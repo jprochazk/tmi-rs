@@ -1,0 +1,29 @@
+[package]
+name = "twitch"
+version = "0.0.1"
+authors = ["jprochazk <honza.spacir@gmail.com>"]
+edition = "2018"
+
+
+[dependencies]
+thiserror = "1.0.23"
+chrono = "0.4.19"
+pretty_assertions = "0.6.1"
+# TODO: remove unused tokio features for better compile times
+tokio = { version = "1.4.0", features = ["full"] }
+# tokio-util = { version = "0.6.5", features = ["full"] }
+tokio-stream = { version = "0.1.5", features = ["io-util"] }
+tokio-rustls = "0.22.0"
+rustls-native-certs = "0.5.0"
+anyhow = "1.0.39"
+futures = "0.3.13"
+log = "0.4.14"
+rand = "0.8.3"
+lazy_static = "1.4.0"
+unicode-segmentation = "1.7.1"
+governor = "0.3.2"
+twitch_getters = { path = "./twitch_getters" }
+
+[dev-dependencies]
+tokio-test = "0.4.0"
+alto_logger = "0.3.7"
