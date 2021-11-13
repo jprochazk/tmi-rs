@@ -41,7 +41,7 @@ impl Message {
     pub fn parse(source: String) -> Result<Message> {
         let input = Pin::new(source);
         let source = input.trim();
-        let (tags, remainder) = Tags::parse(&source);
+        let (tags, remainder) = Tags::parse(source);
         let (prefix, remainder) = Prefix::parse(remainder);
         let (cmd, remainder) = Command::parse(remainder);
         let (channel, remainder) = Channel::parse(remainder);
@@ -136,7 +136,9 @@ pub struct Tags(HashMap<UnsafeSlice, UnsafeSlice>);
 
 impl Deref for Tags {
     type Target = HashMap<UnsafeSlice, UnsafeSlice>;
-    fn deref(&self) -> &Self::Target { &self.0 }
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -278,24 +280,18 @@ impl Tags {
 
     /// Parses a comma-separated list of values
     pub fn get_csv(&self, key: &str) -> Option<Vec<UnsafeSlice>> {
-        match self.get(key) {
-            Some(v) => Some(
-                v.as_ref()
-                    .split(',')
-                    .filter(|v| !v.is_empty())
-                    .map(|v| v.into())
-                    .collect(),
-            ),
-            None => None,
-        }
+        self.get(key).map(|v| {
+            v.as_ref()
+                .split(',')
+                .filter(|v| !v.is_empty())
+                .map(|v| v.into())
+                .collect()
+        })
     }
 
     /// Parses a millisecond precision UNIX timestamp as a UTC date/time
     pub fn get_date(&self, key: &str) -> Option<DateTime<Utc>> {
-        match self.get_number::<i64>(key) {
-            Some(v) => Some(Utc.timestamp_millis(v)),
-            None => None,
-        }
+        self.get_number::<i64>(key).map(|v| Utc.timestamp_millis(v))
     }
 
     pub fn get_duration(&self, key: &str, kind: DurationKind) -> Option<Duration> {
@@ -323,7 +319,8 @@ impl Tags {
     /// Like `.get_ns()`, but returns an `Error` in case the key doesn't exist,
     /// or is invalid in some way
     pub fn require_ns(&self, key: &str) -> Result<String> {
-        self.get_ns(key).ok_or_else(|| Error::MissingTag(key.into()))
+        self.get_ns(key)
+            .ok_or_else(|| Error::MissingTag(key.into()))
     }
 
     /// Like `.get_number()`, but returns an `Error` in case the key doesn't
@@ -333,25 +330,29 @@ impl Tags {
         N: std::str::FromStr,
         <N as std::str::FromStr>::Err: std::fmt::Display,
     {
-        self.get_number(key).ok_or_else(|| Error::MissingTag(key.into()))
+        self.get_number(key)
+            .ok_or_else(|| Error::MissingTag(key.into()))
     }
 
     /// Like `.get_bool()`, but returns an `Error` in case the key doesn't
     /// exist, or is invalid in some way
     pub fn require_bool(&self, key: &str) -> Result<bool> {
-        self.get_bool(key).ok_or_else(|| Error::MissingTag(key.into()))
+        self.get_bool(key)
+            .ok_or_else(|| Error::MissingTag(key.into()))
     }
 
     /// Like `.get_csv()`, but returns an `Error` in case the key doesn't exist,
     /// or is invalid in some way
     pub fn require_csv(&self, key: &str) -> Result<Vec<UnsafeSlice>> {
-        self.get_csv(key).ok_or_else(|| Error::MissingTag(key.into()))
+        self.get_csv(key)
+            .ok_or_else(|| Error::MissingTag(key.into()))
     }
 
     /// Like `.get_date()`, but returns an `Error` in case the key doesn't
     /// exist, or is invalid in some way
     pub fn require_date(&self, key: &str) -> Result<DateTime<Utc>> {
-        self.get_date(key).ok_or_else(|| Error::MissingTag(key.into()))
+        self.get_date(key)
+            .ok_or_else(|| Error::MissingTag(key.into()))
     }
 
     /// Like `.get_duration()`, but returns an `Error` in case the key doesn't
@@ -466,13 +467,15 @@ impl Params {
         }
     }
 
-    pub fn raw(&self) -> &str { self.0.as_str() }
+    pub fn raw(&self) -> &str {
+        self.0.as_str()
+    }
 
     pub fn iter(&self) -> impl Iterator<Item = &str> {
         self.0
             .as_str()
             .split(' ')
-            .map(|v| v.strip_prefix(":").unwrap_or(v))
+            .map(|v| v.strip_prefix(':').unwrap_or(v))
             .filter(|v| !v.is_empty())
     }
 }
@@ -484,7 +487,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parse_empty_prefix() { assert_eq!(None, Prefix::parse("PING :tmi.twitch.tv").0) }
+    fn parse_empty_prefix() {
+        assert_eq!(None, Prefix::parse("PING :tmi.twitch.tv").0)
+    }
 
     #[test]
     fn parse_prefix_host_only() {
@@ -526,7 +531,9 @@ mod tests {
     }
 
     #[test]
-    fn parse_command() { assert_eq!(Command::Privmsg, Command::parse("PRIVMSG").0) }
+    fn parse_command() {
+        assert_eq!(Command::Privmsg, Command::parse("PRIVMSG").0)
+    }
 
     // TODO: tests for parsing other message types
 
