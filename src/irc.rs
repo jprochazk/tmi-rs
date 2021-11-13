@@ -41,7 +41,7 @@ impl Message {
     pub fn parse(source: String) -> Result<Message> {
         let input = Pin::new(source);
         let source = input.trim();
-        let (tags, remainder) = Tags::parse(&source);
+        let (tags, remainder) = Tags::parse(source);
         let (prefix, remainder) = Prefix::parse(remainder);
         let (cmd, remainder) = Command::parse(remainder);
         let (channel, remainder) = Channel::parse(remainder);
@@ -280,24 +280,18 @@ impl Tags {
 
     /// Parses a comma-separated list of values
     pub fn get_csv(&self, key: &str) -> Option<Vec<UnsafeSlice>> {
-        match self.get(key) {
-            Some(v) => Some(
-                v.as_ref()
-                    .split(',')
-                    .filter(|v| !v.is_empty())
-                    .map(|v| v.into())
-                    .collect(),
-            ),
-            None => None,
-        }
+        self.get(key).map(|v| {
+            v.as_ref()
+                .split(',')
+                .filter(|v| !v.is_empty())
+                .map(|v| v.into())
+                .collect()
+        })
     }
 
     /// Parses a millisecond precision UNIX timestamp as a UTC date/time
     pub fn get_date(&self, key: &str) -> Option<DateTime<Utc>> {
-        match self.get_number::<i64>(key) {
-            Some(v) => Some(Utc.timestamp_millis(v)),
-            None => None,
-        }
+        self.get_number::<i64>(key).map(|v| Utc.timestamp_millis(v))
     }
 
     pub fn get_duration(&self, key: &str, kind: DurationKind) -> Option<Duration> {
@@ -481,7 +475,7 @@ impl Params {
         self.0
             .as_str()
             .split(' ')
-            .map(|v| v.strip_prefix(":").unwrap_or(v))
+            .map(|v| v.strip_prefix(':').unwrap_or(v))
             .filter(|v| !v.is_empty())
     }
 }

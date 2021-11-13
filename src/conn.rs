@@ -1,8 +1,4 @@
-use std::{
-    fmt::{self, Display, Formatter},
-    num::NonZeroU32,
-    sync::Arc,
-};
+use std::{num::NonZeroU32, sync::Arc};
 
 use chrono::Duration;
 use futures::StreamExt;
@@ -49,7 +45,7 @@ pub struct Config {
     pub credentials: Login,
 }
 
-#[allow(clippy::clippy::upper_case_acronyms)]
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("Connection to Twitch IRC server failed")]
@@ -365,8 +361,8 @@ pub async fn connect(config: Config) -> Result<Connection> {
         }
         Login::Regular { login, token } => {
             log::debug!("Authenticating as {}", login);
-            sender.pass(&token).await?;
-            sender.nick(&login).await?;
+            sender.pass(token).await?;
+            sender.nick(login).await?;
         }
     }
     // wait for the '001' message, which means connection was successful

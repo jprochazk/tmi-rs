@@ -42,6 +42,8 @@ impl SameMessageBypass {
         }
     }
 }
+
+#[allow(clippy::derivable_impls)]
 impl Default for SameMessageBypass {
     fn default() -> Self {
         SameMessageBypass { flag: 0 }

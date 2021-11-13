@@ -107,7 +107,7 @@ impl Ping {
             arg: value
                 .params
                 .as_ref()
-                .map(|v| v.raw().strip_prefix(":"))
+                .map(|v| v.raw().strip_prefix(':'))
                 .flatten()
                 .map(|v| v.into()),
             raw: value,
@@ -128,7 +128,7 @@ impl Pong {
             arg: value
                 .params
                 .as_ref()
-                .map(|v| v.raw().strip_prefix(":"))
+                .map(|v| v.raw().strip_prefix(':'))
                 .flatten()
                 .map(|v| v.into()),
             raw: value,
@@ -349,7 +349,7 @@ impl Clearchat {
             .params
             .as_ref()
             .map(|v| v.raw())
-            .map(|v| v.trim_start().strip_prefix(":").unwrap_or(v))
+            .map(|v| v.trim_start().strip_prefix(':').unwrap_or(v))
             .map(|v| v.into());
 
         Ok(Clearchat {
@@ -573,6 +573,8 @@ pub enum NoticeId {
     EmoteOnlyOff,
     /// This room is now in emote-only mode.
     EmoteOnlyOn,
+    /// A user has extended their subscription.
+    ExtendSub,
     /// This room is no longer in followers-only mode.Note: The followers tags
     /// are broadcast to a channel when a moderator makes changes.
     FollowersOff,
@@ -864,6 +866,7 @@ impl NoticeId {
             "delete_message_success" => Ok(NoticeId::DeleteMessageSuccess),
             "emote_only_off" => Ok(NoticeId::EmoteOnlyOff),
             "emote_only_on" => Ok(NoticeId::EmoteOnlyOn),
+            "extendsub" => Ok(NoticeId::ExtendSub),
             "followers_off" => Ok(NoticeId::FollowersOff),
             "followers_on" => Ok(NoticeId::FollowersOn),
             "followers_onzero" => Ok(NoticeId::FollowersOnzero),
@@ -1140,6 +1143,16 @@ pub struct Sub {
 
 #[twitch_getters]
 #[derive(Clone, Debug, PartialEq)]
+pub struct SubExtension {
+    pub base: UserNoticeBase,
+    pub cumulative_months: i64,
+    sub_plan: UnsafeSlice,
+    pub sub_plan_name: Option<String>,
+    pub benefit_end_month: i64,
+}
+
+#[twitch_getters]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SubGift {
     pub base: UserNoticeBase,
     pub cumulative_months: i64,
@@ -1209,6 +1222,7 @@ pub struct BitsBadgeTier {
 #[derive(Clone, Debug, PartialEq)]
 pub enum UserNotice {
     Sub(Sub),
+    SubExtension(SubExtension),
     SubGift(SubGift),
     SubMysteryGift(SubMysteryGift),
     GiftPaidUpgrade(GiftPaidUpgrade),
@@ -1263,6 +1277,15 @@ impl UserNotice {
                 sub_plan: source.tags.require("msg-param-sub-plan")?,
                 sub_plan_name: source.tags.require_ns("msg-param-sub-plan-name")?,
                 is_resub: false,
+                base: base(source)?,
+            }),
+            "extendsub" => UserNotice::SubExtension(SubExtension {
+                cumulative_months: source.tags.require_number("msg-param-cumulative-months")?,
+                benefit_end_month: source
+                    .tags
+                    .require_number("msg-param-sub-benefit-end-month")?,
+                sub_plan: source.tags.require("msg-param-sub-plan")?,
+                sub_plan_name: source.tags.require_ns("msg-param-sub-plan-name").ok(),
                 base: base(source)?,
             }),
             "resub" => UserNotice::Sub(Sub {
@@ -1960,6 +1983,46 @@ mod tests {
     }
 
     #[test]
+    pub fn parse_usernotice_extendsub() {
+        let src = "\
+        @badge-info=subscriber/1;badges=staff/1,subscriber/0,premium/1;color=;display-name=olivetan;\
+        emotes=;flags=;id=6031612b-bd79-4a89-a1a3-b8f3f8bc7573;login=olivetan;mod=0;msg-id=extendsub;\
+        msg-param-sub-benefit-end-month=4;msg-param-sub-plan=1000;msg-param-cumulative-months=16;room-id=434858776;\
+        subscriber=1;system-msg=olivetan\\sextended\\stheir\\sTier\\s1\\ssubscription\\sthrough\\sApril!;tmi-sent-ts=1565212333824;\
+        user-id=433099049;user-type=staff \
+        :tmi.twitch.tv USERNOTICE #pennypicklesthedog".to_string();
+
+        let msg = irc::Message::parse(src).unwrap();
+        assert_eq!(
+            Message::UserNotice(UserNotice::SubExtension(SubExtension {
+                base: UserNoticeBase {
+                    channel: "pennypicklesthedog".into(),
+                    text: None,
+                    user: TwitchUser {
+                        id: "433099049".into(),
+                        login: "olivetan".into(),
+                        name: "olivetan".into(),
+                        badge_info: Some("subscriber/1".into()),
+                        badges: Some("staff/1,subscriber/0,premium/1".into())
+                    },
+                    color: None,
+                    emotes: "".into(),
+                    id: "6031612b-bd79-4a89-a1a3-b8f3f8bc7573".into(),
+                    room_id: "434858776".into(),
+                    system_msg: "olivetan extended their Tier 1 subscription through April!".into(),
+                    time: Utc.timestamp_millis(1565212333824),
+                    raw: msg.clone(),
+                },
+                cumulative_months: 16,
+                benefit_end_month: 4,
+                sub_plan: "1000".into(),
+                sub_plan_name: None,
+            })),
+            Message::parse_irc(msg).unwrap()
+        )
+    }
+
+    #[test]
     pub fn parse_usernotice_gift() {
         let src = "\
         @badge-info=;badges=staff/1,premium/1;color=#0000FF;\
@@ -2146,6 +2209,7 @@ mod tests {
 "display-name"
 "emote-sets"
 "emotes"
+"extendsub"
 "id"
 "msg-id"
 "system-msg"
