@@ -13,7 +13,9 @@ pub struct UnsafeSlice {
 }
 
 impl UnsafeSlice {
-    pub fn len(&self) -> usize { self.len }
+    pub fn len(&self) -> usize {
+        self.len
+    }
 
     pub fn as_str<'a>(&self) -> &'a str {
         unsafe { str::from_utf8_unchecked(slice::from_raw_parts(self.ptr, self.len)) }
@@ -30,23 +32,35 @@ impl From<&str> for UnsafeSlice {
 }
 
 impl AsRef<str> for UnsafeSlice {
-    fn as_ref(&self) -> &str { str::from_utf8(unsafe { slice::from_raw_parts(self.ptr, self.len) }).unwrap() }
+    fn as_ref(&self) -> &str {
+        str::from_utf8(unsafe { slice::from_raw_parts(self.ptr, self.len) }).unwrap()
+    }
 }
 impl Debug for UnsafeSlice {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result { Debug::fmt(AsRef::<str>::as_ref(self), f) }
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Debug::fmt(AsRef::<str>::as_ref(self), f)
+    }
 }
 impl Display for UnsafeSlice {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result { Display::fmt(AsRef::<str>::as_ref(self), f) }
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Display::fmt(AsRef::<str>::as_ref(self), f)
+    }
 }
 impl Eq for UnsafeSlice {}
 impl PartialEq<UnsafeSlice> for UnsafeSlice {
-    fn eq(&self, other: &UnsafeSlice) -> bool { (AsRef::<str>::as_ref(self)).eq(AsRef::<str>::as_ref(other)) }
+    fn eq(&self, other: &UnsafeSlice) -> bool {
+        (AsRef::<str>::as_ref(self)).eq(AsRef::<str>::as_ref(other))
+    }
 }
 impl Hash for UnsafeSlice {
-    fn hash<H: Hasher>(&self, state: &mut H) { (AsRef::<str>::as_ref(self)).hash(state) }
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        (AsRef::<str>::as_ref(self)).hash(state)
+    }
 }
 impl Default for UnsafeSlice {
-    fn default() -> Self { "".into() }
+    fn default() -> Self {
+        "".into()
+    }
 }
 
 #[cfg(test)]

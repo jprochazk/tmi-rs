@@ -43,7 +43,9 @@ impl SameMessageBypass {
     }
 }
 impl Default for SameMessageBypass {
-    fn default() -> Self { SameMessageBypass { flag: 0 } }
+    fn default() -> Self {
+        SameMessageBypass { flag: 0 }
+    }
 }
 
 struct NoAllocWrite<'a>(&'a mut String);
@@ -69,7 +71,11 @@ pub fn cap(buffer: &mut String, with_membership: bool) -> fmt::Result {
     write!(
         NoAllocWrite(buffer),
         "CAP REQ :twitch.tv/commands twitch.tv/tags{}\r\n",
-        if with_membership { " twitch.tv/membership" } else { "" }
+        if with_membership {
+            " twitch.tv/membership"
+        } else {
+            ""
+        }
     )
 }
 pub fn pass(buffer: &mut String, token: &str) -> fmt::Result {
@@ -89,7 +95,12 @@ pub fn part(buffer: &mut String, channel: &str) -> fmt::Result {
     write!(NoAllocWrite(buffer), "PART #{}\r\n", channel)
 }
 
-pub fn privmsg(buffer: &mut String, channel: &str, smb: &mut SameMessageBypass, message: &str) -> fmt::Result {
+pub fn privmsg(
+    buffer: &mut String,
+    channel: &str,
+    smb: &mut SameMessageBypass,
+    message: &str,
+) -> fmt::Result {
     buffer.clear();
     write!(
         NoAllocWrite(buffer),
@@ -103,11 +114,21 @@ pub fn whisper(buffer: &mut String, user: &str, message: &str) -> fmt::Result {
     buffer.clear();
     // sending to special '#jtv' channel which is join-less, so messages can be
     // sent without any
-    write!(NoAllocWrite(buffer), "PRIVMSG #jtv :/w {} {}\r\n", user, message)
+    write!(
+        NoAllocWrite(buffer),
+        "PRIVMSG #jtv :/w {} {}\r\n",
+        user,
+        message
+    )
 }
 pub fn me(buffer: &mut String, channel: &str, message: &str) -> fmt::Result {
     buffer.clear();
-    write!(NoAllocWrite(buffer), "PRIVMSG #{} :/me {}\r\n", channel, message)
+    write!(
+        NoAllocWrite(buffer),
+        "PRIVMSG #{} :/me {}\r\n",
+        channel,
+        message
+    )
 }
 pub fn clear(buffer: &mut String, channel: &str) -> fmt::Result {
     buffer.clear();
@@ -115,7 +136,12 @@ pub fn clear(buffer: &mut String, channel: &str) -> fmt::Result {
 }
 /// Maximum timeout is 2 weeks. In case `duration` is `None`, default is 10
 /// minutes.
-pub fn timeout(buffer: &mut String, channel: &str, user: &str, duration: Option<Duration>) -> fmt::Result {
+pub fn timeout(
+    buffer: &mut String,
+    channel: &str,
+    user: &str,
+    duration: Option<Duration>,
+) -> fmt::Result {
     buffer.clear();
     match duration {
         Some(duration) => write!(
@@ -125,20 +151,40 @@ pub fn timeout(buffer: &mut String, channel: &str, user: &str, duration: Option<
             user,
             duration.num_seconds()
         ),
-        None => write!(NoAllocWrite(buffer), "PRIVMSG #{} :/timeout {}\r\n", channel, user),
+        None => write!(
+            NoAllocWrite(buffer),
+            "PRIVMSG #{} :/timeout {}\r\n",
+            channel,
+            user
+        ),
     }
 }
 pub fn untimeout(buffer: &mut String, channel: &str, user: &str) -> fmt::Result {
     buffer.clear();
-    write!(NoAllocWrite(buffer), "PRIVMSG #{} :/untimeout {}\r\n", channel, user)
+    write!(
+        NoAllocWrite(buffer),
+        "PRIVMSG #{} :/untimeout {}\r\n",
+        channel,
+        user
+    )
 }
 pub fn ban(buffer: &mut String, channel: &str, user: &str) -> fmt::Result {
     buffer.clear();
-    write!(NoAllocWrite(buffer), "PRIVMSG #{} :/ban {}\r\n", channel, user)
+    write!(
+        NoAllocWrite(buffer),
+        "PRIVMSG #{} :/ban {}\r\n",
+        channel,
+        user
+    )
 }
 pub fn unban(buffer: &mut String, channel: &str, user: &str) -> fmt::Result {
     buffer.clear();
-    write!(NoAllocWrite(buffer), "PRIVMSG #{} :/unban {}\r\n", channel, user)
+    write!(
+        NoAllocWrite(buffer),
+        "PRIVMSG #{} :/unban {}\r\n",
+        channel,
+        user
+    )
 }
 pub enum Mode {
     R9K,
@@ -194,7 +240,13 @@ pub mod tests {
     fn write_output_is_correct() {
         let expected = "PRIVMSG #TEST :HELLO :)\r\n";
         let mut buf = String::with_capacity(expected.len());
-        privmsg(&mut buf, "TEST", &mut SameMessageBypass::default(), "HELLO :)").unwrap();
+        privmsg(
+            &mut buf,
+            "TEST",
+            &mut SameMessageBypass::default(),
+            "HELLO :)",
+        )
+        .unwrap();
         assert_eq!(buf, expected.to_string());
     }
 
@@ -230,7 +282,10 @@ pub mod tests {
         // /timeout <user> [duration {SECONDS} = 600]
         let mut buf = String::with_capacity(1024);
         timeout(&mut buf, "CHANNEL", "USER", Some(Duration::weeks(2))).unwrap();
-        assert_eq!(buf, "PRIVMSG #CHANNEL :/timeout USER 1209600\r\n".to_string());
+        assert_eq!(
+            buf,
+            "PRIVMSG #CHANNEL :/timeout USER 1209600\r\n".to_string()
+        );
     }
     #[test]
     fn write_command_timeout_default() {

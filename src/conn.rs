@@ -38,7 +38,9 @@ pub enum Login {
 }
 
 impl Default for Login {
-    fn default() -> Self { Login::Anonymous }
+    fn default() -> Self {
+        Login::Anonymous
+    }
 }
 
 #[derive(Clone, Default, Debug, PartialEq)]
@@ -89,7 +91,8 @@ async fn connect_tls(host: &str, port: u16) -> Result<TlsStream<TcpStream>> {
     use tokio_rustls::{rustls::ClientConfig, webpki::DNSNameRef, TlsConnector};
 
     let mut config = ClientConfig::new();
-    config.root_store = rustls_native_certs::load_native_certs().expect("Failed to load native certs");
+    config.root_store =
+        rustls_native_certs::load_native_certs().expect("Failed to load native certs");
     let config = TlsConnector::from(Arc::new(config));
     let dnsname = DNSNameRef::try_from_ascii_str(host).map_err(|err| anyhow::anyhow!(err))?;
     let stream = TcpStream::connect((host, port))
@@ -107,7 +110,9 @@ pub struct Reader {
     stream: LinesStream<BufReader<ReadHalf<TlsStream<TcpStream>>>>,
 }
 impl Reader {
-    pub fn new(stream: LinesStream<BufReader<ReadHalf<TlsStream<TcpStream>>>>) -> Reader { Reader { stream } }
+    pub fn new(stream: LinesStream<BufReader<ReadHalf<TlsStream<TcpStream>>>>) -> Reader {
+        Reader { stream }
+    }
     pub async fn next(&mut self) -> Result<Message> {
         if let Some(message) = self.stream.next().await {
             let message = message?;
@@ -236,7 +241,12 @@ impl Sender {
     ///
     /// Maximum timeout is 2 weeks. In case `duration` is `None`, default is 10
     /// minutes.
-    pub async fn timeout(&mut self, channel: &str, user: &str, duration: Option<Duration>) -> Result<()> {
+    pub async fn timeout(
+        &mut self,
+        channel: &str,
+        user: &str,
+        duration: Option<Duration>,
+    ) -> Result<()> {
         write::timeout(&mut self.buffer, channel, user, duration)?;
         log::debug!("Sent message: {}", self.buffer.trim_end());
         self.rate.until_ready().await;
@@ -283,22 +293,32 @@ pub struct Connection {
 }
 
 impl Connection {
-    pub fn split(self) -> (Sender, Reader) { (self.sender, self.reader) }
-    pub fn join(sender: Sender, reader: Reader) -> Connection { Connection { sender, reader } }
+    pub fn split(self) -> (Sender, Reader) {
+        (self.sender, self.reader)
+    }
+    pub fn join(sender: Sender, reader: Reader) -> Connection {
+        Connection { sender, reader }
+    }
 }
 
 impl From<Connection> for (Sender, Reader) {
-    fn from(value: Connection) -> (Sender, Reader) { value.split() }
+    fn from(value: Connection) -> (Sender, Reader) {
+        value.split()
+    }
 }
 impl From<(Sender, Reader)> for Connection {
-    fn from(value: (Sender, Reader)) -> Connection { Connection::join(value.0, value.1) }
+    fn from(value: (Sender, Reader)) -> Connection {
+        Connection::join(value.0, value.1)
+    }
 }
 
 pub async fn connect(config: Config) -> Result<Connection> {
     log::debug!("Connecting to TMI");
     // 1. connect
     let connection: TlsStream<TcpStream> = tokio::time::timeout(
-        Duration::seconds(5).to_std().expect("Failed to convert duration"),
+        Duration::seconds(5)
+            .to_std()
+            .expect("Failed to convert duration"),
         connect_tls(TMI_URL_HOST, TMI_TLS_PORT),
     )
     .await
