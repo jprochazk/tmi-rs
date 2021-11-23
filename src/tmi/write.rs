@@ -36,7 +36,7 @@ impl SameMessageBypass {
             }
             1 => {
                 self.flag = 0;
-                "⠀"
+                concat!(" ", "⠀")
             }
             _ => unreachable!(),
         }
