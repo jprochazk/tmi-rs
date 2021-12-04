@@ -1,5 +1,4 @@
-use std::{num::NonZeroU32, sync::Arc};
-
+use super::{irc, parse, write, write::Mode, Message};
 use chrono::Duration;
 use futures::StreamExt;
 use governor::{
@@ -7,20 +6,15 @@ use governor::{
     state::{InMemoryState, NotKeyed},
     RateLimiter,
 };
+use std::convert::TryFrom;
+use std::{num::NonZeroU32, sync::Arc};
 use thiserror::Error;
-use tmi::write;
 use tokio::{
     io::{split, AsyncBufReadExt, AsyncWriteExt, BufReader, ReadHalf, WriteHalf},
     net::TcpStream,
 };
 use tokio_rustls::client::TlsStream;
 use tokio_stream::wrappers::LinesStream;
-pub use write::Mode;
-
-use crate::{
-    irc,
-    tmi::{self, Message},
-};
 
 const TMI_URL_HOST: &str = "irc.chat.twitch.tv";
 const TMI_TLS_PORT: u16 = 6697;
@@ -53,7 +47,7 @@ pub enum Error {
     #[error("Encountered an I/O error: {0}")]
     IO(#[from] std::io::Error),
     #[error("Encountered an error while parsing: {0}")]
-    Parse(#[from] tmi::parse::Error),
+    Parse(#[from] parse::Error),
     #[error(transparent)]
     Generic(#[from] anyhow::Error),
     #[error("Timed out")]
@@ -71,7 +65,7 @@ macro_rules! err {
 Err(err!(bare $Variant, $msg))
     };
     (bare $Variant:ident, $msg:expr) => {
-        crate::conn::Error::$Variant(anyhow::anyhow!($msg))
+        crate::tmi::conn::Error::$Variant(anyhow::anyhow!($msg))
     };
 }
 
@@ -84,18 +78,27 @@ fn expected_cap_ack(request_membership_data: bool) -> &'static str {
 }
 
 async fn connect_tls(host: &str, port: u16) -> Result<TlsStream<TcpStream>> {
-    use tokio_rustls::{rustls::ClientConfig, webpki::DNSNameRef, TlsConnector};
+    use tokio_rustls::{
+        rustls::{Certificate, ClientConfig, RootCertStore, ServerName},
+        TlsConnector,
+    };
 
-    let mut config = ClientConfig::new();
-    config.root_store =
-        rustls_native_certs::load_native_certs().expect("Failed to load native certs");
+    let mut root_store = RootCertStore::empty();
+    rustls_native_certs::load_native_certs()
+        .expect("Failed to load native certs")
+        .into_iter()
+        .for_each(|cert| root_store.add(&Certificate(cert.0)).unwrap());
+    let config = ClientConfig::builder()
+        .with_safe_defaults()
+        .with_root_certificates(root_store)
+        .with_no_client_auth();
     let config = TlsConnector::from(Arc::new(config));
-    let dnsname = DNSNameRef::try_from_ascii_str(host).map_err(|err| anyhow::anyhow!(err))?;
+    let server_name = ServerName::try_from(host).map_err(|err| anyhow::anyhow!(err))?;
     let stream = TcpStream::connect((host, port))
         .await
         .map_err(|err| anyhow::anyhow!(err))?;
     let out = config
-        .connect(dnsname, stream)
+        .connect(server_name, stream)
         .await
         .map_err(|err| anyhow::anyhow!(err))?;
 
@@ -338,8 +341,8 @@ pub async fn connect(config: Config) -> Result<Connection> {
     // wait for CAP * ACK :twitch.tv/commands twitch.tv/tags [twitch.tv/membership]
     if let Some(line) = read.next().await {
         let line = line?;
-        match tmi::Message::parse(line)? {
-            tmi::Message::Capability(capability) => {
+        match Message::parse(line)? {
+            Message::Capability(capability) => {
                 if capability.which() != expected_cap_ack(config.membership_data) {
                     return err!(Generic, "Did not receive expected capabilities");
                 }
@@ -353,9 +356,9 @@ pub async fn connect(config: Config) -> Result<Connection> {
     // 3. authenticate
     match &config.credentials {
         Login::Anonymous => {
-            let login = format!("justinfan{}", rand::thread_rng().gen_range(10000..99999));
+            use rand::{thread_rng, Rng};
+            let login = format!("justinfan{}", thread_rng().gen_range(10000i32..99999i32));
             log::debug!("Authenticating as {}", login);
-            use rand::Rng;
             // don't need PASS here
             sender.nick(&login).await?;
         }
@@ -368,8 +371,8 @@ pub async fn connect(config: Config) -> Result<Connection> {
     // wait for the '001' message, which means connection was successful
     if let Some(line) = read.next().await {
         let line = line?;
-        match tmi::Message::parse(line)? {
-            tmi::Message::Unknown(msg) => {
+        match Message::parse(line)? {
+            Message::Unknown(msg) => {
                 if msg.cmd != irc::Command::Unknown("001".into()) {
                     return err!(Generic, "Failed to authenticate");
                 }

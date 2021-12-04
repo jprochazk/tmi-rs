@@ -8,13 +8,13 @@ edition = "2018"
 [dependencies]
 thiserror = "1.0.23"
 chrono = "0.4.19"
-pretty_assertions = "0.6.1"
-# TODO: remove unused tokio features for better compile times
-tokio = { version = "1.4.0", features = ["full"] }
+pretty_assertions = "1.0.0"
+tokio = { version = "1.4.0", features = ["net", "time"] }
 # tokio-util = { version = "0.6.5", features = ["full"] }
 tokio-stream = { version = "0.1.5", features = ["io-util"] }
-tokio-rustls = "0.22.0"
-rustls-native-certs = "0.5.0"
+tokio-rustls = "0.23.1"
+tokio-tungstenite = "0.16.0"
+rustls-native-certs = "0.6.1"
 anyhow = "1.0.39"
 futures = "0.3.13"
 log = "0.4.14"
@@ -27,3 +27,4 @@ twitch_getters = { path = "./twitch_getters" }
 [dev-dependencies]
 tokio-test = "0.4.0"
 alto_logger = "0.3.7"
+tokio = { version = "1.4.0", features = ["full"] }

@@ -3,7 +3,6 @@ use std::fmt::{self, Write};
 use chrono::Duration;
 
 /*
-TODO: write tests
 ✅ /w {USERNAME} {MESSAGE}
 ✅ /me
 ✅ /clear

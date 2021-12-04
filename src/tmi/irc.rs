@@ -1,14 +1,9 @@
-use std::collections::HashMap;
-use std::ops::Deref;
-use std::pin::Pin;
-
+use super::util::UnsafeSlice;
 use chrono::{DateTime, Duration, TimeZone, Utc};
+use std::collections::HashMap;
 use thiserror::Error;
+use twitch_getters::twitch_getters;
 use unicode_segmentation::UnicodeSegmentation;
-
-use crate::util::UnsafeSlice;
-
-// TODO: go over each UnsafeSlice field with `pub`, and create a getter for it
 
 #[derive(Error, Debug, PartialEq)]
 pub enum Error {
@@ -18,17 +13,19 @@ pub enum Error {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
+#[twitch_getters]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Message {
-    // TODO: Params should just be a range
     pub tags: Tags,
     pub prefix: Option<Prefix>,
     pub cmd: Command,
-    pub channel: Option<UnsafeSlice>,
+    channel: Option<UnsafeSlice>,
     pub params: Option<Params>,
-    pub source: Pin<String>,
+    pub source: String,
 }
 
+// SAFETY: it is safe to send `UnsafeSlice` across threads, as long as they are sent together with their source String
+#[allow(clippy::non_send_fields_in_send_ty)]
 unsafe impl Send for Message {}
 
 impl Message {
@@ -39,9 +36,7 @@ impl Message {
     /// the #<channel id> always being present
     /// before :params
     pub fn parse(source: String) -> Result<Message> {
-        let input = Pin::new(source);
-        let source = input.trim();
-        let (tags, remainder) = Tags::parse(source);
+        let (tags, remainder) = Tags::parse(source.trim());
         let (prefix, remainder) = Prefix::parse(remainder);
         let (cmd, remainder) = Command::parse(remainder);
         let (channel, remainder) = Channel::parse(remainder);
@@ -53,12 +48,12 @@ impl Message {
             cmd,
             channel,
             params,
-            source: input,
+            source,
         })
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Command {
     Ping,
     Pong,
@@ -92,14 +87,14 @@ pub enum Command {
     /// Requesting an IRC capability
     Capability,
     /// Unknown command
-    Unknown(UnsafeSlice),
+    Unknown(String),
 }
 
 impl Command {
     /// Parses a Twitch IRC command
     ///
     /// Returns (command, remainder)
-    pub fn parse(data: &str) -> (Command, &str) {
+    fn parse(data: &str) -> (Command, &str) {
         use Command::*;
         let data = data.trim_start();
         let end = match data.find(' ') {
@@ -134,13 +129,6 @@ impl Command {
 #[derive(Clone, PartialEq, Debug)]
 pub struct Tags(HashMap<UnsafeSlice, UnsafeSlice>);
 
-impl Deref for Tags {
-    type Target = HashMap<UnsafeSlice, UnsafeSlice>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum DurationKind {
     Nanoseconds,
@@ -161,7 +149,7 @@ impl Tags {
     /// `[value]`s are optional
     ///
     /// Returns (tags, remainder)
-    pub fn parse(data: &str) -> (Tags, &str) {
+    fn parse(data: &str) -> (Tags, &str) {
         let data = match data.strip_prefix('@') {
             Some(v) => v,
             None => data,
@@ -224,20 +212,18 @@ impl Tags {
         (Tags(map), &data[end..])
     }
 
-    /// Iterates the tags to find one with key == `key`.
-    pub fn get(&self, key: &str) -> Option<UnsafeSlice> {
-        for (item_key, item_value) in self.0.iter() {
-            if key == item_key.as_ref() {
-                return Some(*item_value);
-            }
-        }
+    pub fn get(&self, key: &str) -> Option<&str> {
+        self.0.get(&(key.into())).copied().map(|s| s.as_str())
+    }
 
-        None
+    /// Iterates the tags to find one with key == `key`.
+    pub(crate) fn get_raw(&self, key: &str) -> Option<UnsafeSlice> {
+        self.0.get(&(key.into())).copied()
     }
 
     /// Parses a string, transforming all whitespace "\\s" to actual whitespace.
-    pub fn get_ns(&self, key: &str) -> Option<String> {
-        self.get(key).map(|v| {
+    pub(crate) fn get_ns(&self, key: &str) -> Option<String> {
+        self.get_raw(key).map(|v| {
             let v = v.as_ref();
             let mut out = String::with_capacity(v.len());
             let mut parts = v.split("\\s").peekable();
@@ -252,12 +238,12 @@ impl Tags {
     }
 
     /// Parses a number
-    pub fn get_number<N>(&self, key: &str) -> Option<N>
+    pub(crate) fn get_number<N>(&self, key: &str) -> Option<N>
     where
         N: std::str::FromStr,
         <N as std::str::FromStr>::Err: std::fmt::Display,
     {
-        match self.get(key) {
+        match self.get_raw(key) {
             Some(v) => match v.as_ref().parse::<N>() {
                 Ok(v) => Some(v),
                 Err(_) => None,
@@ -267,8 +253,8 @@ impl Tags {
     }
 
     /// Parses a numeric bool (0 or 1)
-    pub fn get_bool(&self, key: &str) -> Option<bool> {
-        match self.get(key) {
+    pub(crate) fn get_bool(&self, key: &str) -> Option<bool> {
+        match self.get_raw(key) {
             Some(v) => match v.as_ref() {
                 "0" => Some(false),
                 "1" => Some(true),
@@ -278,23 +264,23 @@ impl Tags {
         }
     }
 
-    /// Parses a comma-separated list of values
-    pub fn get_csv(&self, key: &str) -> Option<Vec<UnsafeSlice>> {
-        self.get(key).map(|v| {
+    // Parses a comma-separated list of values
+    /* pub(crate) fn get_csv(&self, key: &str) -> Option<Vec<UnsafeSlice>> {
+        self.get_raw(key).map(|v| {
             v.as_ref()
                 .split(',')
                 .filter(|v| !v.is_empty())
                 .map(|v| v.into())
                 .collect()
         })
-    }
+    } */
 
     /// Parses a millisecond precision UNIX timestamp as a UTC date/time
-    pub fn get_date(&self, key: &str) -> Option<DateTime<Utc>> {
+    pub(crate) fn get_date(&self, key: &str) -> Option<DateTime<Utc>> {
         self.get_number::<i64>(key).map(|v| Utc.timestamp_millis(v))
     }
 
-    pub fn get_duration(&self, key: &str, kind: DurationKind) -> Option<Duration> {
+    pub(crate) fn get_duration(&self, key: &str, kind: DurationKind) -> Option<Duration> {
         match self.get_number::<i64>(key) {
             Some(v) => match kind {
                 DurationKind::Nanoseconds => Some(Duration::nanoseconds(v)),
@@ -310,22 +296,29 @@ impl Tags {
         }
     }
 
+    pub fn require(&self, key: &str) -> Result<&str> {
+        self.get_raw(key)
+            .map(|v| v.as_str())
+            .ok_or_else(|| Error::MissingTag(key.into()))
+    }
+
     /// Like `.get()`, but returns an `Error` in case the key doesn't exist,
     /// or is invalid in some way
-    pub fn require(&self, key: &str) -> Result<UnsafeSlice> {
-        self.get(key).ok_or_else(|| Error::MissingTag(key.into()))
+    pub(crate) fn require_raw(&self, key: &str) -> Result<UnsafeSlice> {
+        self.get_raw(key)
+            .ok_or_else(|| Error::MissingTag(key.into()))
     }
 
     /// Like `.get_ns()`, but returns an `Error` in case the key doesn't exist,
     /// or is invalid in some way
-    pub fn require_ns(&self, key: &str) -> Result<String> {
+    pub(crate) fn require_ns(&self, key: &str) -> Result<String> {
         self.get_ns(key)
             .ok_or_else(|| Error::MissingTag(key.into()))
     }
 
     /// Like `.get_number()`, but returns an `Error` in case the key doesn't
     /// exist, or is invalid in some way
-    pub fn require_number<N>(&self, key: &str) -> Result<N>
+    pub(crate) fn require_number<N>(&self, key: &str) -> Result<N>
     where
         N: std::str::FromStr,
         <N as std::str::FromStr>::Err: std::fmt::Display,
@@ -334,40 +327,41 @@ impl Tags {
             .ok_or_else(|| Error::MissingTag(key.into()))
     }
 
-    /// Like `.get_bool()`, but returns an `Error` in case the key doesn't
-    /// exist, or is invalid in some way
-    pub fn require_bool(&self, key: &str) -> Result<bool> {
+    // Like `.get_bool()`, but returns an `Error` in case the key doesn't
+    // exist, or is invalid in some way
+    /* pub(crate) fn require_bool(&self, key: &str) -> Result<bool> {
         self.get_bool(key)
             .ok_or_else(|| Error::MissingTag(key.into()))
-    }
+    } */
 
-    /// Like `.get_csv()`, but returns an `Error` in case the key doesn't exist,
-    /// or is invalid in some way
-    pub fn require_csv(&self, key: &str) -> Result<Vec<UnsafeSlice>> {
+    // Like `.get_csv()`, but returns an `Error` in case the key doesn't exist,
+    // or is invalid in some way
+    /* pub(crate) fn require_csv(&self, key: &str) -> Result<Vec<UnsafeSlice>> {
         self.get_csv(key)
             .ok_or_else(|| Error::MissingTag(key.into()))
-    }
+    } */
 
     /// Like `.get_date()`, but returns an `Error` in case the key doesn't
     /// exist, or is invalid in some way
-    pub fn require_date(&self, key: &str) -> Result<DateTime<Utc>> {
+    pub(crate) fn require_date(&self, key: &str) -> Result<DateTime<Utc>> {
         self.get_date(key)
             .ok_or_else(|| Error::MissingTag(key.into()))
     }
 
-    /// Like `.get_duration()`, but returns an `Error` in case the key doesn't
-    /// exist, or is invalid in some way
-    pub fn require_duration(&self, key: &str, kind: DurationKind) -> Result<Duration> {
+    // Like `.get_duration()`, but returns an `Error` in case the key doesn't
+    // exist, or is invalid in some way
+    /* pub(crate) fn require_duration(&self, key: &str, kind: DurationKind) -> Result<Duration> {
         self.get_duration(key, kind)
             .ok_or_else(|| Error::MissingTag(key.into()))
-    }
+    } */
 }
 
+#[twitch_getters]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Prefix {
-    pub nick: Option<UnsafeSlice>,
-    pub user: Option<UnsafeSlice>,
-    pub host: UnsafeSlice,
+    nick: Option<UnsafeSlice>,
+    user: Option<UnsafeSlice>,
+    host: UnsafeSlice,
 }
 
 impl Prefix {
@@ -378,7 +372,7 @@ impl Prefix {
     /// * `nick!user@host`
     ///
     /// Returns (prefix, remainder)
-    pub fn parse(data: &str) -> (Option<Prefix>, &str) {
+    fn parse(data: &str) -> (Option<Prefix>, &str) {
         let data = data.trim_start();
         if data.starts_with(':') {
             let start = 0;
@@ -419,7 +413,7 @@ impl Prefix {
 
 pub struct Channel;
 impl Channel {
-    pub fn parse(data: &str) -> (Option<UnsafeSlice>, &str) {
+    fn parse(data: &str) -> (Option<UnsafeSlice>, &str) {
         let data = data.trim_start();
         let (mut start, mut end) = (None, data.len());
         for (i, c) in data.char_indices() {
@@ -458,7 +452,7 @@ impl Params {
     /// Parse a params list
     ///
     /// Valid form: `[:]param0 [:]param1 [:]param2 [:]param3"
-    pub fn parse(data: &str) -> Option<Params> {
+    fn parse(data: &str) -> Option<Params> {
         let data = data.trim_start();
         if data.is_empty() {
             None
@@ -467,7 +461,7 @@ impl Params {
         }
     }
 
-    pub fn raw(&self) -> &str {
+    pub(crate) fn raw(&self) -> &str {
         self.0.as_str()
     }
 
@@ -547,7 +541,7 @@ mod tests {
                 cmd: Command::Ping,
                 channel: None,
                 params: Some(Params(":tmi.twitch.tv".into())),
-                source: Pin::new(src.clone())
+                source: src.clone()
             },
             Message::parse(src).unwrap()
         )
@@ -568,7 +562,7 @@ mod tests {
                 cmd: Command::Join,
                 channel: Some("channel".into()),
                 params: None,
-                source: Pin::new(src.clone())
+                source: src.clone()
             },
             Message::parse(src).unwrap()
         )
@@ -620,7 +614,7 @@ mod tests {
                 cmd: Command::Privmsg,
                 channel: Some("pajlada".into()),
                 params: Some(Params(":dank cam".into())),
-                source: Pin::new(src.clone())
+                source: src.clone()
             },
             Message::parse(src).unwrap()
         );
@@ -658,7 +652,7 @@ mod tests {
                 cmd: Command::Whisper,
                 channel: None,
                 params: Some(Params("randers :Riftey Kappa".into())),
-                source: Pin::new(src.clone()),
+                source: src.clone(),
             },
             Message::parse(src).unwrap()
         );
@@ -696,7 +690,7 @@ mod tests {
                 cmd: Command::Whisper,
                 channel: None,
                 params: Some(Params("randers :\x01ACTION Riftey Kappa\x01".into())),
-                source: Pin::new(src.clone()),
+                source: src.clone(),
             },
             Message::parse(src).unwrap()
         );
@@ -732,7 +726,7 @@ mod tests {
                 params: Some(Params(
                     ":Pong! Uptime: 6h,15m; Temperature: 54.8°C; Latency to TMI: 183ms; Commands used: 795".into()
                 )),
-                source: Pin::new(src.clone()),
+                source: src.clone(),
             },
             Message::parse(src).unwrap()
         )
@@ -767,7 +761,7 @@ mod tests {
                 cmd: Command::Clearmsg,
                 channel: Some("randers".into()),
                 params: Some(Params(":asdf".into())),
-                source: Pin::new(src.clone()),
+                source: src.clone(),
             },
             Message::parse(src).unwrap()
         )

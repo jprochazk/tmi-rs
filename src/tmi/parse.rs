@@ -14,7 +14,7 @@ use thiserror::Error;
 use twitch_getters::twitch_getters;
 
 // TODO: there are still a bunch of String allocations which can be removed
-use crate::{irc, irc::DurationKind, util::UnsafeSlice};
+use super::{irc, irc::DurationKind, util::UnsafeSlice};
 #[derive(Error, Debug, PartialEq)]
 pub enum Error {
     #[error("Invalid tag '{0}'")]
@@ -69,7 +69,7 @@ impl Message {
         let irc = irc::Message::parse(data)?;
         Message::parse_irc(irc)
     }
-    pub fn parse_irc(value: irc::Message) -> Result<Message> {
+    fn parse_irc(value: irc::Message) -> Result<Message> {
         Ok(match value.cmd {
             irc::Command::Ping => Message::Ping(Ping::parse(value)?),
             irc::Command::Pong => Message::Pong(Pong::parse(value)?),
@@ -102,7 +102,7 @@ pub struct Ping {
 }
 
 impl Ping {
-    pub fn parse(value: irc::Message) -> Result<Ping> {
+    fn parse(value: irc::Message) -> Result<Ping> {
         Ok(Ping {
             arg: value
                 .params
@@ -123,7 +123,7 @@ pub struct Pong {
 }
 
 impl Pong {
-    pub fn parse(value: irc::Message) -> Result<Pong> {
+    fn parse(value: irc::Message) -> Result<Pong> {
         Ok(Pong {
             arg: value
                 .params
@@ -145,17 +145,18 @@ pub struct Join {
 }
 
 impl Join {
-    pub fn parse(value: irc::Message) -> Result<Self> {
+    fn parse(value: irc::Message) -> Result<Self> {
         Ok(Join {
             channel: value
-                .channel
-                .ok_or_else(|| Error::MissingParam("channel".into()))?,
+                .channel()
+                .ok_or_else(|| Error::MissingParam("channel".into()))?
+                .into(),
             nick: match value
                 .prefix
                 .ok_or_else(|| Error::MissingParam("nick".into()))?
-                .nick
+                .nick()
             {
-                Some(nick) => nick,
+                Some(nick) => nick.into(),
                 None => return Err(Error::MissingParam("user".into())),
             },
             raw: value,
@@ -172,17 +173,18 @@ pub struct Part {
 }
 
 impl Part {
-    pub fn parse(value: irc::Message) -> Result<Self> {
+    fn parse(value: irc::Message) -> Result<Self> {
         Ok(Part {
             channel: value
-                .channel
-                .ok_or_else(|| Error::MissingParam("channel".into()))?,
+                .channel()
+                .ok_or_else(|| Error::MissingParam("channel".into()))?
+                .into(),
             nick: match value
                 .prefix
                 .ok_or_else(|| Error::MissingParam("nick".into()))?
-                .nick
+                .nick()
             {
-                Some(nick) => nick,
+                Some(nick) => nick.into(),
                 None => return Err(Error::MissingParam("nick".into())),
             },
             raw: value,
@@ -210,7 +212,7 @@ pub struct TwitchUser {
 /// If message starts with '\x01ACTION ' and ends with '\x01', then remove those
 fn parse_message(msg: &str) -> (&str, bool) {
     msg.strip_prefix("\x01ACTION ")
-        .and_then(|v| v.strip_suffix("\x01"))
+        .and_then(|v| v.strip_suffix('\x01'))
         .map(|v| (v, true))
         .unwrap_or((msg, false))
 }
@@ -232,12 +234,8 @@ pub struct Privmsg {
     raw: irc::Message,
 }
 
-// SAFETY: Privmsg owns the source String, and it has no interior mutability
-unsafe impl Sync for Privmsg {}
-unsafe impl Send for Privmsg {}
-
 impl Privmsg {
-    pub fn parse(source: irc::Message) -> Result<Self> {
+    fn parse(source: irc::Message) -> Result<Self> {
         let (text, is_action) = match source.params.as_ref() {
             Some(v) => parse_message(
                 v.raw()
@@ -249,26 +247,28 @@ impl Privmsg {
         };
         Ok(Privmsg {
             channel: source
-                .channel
-                .ok_or_else(|| Error::MissingParam("channel".into()))?,
+                .channel()
+                .ok_or_else(|| Error::MissingParam("channel".into()))?
+                .into(),
             text: text.into(),
             user: TwitchUser {
-                id: source.tags.require("user-id")?,
+                id: source.tags.require_raw("user-id")?,
                 login: source
                     .prefix
                     .ok_or_else(|| Error::MissingParam("nick".into()))?
-                    .nick
-                    .ok_or_else(|| Error::MissingParam("nick".into()))?,
+                    .nick()
+                    .ok_or_else(|| Error::MissingParam("nick".into()))?
+                    .into(),
                 name: source.tags.require_ns("display-name")?,
-                badge_info: source.tags.get("badge-info"),
-                badges: source.tags.get("badges"),
+                badge_info: source.tags.get_raw("badge-info"),
+                badges: source.tags.get_raw("badges"),
             },
             is_action,
             bits: source.tags.get_number("bits"),
-            color: source.tags.get("color"),
-            emotes: source.tags.get("emotes").unwrap_or_default(),
-            id: source.tags.require("id")?,
-            room_id: source.tags.require("room-id")?,
+            color: source.tags.get_raw("color"),
+            emotes: source.tags.get_raw("emotes").unwrap_or_default(),
+            id: source.tags.require_raw("id")?,
+            room_id: source.tags.require_raw("room-id")?,
             time: source.tags.require_date("tmi-sent-ts")?,
             raw: source,
         })
@@ -291,7 +291,7 @@ pub struct Whisper {
 }
 
 impl Whisper {
-    pub fn parse(source: irc::Message) -> Result<Self> {
+    fn parse(source: irc::Message) -> Result<Self> {
         let params = match source.params {
             Some(v) => v,
             None => return Err(Error::EmptyParams),
@@ -308,23 +308,24 @@ impl Whisper {
 
         Ok(Whisper {
             recipient: recipient.into(),
-            thread_id: source.tags.require("thread-id")?,
+            thread_id: source.tags.require_raw("thread-id")?,
             user: TwitchUser {
-                id: source.tags.require("user-id")?,
+                id: source.tags.require_raw("user-id")?,
                 login: source
                     .prefix
                     .ok_or_else(|| Error::MissingParam("nick".into()))?
-                    .nick
-                    .ok_or_else(|| Error::MissingParam("nick".into()))?,
+                    .nick()
+                    .ok_or_else(|| Error::MissingParam("nick".into()))?
+                    .into(),
                 name: source.tags.require_ns("display-name")?,
-                badge_info: source.tags.get("badge-info"),
-                badges: source.tags.get("badges"),
+                badge_info: source.tags.get_raw("badge-info"),
+                badges: source.tags.get_raw("badges"),
             },
             text: text.into(),
             is_action,
-            color: source.tags.get("color"),
-            emotes: source.tags.get("emotes").unwrap_or_default(),
-            id: source.tags.require("message-id")?,
+            color: source.tags.get_raw("color"),
+            emotes: source.tags.get_raw("emotes").unwrap_or_default(),
+            id: source.tags.require_raw("message-id")?,
             raw: source,
         })
     }
@@ -344,7 +345,7 @@ pub struct Clearchat {
 }
 
 impl Clearchat {
-    pub fn parse(source: irc::Message) -> Result<Self> {
+    fn parse(source: irc::Message) -> Result<Self> {
         let target = source
             .params
             .as_ref()
@@ -354,10 +355,11 @@ impl Clearchat {
 
         Ok(Clearchat {
             channel: source
-                .channel
-                .ok_or_else(|| Error::MissingParam("channel".into()))?,
+                .channel()
+                .ok_or_else(|| Error::MissingParam("channel".into()))?
+                .into(),
             target,
-            target_id: source.tags.get("target-user-id"),
+            target_id: source.tags.get_raw("target-user-id"),
             time: source.tags.require_date("tmi-sent-ts")?,
             duration: source
                 .tags
@@ -370,16 +372,16 @@ impl Clearchat {
 #[twitch_getters]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Clearmsg {
-    pub channel: UnsafeSlice,
-    pub login: UnsafeSlice,
+    channel: UnsafeSlice,
+    login: UnsafeSlice,
     /// Deleted message text
-    pub text: UnsafeSlice,
-    pub target_msg_id: UnsafeSlice,
+    text: UnsafeSlice,
+    target_msg_id: UnsafeSlice,
     raw: irc::Message,
 }
 
 impl Clearmsg {
-    pub fn parse(source: irc::Message) -> Result<Self> {
+    fn parse(source: irc::Message) -> Result<Self> {
         let text = match source
             .params
             .as_ref()
@@ -391,11 +393,12 @@ impl Clearmsg {
         };
         Ok(Clearmsg {
             channel: source
-                .channel
-                .ok_or_else(|| Error::MissingParam("channel".into()))?,
-            login: source.tags.require("login")?,
+                .channel()
+                .ok_or_else(|| Error::MissingParam("channel".into()))?
+                .into(),
+            login: source.tags.require_raw("login")?,
             text,
-            target_msg_id: source.tags.require("target-msg-id")?,
+            target_msg_id: source.tags.require_raw("target-msg-id")?,
             raw: source,
         })
     }
@@ -417,14 +420,14 @@ pub struct GlobalUserState {
 }
 
 impl GlobalUserState {
-    pub fn parse(source: irc::Message) -> Result<Self> {
+    fn parse(source: irc::Message) -> Result<Self> {
         Ok(GlobalUserState {
-            user_id: source.tags.require("user-id")?,
+            user_id: source.tags.require_raw("user-id")?,
             display_name: source.tags.require_ns("display-name")?,
-            badge_info: source.tags.get("badge-info"),
-            badges: source.tags.get("badges").unwrap_or_default(),
-            color: source.tags.get("color"),
-            emote_sets: source.tags.get("emote-sets").unwrap_or_default(),
+            badge_info: source.tags.get_raw("badge-info"),
+            badges: source.tags.get_raw("badges").unwrap_or_default(),
+            color: source.tags.get_raw("color"),
+            emote_sets: source.tags.get_raw("emote-sets").unwrap_or_default(),
             raw: source,
         })
     }
@@ -441,7 +444,7 @@ pub struct HostTarget {
 }
 
 impl HostTarget {
-    pub fn parse(source: irc::Message) -> Result<Self> {
+    fn parse(source: irc::Message) -> Result<Self> {
         let (target_channel, viewer_count) = match source
             .params
             .as_ref()
@@ -463,8 +466,9 @@ impl HostTarget {
         };
         Ok(HostTarget {
             hosting_channel: source
-                .channel
-                .ok_or_else(|| Error::MissingParam("channel".into()))?,
+                .channel()
+                .ok_or_else(|| Error::MissingParam("channel".into()))?
+                .into(),
             target_channel,
             viewer_count,
             raw: source,
@@ -820,7 +824,7 @@ pub enum NoticeId {
 }
 
 impl NoticeId {
-    pub fn parse(value: &str) -> Result<NoticeId> {
+    fn parse(value: &str) -> Result<NoticeId> {
         match value {
             "already_banned" => Ok(NoticeId::AlreadyBanned),
             "already_emote_only_off" => Ok(NoticeId::AlreadyEmoteOnlyOff),
@@ -981,11 +985,11 @@ pub struct Notice {
 }
 
 impl Notice {
-    pub fn parse(source: irc::Message) -> Result<Self> {
+    fn parse(source: irc::Message) -> Result<Self> {
         // if id.is_some() => @msg-id=some_id :tmi.twitch.tv NOTICE #forsen
         // :SOME_MESSAGE if id.is_none() => :tmi.twitch.tv NOTICE *
         // :SOME_MESSAGE                in this case we skip this ^
-        let (id, message) = match source.tags.get("msg-id") {
+        let (id, message) = match source.tags.get_raw("msg-id") {
             Some(v) => (
                 Some(NoticeId::parse(v.as_ref())?),
                 source
@@ -1015,7 +1019,7 @@ impl Notice {
         };
         Ok(Notice {
             id,
-            channel: source.channel,
+            channel: source.channel().map(|v| v.into()),
             message,
             raw: source,
         })
@@ -1028,7 +1032,7 @@ pub struct Reconnect {
 }
 
 impl Reconnect {
-    pub fn parse(source: irc::Message) -> Result<Self> {
+    fn parse(source: irc::Message) -> Result<Self> {
         Ok(Reconnect { raw: source })
     }
 }
@@ -1044,7 +1048,7 @@ pub enum FollowerOnlyMode {
 }
 
 impl FollowerOnlyMode {
-    pub fn parse(value: i64) -> FollowerOnlyMode {
+    fn parse(value: i64) -> FollowerOnlyMode {
         match value {
             n if n < 0 => FollowerOnlyMode::Disabled,
             n if n == 0 => FollowerOnlyMode::All,
@@ -1084,10 +1088,11 @@ pub struct RoomState {
 }
 
 impl RoomState {
-    pub fn parse(source: irc::Message) -> Result<Self> {
+    fn parse(source: irc::Message) -> Result<Self> {
         let channel = source
-            .channel
-            .ok_or_else(|| Error::MissingParam("channel".into()))?;
+            .channel()
+            .ok_or_else(|| Error::MissingParam("channel".into()))?
+            .into();
         let emote_only = source.tags.get_bool("emote-only");
         let followers_only = source
             .tags
@@ -1234,12 +1239,13 @@ pub enum UserNotice {
 }
 
 impl UserNotice {
-    pub fn parse(source: irc::Message) -> Result<Self> {
+    fn parse(source: irc::Message) -> Result<Self> {
         let base = |source: irc::Message| -> Result<UserNoticeBase> {
             Ok(UserNoticeBase {
                 channel: source
-                    .channel
-                    .ok_or_else(|| Error::MissingParam("channel".into()))?,
+                    .channel()
+                    .ok_or_else(|| Error::MissingParam("channel".into()))?
+                    .into(),
                 text: source
                     .params
                     .as_ref()
@@ -1247,23 +1253,23 @@ impl UserNotice {
                     .map(|v| v.trim_start().strip_prefix(':').unwrap_or(v))
                     .map(|v| v.into()),
                 user: TwitchUser {
-                    id: source.tags.require("user-id")?,
-                    login: source.tags.require("login")?,
+                    id: source.tags.require_raw("user-id")?,
+                    login: source.tags.require_raw("login")?,
                     name: source.tags.require_ns("display-name")?,
-                    badge_info: source.tags.get("badge-info"),
-                    badges: source.tags.get("badges"),
+                    badge_info: source.tags.get_raw("badge-info"),
+                    badges: source.tags.get_raw("badges"),
                 },
-                color: source.tags.get("color"),
-                emotes: source.tags.get("emotes").unwrap_or_default(),
-                id: source.tags.require("id")?,
-                room_id: source.tags.require("room-id")?,
+                color: source.tags.get_raw("color"),
+                emotes: source.tags.get_raw("emotes").unwrap_or_default(),
+                id: source.tags.require_raw("id")?,
+                room_id: source.tags.require_raw("room-id")?,
                 time: source.tags.require_date("tmi-sent-ts")?,
                 system_msg: source.tags.require_ns("system-msg")?,
                 raw: source,
             })
         };
 
-        Ok(match source.tags.require("msg-id")?.as_ref() {
+        Ok(match source.tags.require_raw("msg-id")?.as_ref() {
             "sub" => UserNotice::Sub(Sub {
                 cumulative_months: source.tags.require_number("msg-param-cumulative-months")?,
                 should_share_streak: source
@@ -1274,7 +1280,7 @@ impl UserNotice {
                     .tags
                     .get_number("msg-param-streak-months")
                     .unwrap_or(0),
-                sub_plan: source.tags.require("msg-param-sub-plan")?,
+                sub_plan: source.tags.require_raw("msg-param-sub-plan")?,
                 sub_plan_name: source.tags.require_ns("msg-param-sub-plan-name")?,
                 is_resub: false,
                 base: base(source)?,
@@ -1284,7 +1290,7 @@ impl UserNotice {
                 benefit_end_month: source
                     .tags
                     .require_number("msg-param-sub-benefit-end-month")?,
-                sub_plan: source.tags.require("msg-param-sub-plan")?,
+                sub_plan: source.tags.require_raw("msg-param-sub-plan")?,
                 sub_plan_name: source.tags.require_ns("msg-param-sub-plan-name").ok(),
                 base: base(source)?,
             }),
@@ -1298,7 +1304,7 @@ impl UserNotice {
                     .tags
                     .get_number("msg-param-streak-months")
                     .unwrap_or(0),
-                sub_plan: source.tags.require("msg-param-sub-plan")?,
+                sub_plan: source.tags.require_raw("msg-param-sub-plan")?,
                 sub_plan_name: source.tags.require_ns("msg-param-sub-plan-name")?,
                 is_resub: true,
                 base: base(source)?,
@@ -1308,9 +1314,9 @@ impl UserNotice {
                 recipient_display_name: source
                     .tags
                     .require_ns("msg-param-recipient-display-name")?,
-                recipient_id: source.tags.require("msg-param-recipient-id")?,
-                recipient_login: source.tags.require("msg-param-recipient-user-name")?,
-                sub_plan: source.tags.require("msg-param-sub-plan")?,
+                recipient_id: source.tags.require_raw("msg-param-recipient-id")?,
+                recipient_login: source.tags.require_raw("msg-param-recipient-user-name")?,
+                sub_plan: source.tags.require_raw("msg-param-sub-plan")?,
                 sub_plan_name: source.tags.require_ns("msg-param-sub-plan-name")?,
                 gift_months: source.tags.get_number("msg-param-gift-months").unwrap_or(1),
                 is_anon: false,
@@ -1321,9 +1327,9 @@ impl UserNotice {
                 recipient_display_name: source
                     .tags
                     .require_ns("msg-param-recipient-display-name")?,
-                recipient_id: source.tags.require("msg-param-recipient-id")?,
-                recipient_login: source.tags.require("msg-param-recipient-user-name")?,
-                sub_plan: source.tags.require("msg-param-sub-plan")?,
+                recipient_id: source.tags.require_raw("msg-param-recipient-id")?,
+                recipient_login: source.tags.require_raw("msg-param-recipient-user-name")?,
+                sub_plan: source.tags.require_raw("msg-param-sub-plan")?,
                 sub_plan_name: source.tags.require_ns("msg-param-sub-plan-name")?,
                 gift_months: source.tags.get_number("msg-param-gift-months").unwrap_or(1),
                 is_anon: true,
@@ -1334,17 +1340,17 @@ impl UserNotice {
             }),
             "giftpaidupgrade" => UserNotice::GiftPaidUpgrade(GiftPaidUpgrade {
                 promo_gift_total: source.tags.require_number("msg-param-promo-gift-total")?,
-                promo_name: source.tags.require("msg-param-promo-name")?,
-                sender_login: source.tags.get("msg-param-sender-login"),
-                sender_name: source.tags.get("msg-param-sender-name"),
+                promo_name: source.tags.require_raw("msg-param-promo-name")?,
+                sender_login: source.tags.get_raw("msg-param-sender-login"),
+                sender_name: source.tags.get_raw("msg-param-sender-name"),
                 is_anon: false,
                 base: base(source)?,
             }),
             "anongiftpaidupgrade" => UserNotice::GiftPaidUpgrade(GiftPaidUpgrade {
                 promo_gift_total: source.tags.require_number("msg-param-promo-gift-total")?,
-                promo_name: source.tags.require("msg-param-promo-name")?,
-                sender_login: source.tags.get("msg-param-sender-login"),
-                sender_name: source.tags.get("msg-param-sender-name"),
+                promo_name: source.tags.require_raw("msg-param-promo-name")?,
+                sender_login: source.tags.get_raw("msg-param-sender-login"),
+                sender_name: source.tags.get_raw("msg-param-sender-name"),
                 is_anon: true,
                 base: base(source)?,
             }),
@@ -1353,7 +1359,7 @@ impl UserNotice {
             }),
             "raid" => UserNotice::Raid(Raid {
                 source_display_name: source.tags.require_ns("msg-param-displayName")?,
-                source_login: source.tags.require("msg-param-login")?,
+                source_login: source.tags.require_raw("msg-param-login")?,
                 viewer_count: source.tags.require_number("msg-param-viewerCount")?,
                 base: base(source)?,
             }),
@@ -1361,11 +1367,11 @@ impl UserNotice {
                 base: base(source)?,
             }),
             "ritual" => UserNotice::Ritual(Ritual {
-                ritual_name: source.tags.require("msg-param-ritual-name")?,
+                ritual_name: source.tags.require_raw("msg-param-ritual-name")?,
                 base: base(source)?,
             }),
             "bitsbadgetier" => UserNotice::BitsBadgeTier(BitsBadgeTier {
-                threshold: source.tags.require("msg-param-threshold")?,
+                threshold: source.tags.require_raw("msg-param-threshold")?,
                 base: base(source)?,
             }),
             invalid => return Err(Error::InvalidTagValue("msg-id".into(), invalid.into())),
@@ -1388,16 +1394,17 @@ pub struct UserState {
 }
 
 impl UserState {
-    pub fn parse(source: irc::Message) -> Result<Self> {
+    fn parse(source: irc::Message) -> Result<Self> {
         Ok(UserState {
             channel: source
-                .channel
-                .ok_or_else(|| Error::MissingParam("channel".into()))?,
+                .channel()
+                .ok_or_else(|| Error::MissingParam("channel".into()))?
+                .into(),
             display_name: source.tags.require_ns("display-name")?,
-            badge_info: source.tags.get("badge-info"),
-            badges: source.tags.get("badges").unwrap_or_default(),
-            color: source.tags.get("color"),
-            emote_sets: source.tags.get("emote-sets").unwrap_or_default(),
+            badge_info: source.tags.get_raw("badge-info"),
+            badges: source.tags.get_raw("badges").unwrap_or_default(),
+            color: source.tags.get_raw("color"),
+            emote_sets: source.tags.get_raw("emote-sets").unwrap_or_default(),
             raw: source,
         })
     }
@@ -1415,7 +1422,7 @@ pub enum CapabilitySubCmd {
 }
 
 impl CapabilitySubCmd {
-    pub fn parse(which: &str) -> Option<CapabilitySubCmd> {
+    fn parse(which: &str) -> Option<CapabilitySubCmd> {
         match which {
             "LS" => Some(CapabilitySubCmd::LS),
             "ACK" => Some(CapabilitySubCmd::ACK),
@@ -1434,7 +1441,7 @@ pub struct Capability {
 }
 
 impl Capability {
-    pub fn parse(source: irc::Message) -> Result<Self> {
+    fn parse(source: irc::Message) -> Result<Self> {
         // skip the first param, which is '*'
         let params = source.params.ok_or(Error::MalformedMessage)?;
         let params = params

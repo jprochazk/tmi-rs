@@ -6,17 +6,17 @@ use std::{
 };
 use std::{slice, str};
 
+/// This type is *deeply* unsafe. It exists to bypass limitations of Rust related to self-referential structs.
+/// The alternative is allocating everywhere, which leads to poor performance.
+///
+/// SAFETY: Must not outlive the `String` it points to. The `String`'s memory must also not be moved.
 #[derive(Clone, Copy)]
-pub struct UnsafeSlice {
+pub(crate) struct UnsafeSlice {
     ptr: *const u8,
     len: usize,
 }
 
 impl UnsafeSlice {
-    pub fn len(&self) -> usize {
-        self.len
-    }
-
     pub fn as_str<'a>(&self) -> &'a str {
         unsafe { str::from_utf8_unchecked(slice::from_raw_parts(self.ptr, self.len)) }
     }

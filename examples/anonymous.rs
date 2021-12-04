@@ -1,4 +1,4 @@
-use twitch::{Config, Message};
+use twitch::tmi::{self, Message};
 
 fn init_logger() -> std::result::Result<(), alto_logger::Error> {
     if std::env::var("RUST_LOG").is_err() {
@@ -11,7 +11,7 @@ fn init_logger() -> std::result::Result<(), alto_logger::Error> {
 async fn main() {
     init_logger().unwrap();
 
-    let mut conn = twitch::connect(Config::default()).await.unwrap();
+    let mut conn = tmi::connect(tmi::Config::default()).await.unwrap();
     conn.sender.join("moscowwbish").await.unwrap();
 
     loop {
