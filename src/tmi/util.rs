@@ -10,7 +10,6 @@ use std::{slice, str};
 /// The alternative is allocating everywhere, which leads to poor performance.
 ///
 /// SAFETY: Must not outlive the `String` it points to. The `String`'s memory must also not be moved.
-#[derive(Clone, Copy)]
 pub(crate) struct UnsafeSlice {
   ptr: *const u8,
   len: usize,
@@ -19,6 +18,23 @@ pub(crate) struct UnsafeSlice {
 impl UnsafeSlice {
   pub fn as_str<'a>(&self) -> &'a str {
     unsafe { str::from_utf8_unchecked(slice::from_raw_parts(self.ptr, self.len)) }
+  }
+
+  /// SAFETY: The caller must guarantee that `UnsafeSlice` will not outlive its underlying `String` buffer
+  pub unsafe fn unsafe_clone(&self) -> Self {
+    Self {
+      ptr: self.ptr,
+      len: self.len,
+    }
+  }
+
+  /// SAFETY: The caller must guarantee that `from` and `to` are exact copies
+  #[allow(clippy::ptr_arg)]
+  pub unsafe fn redirect(&mut self, from: &String, to: &String) {
+    if cfg!(debug_assertions) && from != to {
+      panic!("Attempted to redirect UnsafeSlice to a different String");
+    }
+    self.ptr = to.as_ptr().add((self.ptr as usize) - (from.as_ptr() as usize));
   }
 }
 
@@ -75,7 +91,19 @@ mod tests {
     let slice: UnsafeSlice = (&data[..]).into();
 
     let mut map = HashMap::<UnsafeSlice, UnsafeSlice>::new();
-    map.insert(slice, slice);
+    map.insert(unsafe { slice.unsafe_clone() }, unsafe { slice.unsafe_clone() });
     assert_eq!(map.get(&slice).unwrap(), &slice);
+  }
+
+  #[test]
+  fn unsafeslice_redirect() {
+    let a = "TEST".to_string();
+    let b = a.clone();
+
+    let mut slice = UnsafeSlice::from(&a[..]);
+    unsafe {
+      slice.redirect(&a, &b);
+    }
+    assert_eq!("TEST", slice.as_str());
   }
 }

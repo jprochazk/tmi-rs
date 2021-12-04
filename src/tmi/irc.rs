@@ -14,7 +14,7 @@ pub enum Error {
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[twitch_getters]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Message {
   pub tags: Tags,
   pub prefix: Option<Prefix>,
@@ -35,7 +35,8 @@ impl Message {
   /// nick-only prefixes being host-only, or
   /// the #<channel id> always being present
   /// before :params
-  pub fn parse(source: String) -> Result<Message> {
+  pub fn parse(source: impl Into<String>) -> Result<Message> {
+    let source = source.into();
     let (tags, remainder) = Tags::parse(source.trim());
     let (prefix, remainder) = Prefix::parse(remainder);
     let (cmd, remainder) = Command::parse(remainder);
@@ -53,7 +54,7 @@ impl Message {
   }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum Command {
   Ping,
   Pong,
@@ -126,7 +127,7 @@ impl Command {
   }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(PartialEq, Debug)]
 pub struct Tags(HashMap<UnsafeSlice, UnsafeSlice>);
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -213,12 +214,12 @@ impl Tags {
   }
 
   pub fn get(&self, key: &str) -> Option<&str> {
-    self.0.get(&(key.into())).copied().map(|s| s.as_str())
+    self.0.get(&(key.into())).map(|s| unsafe { s.unsafe_clone() }.as_str())
   }
 
   /// Iterates the tags to find one with key == `key`.
   pub(crate) fn get_raw(&self, key: &str) -> Option<UnsafeSlice> {
-    self.0.get(&(key.into())).copied()
+    self.0.get(&(key.into())).map(|s| unsafe { s.unsafe_clone() })
   }
 
   /// Parses a string, transforming all whitespace "\\s" to actual whitespace.
@@ -354,7 +355,7 @@ impl Tags {
 }
 
 #[twitch_getters]
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Prefix {
   nick: Option<UnsafeSlice>,
   user: Option<UnsafeSlice>,
@@ -443,7 +444,7 @@ impl Channel {
   }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Params(UnsafeSlice);
 impl Params {
   /// Parse a params list

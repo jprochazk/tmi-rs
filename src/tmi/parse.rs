@@ -7,7 +7,7 @@
 ///!     Message::Privmsg(msg) => handle_privmsg(msg)
 ///! }
 ///! ```
-use std::convert::Into;
+use std::convert::{Into, TryFrom};
 
 use chrono::{DateTime, Duration, Utc};
 use thiserror::Error;
@@ -43,7 +43,7 @@ pub enum Error {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum Message {
   Ping(self::Ping),
   Pong(self::Pong),
@@ -65,35 +65,38 @@ pub enum Message {
 }
 
 impl Message {
-  pub fn parse(data: String) -> Result<Message> {
-    let irc = irc::Message::parse(data)?;
-    Message::parse_irc(irc)
+  pub fn parse(data: impl Into<String>) -> Result<Message> {
+    Self::try_from(irc::Message::parse(data)?)
   }
-  fn parse_irc(value: irc::Message) -> Result<Message> {
-    Ok(match value.cmd {
-      irc::Command::Ping => Message::Ping(Ping::parse(value)?),
-      irc::Command::Pong => Message::Pong(Pong::parse(value)?),
-      irc::Command::Join => Message::Join(Join::parse(value)?),
-      irc::Command::Part => Message::Part(Part::parse(value)?),
-      irc::Command::Privmsg => Message::Privmsg(Privmsg::parse(value)?),
-      irc::Command::Whisper => Message::Whisper(Whisper::parse(value)?),
-      irc::Command::Clearchat => Message::Clearchat(Clearchat::parse(value)?),
-      irc::Command::Clearmsg => Message::Clearmsg(Clearmsg::parse(value)?),
-      irc::Command::GlobalUserState => Message::GlobalUserState(GlobalUserState::parse(value)?),
-      irc::Command::HostTarget => Message::HostTarget(HostTarget::parse(value)?),
-      irc::Command::Notice => Message::Notice(Notice::parse(value)?),
-      irc::Command::Reconnect => Message::Reconnect(Reconnect::parse(value)?),
-      irc::Command::RoomState => Message::RoomState(RoomState::parse(value)?),
-      irc::Command::UserNotice => Message::UserNotice(UserNotice::parse(value)?),
-      irc::Command::UserState => Message::UserState(UserState::parse(value)?),
-      irc::Command::Capability => Message::Capability(Capability::parse(value)?),
-      _ => Message::Unknown(value),
+}
+
+impl TryFrom<irc::Message> for Message {
+  type Error = Error;
+  fn try_from(msg: irc::Message) -> Result<Self> {
+    Ok(match msg.cmd {
+      irc::Command::Ping => Message::Ping(Ping::parse(msg)?),
+      irc::Command::Pong => Message::Pong(Pong::parse(msg)?),
+      irc::Command::Join => Message::Join(Join::parse(msg)?),
+      irc::Command::Part => Message::Part(Part::parse(msg)?),
+      irc::Command::Privmsg => Message::Privmsg(Privmsg::parse(msg)?),
+      irc::Command::Whisper => Message::Whisper(Whisper::parse(msg)?),
+      irc::Command::Clearchat => Message::Clearchat(Clearchat::parse(msg)?),
+      irc::Command::Clearmsg => Message::Clearmsg(Clearmsg::parse(msg)?),
+      irc::Command::GlobalUserState => Message::GlobalUserState(GlobalUserState::parse(msg)?),
+      irc::Command::HostTarget => Message::HostTarget(HostTarget::parse(msg)?),
+      irc::Command::Notice => Message::Notice(Notice::parse(msg)?),
+      irc::Command::Reconnect => Message::Reconnect(Reconnect::parse(msg)?),
+      irc::Command::RoomState => Message::RoomState(RoomState::parse(msg)?),
+      irc::Command::UserNotice => Message::UserNotice(UserNotice::parse(msg)?),
+      irc::Command::UserState => Message::UserState(UserState::parse(msg)?),
+      irc::Command::Capability => Message::Capability(Capability::parse(msg)?),
+      _ => Message::Unknown(msg),
     })
   }
 }
 
 #[twitch_getters]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Ping {
   arg: Option<UnsafeSlice>,
   raw: irc::Message,
@@ -114,7 +117,7 @@ impl Ping {
 }
 
 #[twitch_getters]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Pong {
   arg: Option<UnsafeSlice>,
   raw: irc::Message,
@@ -135,7 +138,7 @@ impl Pong {
 }
 
 #[twitch_getters]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Join {
   channel: UnsafeSlice,
   nick: UnsafeSlice,
@@ -149,7 +152,12 @@ impl Join {
         .channel()
         .ok_or_else(|| Error::MissingParam("channel".into()))?
         .into(),
-      nick: match value.prefix.ok_or_else(|| Error::MissingParam("nick".into()))?.nick() {
+      nick: match value
+        .prefix
+        .as_ref()
+        .ok_or_else(|| Error::MissingParam("nick".into()))?
+        .nick()
+      {
         Some(nick) => nick.into(),
         None => return Err(Error::MissingParam("user".into())),
       },
@@ -159,7 +167,7 @@ impl Join {
 }
 
 #[twitch_getters]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Part {
   channel: UnsafeSlice,
   nick: UnsafeSlice,
@@ -173,7 +181,12 @@ impl Part {
         .channel()
         .ok_or_else(|| Error::MissingParam("channel".into()))?
         .into(),
-      nick: match value.prefix.ok_or_else(|| Error::MissingParam("nick".into()))?.nick() {
+      nick: match value
+        .prefix
+        .as_ref()
+        .ok_or_else(|| Error::MissingParam("nick".into()))?
+        .nick()
+      {
         Some(nick) => nick.into(),
         None => return Err(Error::MissingParam("nick".into())),
       },
@@ -183,7 +196,7 @@ impl Part {
 }
 
 #[twitch_getters]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct TwitchUser {
   /// The unique ID of the user - the `login` and `name` fields may
   /// arbitrarily change, but ID stays the same forever. For that reason,
@@ -209,7 +222,7 @@ fn parse_message(msg: &str) -> (&str, bool) {
 }
 
 #[twitch_getters]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Privmsg {
   channel: UnsafeSlice,
   text: UnsafeSlice,
@@ -241,6 +254,7 @@ impl Privmsg {
         id: source.tags.require_raw("user-id")?,
         login: source
           .prefix
+          .as_ref()
           .ok_or_else(|| Error::MissingParam("nick".into()))?
           .nick()
           .ok_or_else(|| Error::MissingParam("nick".into()))?
@@ -262,7 +276,7 @@ impl Privmsg {
 }
 
 #[twitch_getters]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Whisper {
   recipient: UnsafeSlice,
   thread_id: UnsafeSlice,
@@ -278,7 +292,7 @@ pub struct Whisper {
 
 impl Whisper {
   fn parse(source: irc::Message) -> Result<Self> {
-    let params = match source.params {
+    let params = match source.params.as_ref() {
       Some(v) => v,
       None => return Err(Error::EmptyParams),
     };
@@ -299,6 +313,7 @@ impl Whisper {
         id: source.tags.require_raw("user-id")?,
         login: source
           .prefix
+          .as_ref()
           .ok_or_else(|| Error::MissingParam("nick".into()))?
           .nick()
           .ok_or_else(|| Error::MissingParam("nick".into()))?
@@ -318,7 +333,7 @@ impl Whisper {
 }
 
 #[twitch_getters]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Clearchat {
   channel: UnsafeSlice,
   /// None = clear the entire chat
@@ -354,7 +369,7 @@ impl Clearchat {
 }
 
 #[twitch_getters]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Clearmsg {
   channel: UnsafeSlice,
   login: UnsafeSlice,
@@ -390,7 +405,7 @@ impl Clearmsg {
 
 /// Sent following a successful authentication
 #[twitch_getters]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct GlobalUserState {
   user_id: UnsafeSlice,
   pub display_name: String,
@@ -418,7 +433,7 @@ impl GlobalUserState {
 }
 
 #[twitch_getters]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct HostTarget {
   hosting_channel: UnsafeSlice,
   /// None = stop hosting
@@ -460,7 +475,7 @@ impl HostTarget {
   }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum NoticeId {
   /// <user> is already banned in this channel.
   AlreadyBanned,
@@ -960,7 +975,7 @@ impl NoticeId {
 }
 
 #[twitch_getters]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Notice {
   pub id: Option<NoticeId>,
   channel: Option<UnsafeSlice>,
@@ -1010,7 +1025,7 @@ impl Notice {
   }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Reconnect {
   raw: irc::Message,
 }
@@ -1045,7 +1060,7 @@ impl FollowerOnlyMode {
 }
 
 #[twitch_getters]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct RoomState {
   channel: UnsafeSlice,
   /// Only Twitch emotes are allowed in chat
@@ -1100,7 +1115,7 @@ impl RoomState {
 }
 
 #[twitch_getters]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct UserNoticeBase {
   channel: UnsafeSlice,
   text: Option<UnsafeSlice>,
@@ -1116,7 +1131,7 @@ pub struct UserNoticeBase {
 }
 
 #[twitch_getters]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Sub {
   pub base: UserNoticeBase,
   pub cumulative_months: i64,
@@ -1128,7 +1143,7 @@ pub struct Sub {
 }
 
 #[twitch_getters]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct SubExtension {
   pub base: UserNoticeBase,
   pub cumulative_months: i64,
@@ -1138,7 +1153,7 @@ pub struct SubExtension {
 }
 
 #[twitch_getters]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct SubGift {
   pub base: UserNoticeBase,
   pub cumulative_months: i64,
@@ -1153,13 +1168,13 @@ pub struct SubGift {
   pub is_anon: bool,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct SubMysteryGift {
   pub base: UserNoticeBase,
 }
 
 #[twitch_getters]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct GiftPaidUpgrade {
   pub base: UserNoticeBase,
   pub promo_gift_total: i64,
@@ -1169,13 +1184,13 @@ pub struct GiftPaidUpgrade {
   pub is_anon: bool,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct RewardGift {
   pub base: UserNoticeBase,
 }
 
 #[twitch_getters]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Raid {
   pub base: UserNoticeBase,
   /// Display name of raid origin channel
@@ -1185,27 +1200,27 @@ pub struct Raid {
   pub viewer_count: i64,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Unraid {
   pub base: UserNoticeBase,
 }
 
 #[twitch_getters]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Ritual {
   pub base: UserNoticeBase,
   ritual_name: UnsafeSlice,
 }
 
 #[twitch_getters]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct BitsBadgeTier {
   pub base: UserNoticeBase,
   /// Tier of bits badge the user just earned
   threshold: UnsafeSlice,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum UserNotice {
   Sub(Sub),
   SubExtension(SubExtension),
@@ -1337,7 +1352,7 @@ impl UserNotice {
 }
 
 #[twitch_getters]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct UserState {
   channel: UnsafeSlice,
   pub display_name: String,
@@ -1368,7 +1383,7 @@ impl UserState {
 }
 
 #[allow(clippy::upper_case_acronyms)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum CapabilitySubCmd {
   /// Capability.`kinds` contains a list of possible capabilities
   LS,
@@ -1390,7 +1405,7 @@ impl CapabilitySubCmd {
 }
 
 #[twitch_getters]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Capability {
   pub subcmd: CapabilitySubCmd,
   which: UnsafeSlice,
@@ -1400,7 +1415,7 @@ pub struct Capability {
 impl Capability {
   fn parse(source: irc::Message) -> Result<Self> {
     // skip the first param, which is '*'
-    let params = source.params.ok_or(Error::MalformedMessage)?;
+    let params = source.params.as_ref().ok_or(Error::MalformedMessage)?;
     let params = params
       .raw()
       .trim_start()
@@ -1432,87 +1447,81 @@ mod tests {
 
   #[test]
   pub fn parse_ping() {
-    let src = "PING :tmi.twitch.tv".to_string();
-    let msg = irc::Message::parse(src).unwrap();
+    let src = "PING :tmi.twitch.tv";
 
     assert_eq!(
       Message::Ping(Ping {
         arg: Some("tmi.twitch.tv".into()),
-        raw: msg.clone()
+        raw: irc::Message::parse(src).unwrap()
       }),
-      Message::parse_irc(msg).unwrap()
+      Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
     )
   }
 
   #[test]
   pub fn parse_ping_no_arg() {
-    let src = "PING".to_string();
-    let msg = irc::Message::parse(src).unwrap();
+    let src = "PING";
 
     assert_eq!(
       Message::Ping(Ping {
         arg: None,
-        raw: msg.clone()
+        raw: irc::Message::parse(src).unwrap()
       }),
-      Message::parse_irc(msg).unwrap()
+      Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
     )
   }
 
   #[test]
   pub fn parse_pong() {
-    let src = "PONG :tmi.twitch.tv".to_string();
-    let msg = irc::Message::parse(src).unwrap();
+    let src = "PONG :tmi.twitch.tv";
 
     assert_eq!(
       Message::Pong(Pong {
         arg: Some("tmi.twitch.tv".into()),
-        raw: msg.clone()
+        raw: irc::Message::parse(src).unwrap()
       }),
-      Message::parse_irc(msg).unwrap()
+      Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
     )
   }
 
   #[test]
   pub fn parse_pong_no_arg() {
-    let src = "PONG".to_string();
-    let msg = irc::Message::parse(src).unwrap();
+    let src = "PONG";
 
     assert_eq!(
       Message::Pong(Pong {
         arg: None,
-        raw: msg.clone()
+        raw: irc::Message::parse(src).unwrap()
       }),
-      Message::parse_irc(msg).unwrap()
+      Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
     )
   }
 
   #[test]
   pub fn parse_join() {
-    let src = ":test!test@test.tmi.twitch.tv JOIN #channel".to_string();
-    let msg = irc::Message::parse(src).unwrap();
+    let src = ":test!test@test.tmi.twitch.tv JOIN #channel";
 
     assert_eq!(
       Message::Join(Join {
         channel: "channel".into(),
         nick: "test".into(),
-        raw: msg.clone()
+        raw: irc::Message::parse(src).unwrap()
       }),
-      Message::parse_irc(msg).unwrap()
+      Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
     )
   }
 
   #[test]
   pub fn parse_part() {
-    let src = ":test!test@test.tmi.twitch.tv PART #channel".to_string();
-    let msg = irc::Message::parse(src).unwrap();
+    let src = ":test!test@test.tmi.twitch.tv PART #channel";
 
     assert_eq!(
       Message::Part(Part {
         channel: "channel".into(),
         nick: "test".into(),
-        raw: msg.clone()
+        raw: irc::Message::parse(src).unwrap()
       }),
-      Message::parse_irc(msg).unwrap()
+      Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
     )
   }
 
@@ -1523,9 +1532,7 @@ mod tests {
         color=#19E6E6;display-name=randers;emotes=;flags=;id=7eb848c9-1060-4e5e-9f4c-612877982e79;\
         mod=0;room-id=40286300;subscriber=1;tmi-sent-ts=1563096499780;turbo=0;\
         user-id=40286300;user-type= :randers!randers@randers.tmi.twitch.tv PRIVMSG #randers :test\
-        "
-    .to_string();
-    let msg = irc::Message::parse(src).unwrap();
+        ";
 
     assert_eq!(
       Message::Privmsg(Privmsg {
@@ -1545,9 +1552,9 @@ mod tests {
         id: "7eb848c9-1060-4e5e-9f4c-612877982e79".into(),
         room_id: "40286300".into(),
         time: Utc.timestamp_millis(1563096499780i64),
-        raw: msg.clone(),
+        raw: irc::Message::parse(src).unwrap(),
       }),
-      Message::parse_irc(msg).unwrap()
+      Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
     )
   }
 
@@ -1558,9 +1565,7 @@ mod tests {
         color=#19E6E6;display-name=randers;emotes=;flags=;id=7eb848c9-1060-4e5e-9f4c-612877982e79;\
         mod=0;room-id=40286300;subscriber=1;tmi-sent-ts=1563096499780;turbo=0;\
         user-id=40286300;user-type= :randers!randers@randers.tmi.twitch.tv PRIVMSG #randers :\x01ACTION test\x01\
-        "
-    .to_string();
-    let msg = irc::Message::parse(src).unwrap();
+        ";
 
     assert_eq!(
       Message::Privmsg(Privmsg {
@@ -1580,9 +1585,9 @@ mod tests {
         id: "7eb848c9-1060-4e5e-9f4c-612877982e79".into(),
         room_id: "40286300".into(),
         time: Utc.timestamp_millis(1563096499780i64),
-        raw: msg.clone(),
+        raw: irc::Message::parse(src).unwrap(),
       }),
-      Message::parse_irc(msg).unwrap()
+      Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
     )
   }
 
@@ -1592,9 +1597,7 @@ mod tests {
         @badges=;color=#2E8B57;display-name=pajbot;emotes=25:7-11;message-id=\
         2034;thread-id=40286300_82008718;turbo=0;user-id=82008718;user-type= \
         :pajbot!pajbot@pajbot.tmi.twitch.tv WHISPER randers :Riftey Kappa\
-        "
-    .to_string();
-    let msg = irc::Message::parse(src).unwrap();
+        ";
 
     assert_eq!(
       Message::Whisper(Whisper {
@@ -1612,9 +1615,9 @@ mod tests {
         color: Some("#2E8B57".into()),
         emotes: "25:7-11".into(),
         id: "2034".into(),
-        raw: msg.clone(),
+        raw: irc::Message::parse(src).unwrap(),
       }),
-      Message::parse_irc(msg).unwrap()
+      Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
     )
   }
 
@@ -1624,9 +1627,7 @@ mod tests {
         @badges=;color=#2E8B57;display-name=pajbot;emotes=25:7-11;message-id=\
         2034;thread-id=40286300_82008718;turbo=0;user-id=82008718;user-type= \
         :pajbot!pajbot@pajbot.tmi.twitch.tv WHISPER randers :\x01ACTION Riftey Kappa\x01\
-        "
-    .to_string();
-    let msg = irc::Message::parse(src).unwrap();
+        ";
 
     assert_eq!(
       Message::Whisper(Whisper {
@@ -1644,9 +1645,9 @@ mod tests {
         color: Some("#2E8B57".into()),
         emotes: "25:7-11".into(),
         id: "2034".into(),
-        raw: msg.clone(),
+        raw: irc::Message::parse(src).unwrap(),
       }),
-      Message::parse_irc(msg).unwrap()
+      Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
     )
   }
 
@@ -1655,9 +1656,7 @@ mod tests {
     let src = "\
         @ban-duration=600;room-id=40286300;target-user-id=70948394;tmi-sent-ts=1563051113633 \
         :tmi.twitch.tv CLEARCHAT #randers :weeb123\
-        "
-    .to_string();
-    let msg = irc::Message::parse(src).unwrap();
+        ";
 
     assert_eq!(
       Message::Clearchat(Clearchat {
@@ -1666,9 +1665,9 @@ mod tests {
         target_id: Some("70948394".into()),
         time: Utc.timestamp_millis(1563051113633),
         duration: Some(Duration::seconds(600)),
-        raw: msg.clone(),
+        raw: irc::Message::parse(src).unwrap(),
       }),
-      Message::parse_irc(msg).unwrap()
+      Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
     )
   }
 
@@ -1677,9 +1676,7 @@ mod tests {
     let src = "\
         @room-id=40286300;target-user-id=70948394;tmi-sent-ts=1563051758128 \
         :tmi.twitch.tv CLEARCHAT #randers :weeb123\
-        "
-    .to_string();
-    let msg = irc::Message::parse(src).unwrap();
+        ";
 
     assert_eq!(
       Message::Clearchat(Clearchat {
@@ -1688,9 +1685,9 @@ mod tests {
         target_id: Some("70948394".into()),
         time: Utc.timestamp_millis(1563051758128),
         duration: None,
-        raw: msg.clone(),
+        raw: irc::Message::parse(src).unwrap(),
       }),
-      Message::parse_irc(msg).unwrap()
+      Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
     )
   }
 
@@ -1699,9 +1696,7 @@ mod tests {
     let src = "\
         @room-id=40286300;tmi-sent-ts=1563051778390 \
         :tmi.twitch.tv CLEARCHAT #randers\
-        "
-    .to_string();
-    let msg = irc::Message::parse(src).unwrap();
+        ";
 
     assert_eq!(
       Message::Clearchat(Clearchat {
@@ -1710,9 +1705,9 @@ mod tests {
         target_id: None,
         time: Utc.timestamp_millis(1563051778390),
         duration: None,
-        raw: msg.clone(),
+        raw: irc::Message::parse(src).unwrap(),
       }),
-      Message::parse_irc(msg).unwrap()
+      Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
     )
   }
 
@@ -1722,9 +1717,7 @@ mod tests {
         @login=supibot;room-id=;target-msg-id=25fd76d9-4731-4907-978e-a391134ebd67;\
         tmi-sent-ts=-6795364578871 :tmi.twitch.tv CLEARMSG #randers :Pong! Uptime: 6h,\
         15m; Temperature: 54.8°C; Latency to TMI: 183ms; Commands used: 795\
-        "
-    .to_string();
-    let msg = irc::Message::parse(src).unwrap();
+        ";
 
     assert_eq!(
       Message::Clearmsg(Clearmsg {
@@ -1733,9 +1726,9 @@ mod tests {
         /// Deleted message text
         text: "Pong! Uptime: 6h,15m; Temperature: 54.8°C; Latency to TMI: 183ms; Commands used: 795".into(),
         target_msg_id: "25fd76d9-4731-4907-978e-a391134ebd67".into(),
-        raw: msg.clone(),
+        raw: irc::Message::parse(src).unwrap(),
       }),
-      Message::parse_irc(msg).unwrap()
+      Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
     )
   }
 
@@ -1745,9 +1738,7 @@ mod tests {
         @badge-info=;badges=bits-charity/1;color=#19E6E6;display-name=RANDERS;\
         emote-sets=0,42,237;user-id=40286300;user-type= \
         :tmi.twitch.tv GLOBALUSERSTATE\
-        "
-    .to_string();
-    let msg = irc::Message::parse(src).unwrap();
+        ";
 
     assert_eq!(
       Message::GlobalUserState(GlobalUserState {
@@ -1757,9 +1748,9 @@ mod tests {
         badges: "bits-charity/1".into(),
         color: Some("#19E6E6".into()),
         emote_sets: "0,42,237".into(),
-        raw: msg.clone(),
+        raw: irc::Message::parse(src).unwrap(),
       }),
-      Message::parse_irc(msg).unwrap()
+      Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
     )
   }
 
@@ -1768,9 +1759,7 @@ mod tests {
     let src = "\
         @badge-info=;badges=;color=;display-name=receivertest3;emote-sets=0;user-id=422021310;user-type= \
         :tmi.twitch.tv GLOBALUSERSTATE\
-        "
-    .to_string();
-    let msg = irc::Message::parse(src).unwrap();
+        ";
 
     assert_eq!(
       Message::GlobalUserState(GlobalUserState {
@@ -1780,41 +1769,39 @@ mod tests {
         badges: "".into(),
         color: None,
         emote_sets: "0".into(),
-        raw: msg.clone(),
+        raw: irc::Message::parse(src).unwrap(),
       }),
-      Message::parse_irc(msg).unwrap()
+      Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
     )
   }
 
   #[test]
   pub fn parse_hosttarget_host() {
-    let src = ":tmi.twitch.tv HOSTTARGET #randers :leebaxd 0".to_string();
-    let msg = irc::Message::parse(src).unwrap();
+    let src = ":tmi.twitch.tv HOSTTARGET #randers :leebaxd 0";
 
     assert_eq!(
       Message::HostTarget(HostTarget {
         hosting_channel: "randers".into(),
         target_channel: Some("leebaxd".into()),
         viewer_count: Some(0),
-        raw: msg.clone(),
+        raw: irc::Message::parse(src).unwrap(),
       }),
-      Message::parse_irc(msg).unwrap()
+      Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
     )
   }
 
   #[test]
   pub fn parse_hosttarget_unhost() {
-    let src = ":tmi.twitch.tv HOSTTARGET #randers :-".to_string();
-    let msg = irc::Message::parse(src).unwrap();
+    let src = ":tmi.twitch.tv HOSTTARGET #randers :-";
 
     assert_eq!(
       Message::HostTarget(HostTarget {
         hosting_channel: "randers".into(),
         target_channel: None,
         viewer_count: None,
-        raw: msg.clone(),
+        raw: irc::Message::parse(src).unwrap(),
       }),
-      Message::parse_irc(msg).unwrap()
+      Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
     )
   }
 
@@ -1823,34 +1810,31 @@ mod tests {
     let src = "\
         @msg-id=msg_banned \
         :tmi.twitch.tv NOTICE #forsen :You are permanently banned from talking in forsen.\
-        "
-    .to_string();
-    let msg = irc::Message::parse(src).unwrap();
+        ";
 
     assert_eq!(
       Message::Notice(Notice {
         id: Some(NoticeId::MsgBanned),
         channel: Some("forsen".into()),
         message: "You are permanently banned from talking in forsen.".into(),
-        raw: msg.clone(),
+        raw: irc::Message::parse(src).unwrap(),
       }),
-      Message::parse_irc(msg).unwrap()
+      Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
     )
   }
 
   #[test]
   pub fn parse_notice_bad_auth() {
-    let src = ":tmi.twitch.tv NOTICE * :Improperly formatted auth".to_string();
-    let msg = irc::Message::parse(src).unwrap();
+    let src = ":tmi.twitch.tv NOTICE * :Improperly formatted auth";
 
     assert_eq!(
       Message::Notice(Notice {
         id: None,
         channel: None,
         message: "Improperly formatted auth".into(),
-        raw: msg.clone(),
+        raw: irc::Message::parse(src).unwrap(),
       }),
-      Message::parse_irc(msg).unwrap()
+      Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
     )
   }
 
@@ -1859,9 +1843,7 @@ mod tests {
     let src = "\
         @emote-only=0;followers-only=-1;r9k=0;rituals=0;room-id=40286300;slow=0;subs-only=0 \
         :tmi.twitch.tv ROOMSTATE #randers\
-        "
-    .to_string();
-    let msg = irc::Message::parse(src).unwrap();
+        ";
 
     assert_eq!(
       Message::RoomState(RoomState {
@@ -1872,16 +1854,15 @@ mod tests {
         slow: Some(0),
         subs_only: Some(false),
         is_update: false,
-        raw: msg.clone(),
+        raw: irc::Message::parse(src).unwrap(),
       }),
-      Message::parse_irc(msg).unwrap()
+      Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
     )
   }
 
   #[test]
   pub fn parse_roomstate_partial() {
-    let src = "@slow=10 :tmi.twitch.tv ROOMSTATE #dallas".to_string();
-    let msg = irc::Message::parse(src).unwrap();
+    let src = "@slow=10 :tmi.twitch.tv ROOMSTATE #dallas";
 
     assert_eq!(
       Message::RoomState(RoomState {
@@ -1892,9 +1873,9 @@ mod tests {
         slow: Some(10),
         subs_only: None,
         is_update: true,
-        raw: msg.clone(),
+        raw: irc::Message::parse(src).unwrap(),
       }),
-      Message::parse_irc(msg).unwrap()
+      Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
     )
   }
 
@@ -1908,9 +1889,7 @@ mod tests {
         room-id=1337;subscriber=1;system-msg=ronni\\shas\\ssubscribed\\sfor\\s6\\smonths!;\
         tmi-sent-ts=1507246572675;turbo=1;user-id=1337;user-type=staff \
         :tmi.twitch.tv USERNOTICE #dallas :Great stream -- keep it up!\
-        "
-    .to_string();
-    let msg = irc::Message::parse(src).unwrap();
+        ";
 
     assert_eq!(
       Message::UserNotice(UserNotice::Sub(Sub {
@@ -1930,7 +1909,7 @@ mod tests {
           room_id: "1337".into(),
           system_msg: "ronni has subscribed for 6 months!".into(),
           time: Utc.timestamp_millis(1507246572675),
-          raw: msg.clone(),
+          raw: irc::Message::parse(src).unwrap(),
         },
         cumulative_months: 6,
         should_share_streak: true,
@@ -1939,7 +1918,7 @@ mod tests {
         sub_plan_name: "Prime".into(),
         is_resub: true,
       })),
-      Message::parse_irc(msg).unwrap()
+      Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
     )
   }
 
@@ -1951,9 +1930,8 @@ mod tests {
         msg-param-sub-benefit-end-month=4;msg-param-sub-plan=1000;msg-param-cumulative-months=16;room-id=434858776;\
         subscriber=1;system-msg=olivetan\\sextended\\stheir\\sTier\\s1\\ssubscription\\sthrough\\sApril!;tmi-sent-ts=1565212333824;\
         user-id=433099049;user-type=staff \
-        :tmi.twitch.tv USERNOTICE #pennypicklesthedog".to_string();
+        :tmi.twitch.tv USERNOTICE #pennypicklesthedog";
 
-    let msg = irc::Message::parse(src).unwrap();
     assert_eq!(
       Message::UserNotice(UserNotice::SubExtension(SubExtension {
         base: UserNoticeBase {
@@ -1972,14 +1950,14 @@ mod tests {
           room_id: "434858776".into(),
           system_msg: "olivetan extended their Tier 1 subscription through April!".into(),
           time: Utc.timestamp_millis(1565212333824),
-          raw: msg.clone(),
+          raw: irc::Message::parse(src).unwrap(),
         },
         cumulative_months: 16,
         benefit_end_month: 4,
         sub_plan: "1000".into(),
         sub_plan_name: None,
       })),
-      Message::parse_irc(msg).unwrap()
+      Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
     )
   }
 
@@ -1995,9 +1973,7 @@ mod tests {
         system-msg=TWW2\\sgifted\\sa\\sTier\\s1\\ssub\\sto\\sMr_Woodchuck!;\
         tmi-sent-ts=1521159445153;turbo=0;user-id=13405587;user-type=staff \
         :tmi.twitch.tv USERNOTICE #forstycup\
-        "
-    .to_string();
-    let msg = irc::Message::parse(src).unwrap();
+        ";
 
     assert_eq!(
       Message::UserNotice(UserNotice::SubGift(SubGift {
@@ -2017,7 +1993,7 @@ mod tests {
           room_id: "19571752".into(),
           system_msg: "TWW2 gifted a Tier 1 sub to Mr_Woodchuck!".into(),
           time: Utc.timestamp_millis(1521159445153),
-          raw: msg.clone(),
+          raw: irc::Message::parse(src).unwrap(),
         },
         cumulative_months: 1,
         recipient_display_name: "Mr_Woodchuck".into(),
@@ -2028,18 +2004,19 @@ mod tests {
         gift_months: 1,
         is_anon: false,
       })),
-      Message::parse_irc(msg).unwrap()
+      Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
     )
   }
 
   #[test]
   pub fn parse_reconnect() {
-    let src = ":tmi.twitch.tv RECONNECT".to_string();
-    let msg = irc::Message::parse(src).unwrap();
+    let src = ":tmi.twitch.tv RECONNECT";
 
     assert_eq!(
-      Message::Reconnect(Reconnect { raw: msg.clone() }),
-      Message::parse_irc(msg).unwrap()
+      Message::Reconnect(Reconnect {
+        raw: irc::Message::parse(src).unwrap()
+      }),
+      Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
     )
   }
 
@@ -2049,9 +2026,7 @@ mod tests {
         @badge-info=;badges=;color=#FF0000;\
         display-name=zwb3_pyramids;emote-sets=0;mod=0;subscriber=0;user-type= \
         :tmi.twitch.tv USERSTATE #randers\
-        "
-    .to_string();
-    let msg = irc::Message::parse(src).unwrap();
+        ";
 
     assert_eq!(
       Message::UserState(UserState {
@@ -2061,93 +2036,90 @@ mod tests {
         badges: "".into(),
         color: Some("#FF0000".into()),
         emote_sets: "0".into(),
-        raw: msg.clone(),
+        raw: irc::Message::parse(src).unwrap(),
       }),
-      Message::parse_irc(msg).unwrap()
+      Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
     )
   }
 
   #[test]
   pub fn parse_capability_ack_single() {
-    let src = ":tmi.twitch.tv CAP * ACK :twitch.tv/commands".to_string();
-    let msg = irc::Message::parse(src).unwrap();
+    let src = ":tmi.twitch.tv CAP * ACK :twitch.tv/commands";
 
     assert_eq!(
       Message::Capability(Capability {
         subcmd: CapabilitySubCmd::ACK,
         which: "twitch.tv/commands".into(),
-        raw: msg.clone(),
+        raw: irc::Message::parse(src).unwrap(),
       }),
-      Message::parse_irc(msg).unwrap()
+      Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
     )
   }
 
   #[test]
   pub fn parse_capability_ack_multi() {
-    let src = ":tmi.twitch.tv CAP * ACK :twitch.tv/commands twitch.tv/tags twitch.tv/membership".to_string();
-    let msg = irc::Message::parse(src).unwrap();
+    let src = ":tmi.twitch.tv CAP * ACK :twitch.tv/commands twitch.tv/tags twitch.tv/membership";
 
     assert_eq!(
       Message::Capability(Capability {
         subcmd: CapabilitySubCmd::ACK,
         which: "twitch.tv/commands twitch.tv/tags twitch.tv/membership".into(),
-        raw: msg.clone(),
+        raw: irc::Message::parse(src).unwrap(),
       }),
-      Message::parse_irc(msg).unwrap()
+      Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
     )
   }
 
   #[test]
   pub fn parse_capability_nak_single() {
-    let src = ":tmi.twitch.tv CAP * NAK :twitch.tv/invalid".to_string();
-    let msg = irc::Message::parse(src).unwrap();
+    let src = ":tmi.twitch.tv CAP * NAK :twitch.tv/invalid";
 
     assert_eq!(
       Message::Capability(Capability {
         subcmd: CapabilitySubCmd::NAK,
         which: "twitch.tv/invalid".into(),
-        raw: msg.clone(),
+        raw: irc::Message::parse(src).unwrap(),
       }),
-      Message::parse_irc(msg).unwrap()
+      Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
     )
   }
 
   #[test]
   pub fn parse_capability_nak_multi() {
-    let src = ":tmi.twitch.tv CAP * NAK :twitch.tv/invalid0 twitch.tv/invalid1 twitch.tv/invalid2".to_string();
-    let msg = irc::Message::parse(src).unwrap();
+    let src = ":tmi.twitch.tv CAP * NAK :twitch.tv/invalid0 twitch.tv/invalid1 twitch.tv/invalid2";
 
     assert_eq!(
       Message::Capability(Capability {
         subcmd: CapabilitySubCmd::NAK,
         which: "twitch.tv/invalid0 twitch.tv/invalid1 twitch.tv/invalid2".into(),
-        raw: msg.clone(),
+        raw: irc::Message::parse(src).unwrap(),
       }),
-      Message::parse_irc(msg).unwrap()
+      Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
     )
   }
 
   #[test]
   pub fn parse_capability_ls() {
-    let src = ":tmi.twitch.tv CAP * LS :twitch.tv/commands twitch.tv/tags twitch.tv/membership".to_string();
-    let msg = irc::Message::parse(src).unwrap();
+    let src = ":tmi.twitch.tv CAP * LS :twitch.tv/commands twitch.tv/tags twitch.tv/membership";
 
     assert_eq!(
       Message::Capability(Capability {
         subcmd: CapabilitySubCmd::LS,
         which: "twitch.tv/commands twitch.tv/tags twitch.tv/membership".into(),
-        raw: msg.clone(),
+        raw: irc::Message::parse(src).unwrap(),
       }),
-      Message::parse_irc(msg).unwrap()
+      Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
     )
   }
 
   #[test]
   pub fn parse_welcome_msg() {
-    let src = ":tmi.twitch.tv 001 justinfan12345 :Welcome, GLHF!".to_string();
-    let msg = irc::Message::parse(src).unwrap();
+    let src = ":tmi.twitch.tv 001 justinfan12345 :Welcome, GLHF!";
 
-    assert_eq!(Message::Unknown(msg.clone()), Message::parse_irc(msg).unwrap())
+    assert_eq!(
+      Message::Unknown(irc::Message::parse(src).unwrap()),
+      Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
+    )
   }
 }
 
