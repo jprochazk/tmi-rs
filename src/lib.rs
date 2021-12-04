@@ -1,5 +1,7 @@
 //! Message parsing/writing module
 //!
-//! * [`tmi`](./twitch) - Twitch IRC functionality
+//! * [`ps`](./ps) - Twitch PubSub
+//! * [`tmi`](./twitch) - Twitch IRC
 
+pub mod ps;
 pub mod tmi;

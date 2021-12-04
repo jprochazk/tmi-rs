@@ -978,8 +978,12 @@ checksum = "e057364a4dd37870b33bf8dc1885d29187d90770f488d599d3ee8d9e4916fbd3"
 dependencies = [
  "futures-util",
  "log",
+ "rustls",
+ "rustls-native-certs",
  "tokio",
+ "tokio-rustls",
  "tungstenite",
+ "webpki",
 ]
 
 [[package]]
@@ -995,10 +999,12 @@ dependencies = [
  "httparse",
  "log",
  "rand",
+ "rustls",
  "sha-1",
  "thiserror",
  "url",
  "utf-8",
+ "webpki",
 ]
 
 [[package]]

@@ -13,9 +13,8 @@ tokio = { version = "1.4.0", features = ["net", "time"] }
 # tokio-util = { version = "0.6.5", features = ["full"] }
 tokio-stream = { version = "0.1.5", features = ["io-util"] }
 tokio-rustls = "0.23.1"
-tokio-tungstenite = "0.16.0"
+tokio-tungstenite = { version = "0.16.0", features = ["connect", "rustls-tls-native-roots"]}
 rustls-native-certs = "0.6.1"
-anyhow = "1.0.39"
 futures = "0.3.13"
 log = "0.4.14"
 rand = "0.8.3"
@@ -25,6 +24,7 @@ governor = "0.3.2"
 twitch_getters = { path = "./twitch_getters" }
 
 [dev-dependencies]
+anyhow = "1.0.39"
 tokio-test = "0.4.0"
 alto_logger = "0.3.7"
 tokio = { version = "1.4.0", features = ["full"] }

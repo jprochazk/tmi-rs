@@ -14,6 +14,7 @@ use tokio::{
   net::TcpStream,
 };
 use tokio_rustls::client::TlsStream;
+use tokio_rustls::{rustls, webpki, TlsConnector};
 use tokio_stream::wrappers::LinesStream;
 
 const TMI_URL_HOST: &str = "irc.chat.twitch.tv";
@@ -42,14 +43,16 @@ pub struct Config {
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Error, Debug)]
 pub enum Error {
-  #[error("Connection to Twitch IRC server failed")]
-  ConnectionFailed,
+  #[error("Connection to Twitch IRC server failed: {0}")]
+  ConnectionFailed(String),
   #[error("Encountered an I/O error: {0}")]
   IO(#[from] std::io::Error),
   #[error("Encountered an error while parsing: {0}")]
   Parse(#[from] parse::Error),
-  #[error(transparent)]
-  Generic(#[from] anyhow::Error),
+  #[error("Encountered an error while fetching certificates: {0}")]
+  CertError(#[from] webpki::Error),
+  #[error("Encountered an error while resolving server name: {0}")]
+  DnsError(#[from] rustls::client::InvalidDnsNameError),
   #[error("Timed out")]
   Timeout,
   #[error("Stream closed")]
@@ -60,15 +63,6 @@ pub enum Error {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-macro_rules! err {
-    ($Variant:ident, $msg:expr) => {
-Err(err!(bare $Variant, $msg))
-    };
-    (bare $Variant:ident, $msg:expr) => {
-        crate::tmi::conn::Error::$Variant(anyhow::anyhow!($msg))
-    };
-}
-
 fn expected_cap_ack(request_membership_data: bool) -> &'static str {
   if request_membership_data {
     "twitch.tv/commands twitch.tv/tags twitch.tv/membership"
@@ -78,29 +72,18 @@ fn expected_cap_ack(request_membership_data: bool) -> &'static str {
 }
 
 async fn connect_tls(host: &str, port: u16) -> Result<TlsStream<TcpStream>> {
-  use tokio_rustls::{
-    rustls::{Certificate, ClientConfig, RootCertStore, ServerName},
-    TlsConnector,
-  };
-
-  let mut root_store = RootCertStore::empty();
-  rustls_native_certs::load_native_certs()
-    .expect("Failed to load native certs")
-    .into_iter()
-    .for_each(|cert| root_store.add(&Certificate(cert.0)).unwrap());
-  let config = ClientConfig::builder()
+  let mut root_store = rustls::RootCertStore::empty();
+  for cert in rustls_native_certs::load_native_certs()? {
+    root_store.add(&rustls::Certificate(cert.0))?;
+  }
+  let config = rustls::ClientConfig::builder()
     .with_safe_defaults()
     .with_root_certificates(root_store)
     .with_no_client_auth();
   let config = TlsConnector::from(Arc::new(config));
-  let server_name = ServerName::try_from(host).map_err(|err| anyhow::anyhow!(err))?;
-  let stream = TcpStream::connect((host, port))
-    .await
-    .map_err(|err| anyhow::anyhow!(err))?;
-  let out = config
-    .connect(server_name, stream)
-    .await
-    .map_err(|err| anyhow::anyhow!(err))?;
+  let server_name = rustls::ServerName::try_from(host)?;
+  let stream = TcpStream::connect((host, port)).await?;
+  let out = config.connect(server_name, stream).await?;
 
   Ok(out)
 }
@@ -307,6 +290,12 @@ impl From<(Sender, Reader)> for Connection {
 }
 
 pub async fn connect(config: Config) -> Result<Connection> {
+  macro_rules! fail {
+    ($msg:expr) => {
+      Err(crate::tmi::conn::Error::ConnectionFailed($msg.into()))
+    };
+  }
+
   log::debug!("Connecting to TMI");
   // 1. connect
   let connection: TlsStream<TcpStream> = tokio::time::timeout(
@@ -329,19 +318,19 @@ pub async fn connect(config: Config) -> Result<Connection> {
       "commands, tags"
     }
   );
-
   sender.cap(config.membership_data).await?;
+
   // wait for CAP * ACK :twitch.tv/commands twitch.tv/tags [twitch.tv/membership]
   if let Some(line) = read.next().await {
     let line = line?;
     match Message::parse(line)? {
       Message::Capability(capability) => {
         if capability.which() != expected_cap_ack(config.membership_data) {
-          return err!(Generic, "Did not receive expected capabilities");
+          return fail!("Did not receive expected capabilities");
         }
       }
       _ => {
-        return err!(Generic, "Did not receive expected capabilities");
+        return fail!("Did not receive expected capabilities");
       }
     }
   }
@@ -361,17 +350,18 @@ pub async fn connect(config: Config) -> Result<Connection> {
       sender.nick(login).await?;
     }
   }
-  // wait for the '001' message, which means connection was successful
+
+  // 4. wait for the '001' message
   if let Some(line) = read.next().await {
     let line = line?;
     match Message::parse(line)? {
       Message::Unknown(msg) => {
         if msg.cmd != irc::Command::Unknown("001".into()) {
-          return err!(Generic, "Failed to authenticate");
+          return fail!("Failed to authenticate");
         }
       }
       _ => {
-        return err!(Generic, "Failed to authenticate");
+        return fail!("Failed to authenticate");
       }
     }
   }
