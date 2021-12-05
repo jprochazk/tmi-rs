@@ -235,6 +235,7 @@ pub struct Privmsg {
   id: UnsafeSlice,
   room_id: UnsafeSlice,
   pub time: DateTime<Utc>,
+  custom_reward_id: Option<UnsafeSlice>,
   raw: irc::Message,
 }
 
@@ -270,6 +271,7 @@ impl Privmsg {
       id: source.tags.require_raw("id")?,
       room_id: source.tags.require_raw("room-id")?,
       time: source.tags.require_date("tmi-sent-ts")?,
+      custom_reward_id: source.tags.get_raw("custom-reward-id"),
       raw: source,
     })
   }
@@ -1552,6 +1554,7 @@ mod tests {
         id: "7eb848c9-1060-4e5e-9f4c-612877982e79".into(),
         room_id: "40286300".into(),
         time: Utc.timestamp_millis(1563096499780i64),
+        custom_reward_id: None,
         raw: irc::Message::parse(src).unwrap(),
       }),
       Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
@@ -1585,6 +1588,7 @@ mod tests {
         id: "7eb848c9-1060-4e5e-9f4c-612877982e79".into(),
         room_id: "40286300".into(),
         time: Utc.timestamp_millis(1563096499780i64),
+        custom_reward_id: None,
         raw: irc::Message::parse(src).unwrap(),
       }),
       Message::try_from(irc::Message::parse(src).unwrap()).unwrap()
@@ -2167,4 +2171,5 @@ mod tests {
 "msg-param-gift-months"
 "thread-id"
 "message-id"
+"custom-reward-id"
 */

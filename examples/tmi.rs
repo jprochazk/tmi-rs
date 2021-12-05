@@ -23,13 +23,15 @@ async fn main() {
       result = conn.reader.next() => match result {
         Ok(message) => match message {
           Message::Ping(ping) => conn.sender.pong(ping.arg()).await.unwrap(),
-          Message::Privmsg(message) => {
+          /* Message::Privmsg(message) => {
             log::info!("#{} {} ({}): {}", message.channel(), message.user.name, message.user.id(), message.text());
             if message.text().starts_with("!stop") {
               break;
             }
-          },
-          _ => ()
+          }, */
+          _ => {
+            log::info!("{:?}", message)
+          }
         },
         Err(err) => {
           panic!("{}", err);
