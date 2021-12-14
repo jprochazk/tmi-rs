@@ -212,6 +212,25 @@ pub struct TwitchUser {
   badges: Option<UnsafeSlice>,
 }
 
+impl TwitchUser {
+  pub fn has_badge(&self, badge: &str) -> bool {
+    self
+      .badges
+      .as_ref()
+      .map(|v| v.as_str().contains(badge))
+      .unwrap_or(false)
+  }
+  pub fn is_mod(&self) -> bool {
+    self.has_badge("moderator")
+  }
+  pub fn is_streamer(&self) -> bool {
+    self.has_badge("broadcaster")
+  }
+  pub fn is_vip(&self) -> bool {
+    self.has_badge("vip")
+  }
+}
+
 /// If message starts with '\x01ACTION ' and ends with '\x01', then remove those
 fn parse_message(msg: &str) -> (&str, bool) {
   msg
