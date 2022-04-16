@@ -57,7 +57,7 @@ impl<'src> Tags<'src> {
   }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Command<'src> {
   Ping,
   Pong,
@@ -90,6 +90,16 @@ pub enum Command<'src> {
   UserState,
   /// Requesting an IRC capability
   Capability,
+  // Numeric commands
+  RplWelcome,
+  RplYourHost,
+  RplCreated,
+  RplMyInfo,
+  RplNamReply,
+  RplEndOfNames,
+  RplMotd,
+  RplMotdStart,
+  RplEndOfMotd,
   /// Unknown command
   Unknown(&'src str),
 }
@@ -112,6 +122,15 @@ fn command_from_raw<'src>(raw: &'src CommandRaw, base: &'src str) -> Command<'sr
     CommandRaw::UserNotice => Command::UserNotice,
     CommandRaw::UserState => Command::UserState,
     CommandRaw::Capability => Command::Capability,
+    CommandRaw::RplWelcome => Command::RplWelcome,
+    CommandRaw::RplYourHost => Command::RplYourHost,
+    CommandRaw::RplCreated => Command::RplCreated,
+    CommandRaw::RplMyInfo => Command::RplMyInfo,
+    CommandRaw::RplNamReply => Command::RplNamReply,
+    CommandRaw::RplEndOfNames => Command::RplEndOfNames,
+    CommandRaw::RplMotd => Command::RplMotd,
+    CommandRaw::RplMotdStart => Command::RplMotdStart,
+    CommandRaw::RplEndOfMotd => Command::RplEndOfMotd,
     CommandRaw::Unknown(v) => Command::Unknown(&base[v.clone()]),
   }
 }
@@ -153,12 +172,15 @@ impl<'a> Extend for &'a str {
     let count = -(n as isize);
     std::str::from_utf8_unchecked(std::slice::from_raw_parts(
       self.as_ptr().offset(count),
-      self.len(),
+      self.len() + n,
     ))
   }
 
   unsafe fn extend_right(self, n: usize) -> Self {
-    std::str::from_utf8_unchecked(std::slice::from_raw_parts(self.as_ptr(), self.len() + n))
+    std::str::from_utf8_unchecked(std::slice::from_raw_parts(
+      self.as_ptr(),
+      (self.len() + n).saturating_sub(1),
+    ))
   }
 }
 
@@ -182,16 +204,18 @@ impl TagsLazy {
 
   fn parse_inner(raw: Range, base: &str) -> HashMap<Tag, Range> {
     let mut out = HashMap::new();
+    let mut unrecognized = Vec::new();
     for (key, value) in base.split(';').flat_map(|v| v.split_once('=')) {
-      let key = TAG_MAP
-        .get(key)
-        .cloned()
-        // This is a bit fucky, but I don't know of a better way
-        // to do this without ruining the ergonomics of the API.
-        .unwrap_or_else(|| panic!("Unrecognized tag key {key}: Are you running the latest version of twitch-rs? If yes, please create an issue."));
-      // SAFETY: `value` is a subslice of `base`
-      let value = unsafe { value.into_range(base) };
-      out.insert(key, value);
+      match TAGS.get(key).cloned() {
+        Some(v) => {
+          // SAFETY: `value` is a subslice of `base`
+          out.insert(v, unsafe { value.into_range(base) });
+        }
+        None => unrecognized.push(key.to_string()),
+      }
+    }
+    if !unrecognized.is_empty() {
+      panic!("Unrecognized keys: {unrecognized:?}. Are you running the latest version of twitch-rs? If yes, please create an issue.");
     }
     out
   }
@@ -225,21 +249,138 @@ fn parse_tags<'src>(base: &'src str, remainder: &'src str) -> (Option<TagsLazy>,
   }
 }
 
-// TODO: list all tags
-// Keep this in sync with `TAG_MAP`
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Tag {
-  Login,
-  TmiSentTs,
+macro_rules! tags_def {
+  ($enum:ident $map:ident $($(#[$meta:meta])* $key:literal = $tag:ident),*) => {
+    #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+    pub enum $enum {
+      $(
+        $(#[$meta])*
+        $tag
+      ),*
+    }
+
+    lazy_static::lazy_static! {
+      static ref $map: HashMap<&'static str, Tag> = {
+        let mut m = HashMap::new();
+        $(m.insert($key, Tag::$tag);)*
+        m
+      };
+    }
+  }
 }
 
-lazy_static::lazy_static! {
-  static ref TAG_MAP: HashMap<&'static str, Tag> = {
-    let mut m = HashMap::new();
-    m.insert("login", Tag::Login);
-    m.insert("tmi-sent-ts", Tag::TmiSentTs);
-    m
-  };
+tags_def! { Tag TAGS
+  // notice
+  /// Test
+  "msg-id" = MsgId,
+  // privmsg
+  /// Test
+  "badges" = Badges,
+  /// Test
+  "badge-info" = BadgeInfo,
+  /// Test
+  "display-name" = DisplayName,
+  /// Test
+  "emote-only" = EmoteOnly,
+  /// Test
+  "emotes" = Emotes,
+  /// Test
+  "flags" = Flags,
+  /// Test
+  "id" = Id,
+  /// Test
+  "mod" = Mod,
+  /// Test
+  "room-id" = RoomId,
+  /// Test
+  "subscriber" = Subscriber,
+  /// Test
+  "tmi-sent-ts" = TmiSentTs,
+  /// Test
+  "turbo" = Turbo,
+  /// Test
+  "user-id" = UserId,
+  /// Test
+  "user-type" = UserType,
+  /// Test
+  "client-nonce" = ClientNonce,
+  /// Test
+  "first-msg" = FirstMsg,
+  /// Test
+  "reply-parent-display-name" = ReplyParentDisplayName,
+  /// Test
+  "reply-parent-msg-body" = ReplyParentMsgBody,
+  /// Test
+  "reply-parent-msg-id" = ReplyParentMsgId,
+  /// Test
+  "reply-parent-user-id" = ReplyParentUserId,
+  /// Test
+  "reply-parent-user-login" = ReplyParentUserLogin,
+  // roomstate
+  // "emote-only" = EmoteOnly,
+  /// Test
+  "followers-only" = FollowersOnly,
+  /// Test
+  "r9k" = R9K,
+  /// Test
+  "rituals" = Rituals,
+  // "room-id" = RoomId,
+  /// Test
+  "slow" = Slow,
+  /// Test
+  "subs-only" = SubsOnly,
+  // usernotice
+  // "msg-id" = MsgId,
+  /// Test
+  "msg-param-cumulative-months" = MsgParamCumulativeMonths,
+  /// Test
+  "msg-param-displayName" = MsgParamDisplayName,
+  /// Test
+  "msg-param-login" = MsgParamLogin,
+  /// Test
+  "msg-param-months" = MsgParamMonths,
+  /// Test
+  "msg-param-promo-gift-total" = MsgParamPromoGiftTotal,
+  /// Test
+  "msg-param-promo-name" = MsgParamPromoName,
+  /// Test
+  "msg-param-recipient-display-name" = MsgParamRecipientDisplayName,
+  /// Test
+  "msg-param-recipient-id" = MsgParamRecipientId,
+  /// Test
+  "msg-param-recipient-user-name" = MsgParamRecipientUserName,
+  /// Test
+  "msg-param-sender-login" = MsgParamSenderLogin,
+  /// Test
+  "msg-param-sender-name" = MsgParamSenderName,
+  /// Test
+  "msg-param-should-share-streak" = MsgParamShouldShareStreak,
+  /// Test
+  "msg-param-streak-months" = MsgParamStreakMonths,
+  /// Test
+  "msg-param-sub-plan" = MsgParamSubPlan,
+  /// Test
+  "msg-param-sub-plan-name" = MsgParamSubPlanName,
+  /// Test
+  "msg-param-viewerCount" = MsgParamViewerCount,
+  /// Test
+  "msg-param-ritual-name" = MsgParamRitualName,
+  /// Test
+  "msg-param-threshold" = MsgParamThreshold,
+  /// Test
+  "msg-param-gift-months" = MsgParamGiftMonths,
+  /// Test
+  "login" = Login,
+  /// Test
+  "system-msg" = SystemMsg,
+  // userstate
+  /// Test
+  "emote-sets" = EmoteSets,
+  // whisper
+  /// Test
+  "thread-id" = ThreadId,
+  /// Test
+  "message-id" = MessageId
 }
 
 struct Prefix {
@@ -314,6 +455,16 @@ enum CommandRaw {
   UserState,
   /// Requesting an IRC capability
   Capability,
+  // Numeric commands
+  RplWelcome,
+  RplYourHost,
+  RplCreated,
+  RplMyInfo,
+  RplNamReply,
+  RplEndOfNames,
+  RplMotd,
+  RplMotdStart,
+  RplEndOfMotd,
   /// Unknown command
   Unknown(Range),
 }
@@ -345,6 +496,15 @@ fn parse_command<'src>(base: &'src str, remainder: &'src str) -> Option<(Command
     "USERNOTICE" => UserNotice,
     "USERSTATE" => UserState,
     "CAP" => Capability,
+    "001" => RplWelcome,
+    "002" => RplYourHost,
+    "003" => RplCreated,
+    "004" => RplMyInfo,
+    "353" => RplNamReply,
+    "366" => RplEndOfNames,
+    "372" => RplMotd,
+    "375" => RplMotdStart,
+    "376" => RplEndOfMotd,
     // SAFETY: `other` is a subslice of `base`
     other if !other.is_empty() => Unknown(unsafe { other.into_range(base) }),
     _ => return None,
@@ -379,8 +539,44 @@ fn parse_params<'src>(base: &'src str, remainder: &'src str) -> Option<Range> {
   }
 }
 
+// https://git.kotmisia.pl/Mm2PL/docs
+// TODO: rework connection to TMI, try to make it runtime agnostic and more reliable
 // TODO: test
 // - every `parse_XXX`
 // - `Extend`, `SliceToRange`
-// - test case with at least one occurrence of each command and tag,
-//   with the correct format
+// - test case with at least one occurrence of each command and tag, with the correct format
+
+// TODO: two layers
+// - low-level: tmi, pubsub, helix, eventsub
+// - high-level:
+//   - command registry
+//   - output:
+//     - chat for simple responses
+//     - websocket, custom events that can be used to trigger anything
+//   - API for adding/removing commands
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn str_extend_left() {
+    let a = "test";
+    let b = &a[1..];
+    assert_eq!(a, unsafe { b.extend_left(1) });
+  }
+
+  #[test]
+  fn str_extend_right() {
+    let a = "test";
+    let b = &a[..a.len()];
+    assert_eq!(a, unsafe { b.extend_right(1) });
+  }
+
+  #[test]
+  fn to_range() {
+    let a = "test";
+    let b = unsafe { a.into_range(a) };
+    assert_eq!(a, &a[b]);
+  }
+}
