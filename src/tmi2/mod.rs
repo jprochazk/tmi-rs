@@ -1,5 +1,6 @@
-use std::collections::HashMap;
+use std::{cell::UnsafeCell, collections::HashMap};
 
+#[derive(Clone)]
 pub struct Message {
   raw: String,
   tags: Option<TagsLazy>,
@@ -35,8 +36,8 @@ impl Message {
     &self.raw
   }
 
-  pub fn tags(&mut self) -> Option<Tags> {
-    self.tags.as_mut().map(|t| {
+  pub fn tags(&self) -> Option<Tags> {
+    self.tags.as_ref().map(|t| {
       let base = &self.raw;
       Tags {
         base,
@@ -46,6 +47,7 @@ impl Message {
   }
 }
 
+#[derive(Clone, Copy)]
 pub struct Tags<'src> {
   base: &'src str,
   tags: &'src HashMap<Tag, Range>,
@@ -186,26 +188,39 @@ impl<'a> Extend for &'a str {
 
 struct TagsLazy {
   raw: Range,
-  inner: Option<HashMap<Tag, Range>>,
+  inner: UnsafeCell<Option<HashMap<Tag, Range>>>,
 }
 
 impl TagsLazy {
-  /// Get a map of `Tag -> Range`. The map is lazily initialized.
-  fn get(&mut self, base: &str) -> &mut HashMap<Tag, Range> {
-    match self.inner {
-      Some(ref mut v) => v,
-      None => {
-        self.inner = Some(TagsLazy::parse_inner(self.raw.clone(), base));
-        // SAFETY: we just assigned it as `Some`
-        unsafe { self.inner.as_mut().unwrap_unchecked() }
-      }
+  fn new(raw: Range) -> Self {
+    TagsLazy {
+      raw,
+      inner: UnsafeCell::new(None),
     }
+  }
+
+  /// Get a map of `Tag -> Range`. The map is lazily initialized by parsing the tags.
+  fn get(&self, base: &str) -> &HashMap<Tag, Range> {
+    if !unsafe { &*self.inner.get() }.is_some() {
+      // SAFETY: No references to the inner HashMap exist at this point in time
+      // mutable or immutable, because it has not been initialized yet.
+      // It is only initialiazed once, so this branch will never execute
+      // if an immutable reference already exists.
+      unsafe {
+        self
+          .inner
+          .get()
+          .write(Some(TagsLazy::parse_inner(self.raw.clone(), base)))
+      };
+    }
+    let inner = unsafe { &*self.inner.get() };
+    unsafe { inner.as_ref().unwrap_unchecked() }
   }
 
   fn parse_inner(raw: Range, base: &str) -> HashMap<Tag, Range> {
     let mut out = HashMap::new();
     let mut unrecognized = Vec::new();
-    for (key, value) in base.split(';').flat_map(|v| v.split_once('=')) {
+    for (key, value) in base[raw].split(';').flat_map(|v| v.split_once('=')) {
       match TAGS.get(key).cloned() {
         Some(v) => {
           // SAFETY: `value` is a subslice of `base`
@@ -221,29 +236,32 @@ impl TagsLazy {
   }
 }
 
+impl Clone for TagsLazy {
+  fn clone(&self) -> Self {
+    Self {
+      raw: self.raw.clone(),
+      inner: UnsafeCell::new(unsafe { &*self.inner.get() }.clone()),
+    }
+  }
+}
+
 /// `@a=a;b=b;c= :<rest>`
 fn parse_tags<'src>(base: &'src str, remainder: &'src str) -> (Option<TagsLazy>, &'src str) {
-  if remainder.starts_with('@') {
+  if let Some(remainder) = remainder.strip_prefix('@') {
     // propagating option here, because we want to immediately stop
     // if we can't find the ` :`, as we're under the assumption
     // that any message with tags also includes a prefix.
-    let (tags, rest) = match remainder.split_once(" :") {
+    let (tags, remainder) = match remainder.split_once(" :") {
       Some(v) => v,
       None => return (None, remainder),
     };
-    // SAFETY: we if the prefix exists in the condition above
-    let tags = unsafe { tags.strip_prefix('@').unwrap_unchecked() };
     // we want split by " :", but preserve the ":", so we move the
     // slice's start to the left by 1 byte.
     // SAFETY: valid because `rest` has at least 2 chars in front of it (the " :").
-    let remainder = unsafe { rest.extend_left(1) };
+    let remainder = unsafe { remainder.extend_left(1) };
     // SAFETY: `tags` is a subslice of `raw`.
     let tags_raw = unsafe { tags.into_range(base) };
-    let tags = TagsLazy {
-      raw: tags_raw,
-      inner: None,
-    };
-    (Some(tags), remainder)
+    (Some(TagsLazy::new(tags_raw)), remainder)
   } else {
     (None, remainder)
   }
@@ -383,6 +401,7 @@ tags_def! { Tag TAGS
   "message-id" = MessageId
 }
 
+#[derive(Clone)]
 struct Prefix {
   nick: Option<Range>,
   user: Option<Range>,
@@ -391,7 +410,7 @@ struct Prefix {
 
 /// `:nick!user@host <rest>`
 fn parse_prefix<'src>(base: &'src str, remainder: &'src str) -> (Option<Prefix>, &'src str) {
-  if remainder.starts_with(':') {
+  if let Some(remainder) = remainder.strip_prefix(':') {
     // :host <rest>
     // :nick@host <rest>
     // :nick!user@host <rest>
@@ -423,6 +442,7 @@ fn parse_prefix<'src>(base: &'src str, remainder: &'src str) -> (Option<Prefix>,
   }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum CommandRaw {
   Ping,
   Pong,
@@ -513,6 +533,7 @@ fn parse_command<'src>(base: &'src str, remainder: &'src str) -> Option<(Command
   Some((cmd, remainder))
 }
 
+/// #channel <rest>
 fn parse_channel<'src>(base: &'src str, remainder: &'src str) -> (Option<Range>, &'src str) {
   if remainder.starts_with('#') {
     let (channel, remainder) = match remainder.split_once(' ') {
@@ -520,11 +541,8 @@ fn parse_channel<'src>(base: &'src str, remainder: &'src str) -> (Option<Range>,
       None => (remainder, &remainder[remainder.len()..]),
     };
 
-    // SAFETY:
-    // - `channel` has at least one character in front of it (the '#').
-    // - `channel` is a subslice of `base`.
-    let channel = unsafe { channel.extend_left(1).into_range(base) };
-    (Some(channel), remainder)
+    // SAFETY: `channel` is a subslice of `base`.
+    (Some(unsafe { channel.into_range(base) }), remainder)
   } else {
     (None, remainder)
   }
@@ -543,7 +561,6 @@ fn parse_params<'src>(base: &'src str, remainder: &'src str) -> Option<Range> {
 // TODO: rework connection to TMI, try to make it runtime agnostic and more reliable
 // TODO: test
 // - every `parse_XXX`
-// - `Extend`, `SliceToRange`
 // - test case with at least one occurrence of each command and tag, with the correct format
 
 // TODO: two layers
@@ -578,5 +595,89 @@ mod tests {
     let a = "test";
     let b = unsafe { a.into_range(a) };
     assert_eq!(a, &a[b]);
+  }
+
+  mod parse {
+    use super::*;
+
+    #[test]
+    fn tags() {
+      let data = "@login=test;id=asdf :<rest>";
+
+      let (tags, remainder) = parse_tags(data, data);
+      assert_eq!(remainder, &data[20..]);
+      let tags = tags.unwrap();
+      assert_eq!(tags.raw, Range { start: 1, end: 19 });
+
+      let map = tags.get(data);
+      assert_eq!(
+        map,
+        &[
+          (Tag::Login, Range { start: 7, end: 11 }),
+          (Tag::Id, Range { start: 15, end: 19 })
+        ]
+        .into_iter()
+        .collect()
+      )
+    }
+
+    #[test]
+    fn prefix() {
+      let data = ":nick!user@host <rest>";
+
+      let (prefix, remainder) = parse_prefix(data, data);
+      assert_eq!(remainder, &data[16..]);
+      let prefix = prefix.unwrap();
+      assert_eq!(&data[prefix.nick.unwrap()], "nick");
+      assert_eq!(&data[prefix.user.unwrap()], "user");
+      assert_eq!(&data[prefix.host], "host");
+      assert_eq!(remainder, "<rest>");
+
+      let data = ":nick@host <rest>";
+      let (prefix, remainder) = parse_prefix(data, data);
+      assert_eq!(remainder, &data[11..]);
+      let prefix = prefix.unwrap();
+      assert_eq!(&data[prefix.nick.unwrap()], "nick");
+      assert!(prefix.user.is_none());
+      assert_eq!(&data[prefix.host], "host");
+      assert_eq!(remainder, "<rest>");
+
+      let data = ":host <rest>";
+      let (prefix, remainder) = parse_prefix(data, data);
+      assert_eq!(remainder, &data[6..]);
+      let prefix = prefix.unwrap();
+      assert!(prefix.nick.is_none());
+      assert!(prefix.user.is_none());
+      assert_eq!(&data[prefix.host], "host");
+      assert_eq!(remainder, "<rest>");
+    }
+
+    #[test]
+    fn command() {
+      let data = "PING <rest>";
+
+      let (command, remainder) = parse_command(data, data).unwrap();
+      assert_eq!(command, CommandRaw::Ping);
+      assert_eq!(remainder, "<rest>");
+    }
+
+    #[test]
+    fn channel() {
+      let data = "#channel <rest>";
+
+      let (channel, remainder) = parse_channel(data, data);
+      let channel = &data[channel.unwrap()];
+      assert_eq!(channel, "#channel");
+      assert_eq!(remainder, "<rest>");
+    }
+
+    #[test]
+    fn params() {
+      let data = ":param_a :param_b";
+
+      let params = parse_params(data, data);
+      let params = &data[params.unwrap()];
+      assert_eq!(params, data)
+    }
   }
 }
