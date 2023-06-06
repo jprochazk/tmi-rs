@@ -19,7 +19,8 @@ async fn main() -> Result<()> {
   .await?;
   ws.send(Message::Text("PASS just_a_lil_guy".into())).await?;
   ws.send(Message::Text("NICK justinfan83124".into())).await?;
-  ws.send(Message::Text("JOIN #anny".into())).await?;
+  ws.send(Message::Text("JOIN #anny,#nymn,#forsen,#ironmouse".into()))
+    .await?;
 
   loop {
     tokio::select! {
