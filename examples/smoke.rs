@@ -1,14 +1,17 @@
 use futures_util::{SinkExt, StreamExt};
+use tokio::net::TcpStream;
 use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
+use twitch::Command;
 
 type Result<T, E = Box<dyn std::error::Error + Send + Sync + 'static>> =
   ::core::result::Result<T, E>;
 
+type WebSocket = WebSocketStream<MaybeTlsStream<TcpStream>>;
+
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
-  let mut ws = tokio_tungstenite::connect_async("ws://irc-ws.chat.twitch.tv:80")
-    .await?
-    .0;
+  let (mut ws, _) = tokio_tungstenite::connect_async("ws://irc-ws.chat.twitch.tv:80").await?;
 
   ws.send(Message::Text(
     "CAP REQ :twitch.tv/commands twitch.tv/tags".into(),
@@ -25,7 +28,7 @@ async fn main() -> Result<()> {
       }
       Some(message) = ws.next() => {
         let message = message?;
-        handle_message(message)?;
+        handle_message(&mut ws, message).await?;
       }
     }
   }
@@ -33,7 +36,7 @@ async fn main() -> Result<()> {
   Ok(())
 }
 
-fn handle_message(message: Message) -> Result<()> {
+async fn handle_message(ws: &mut WebSocket, message: Message) -> Result<()> {
   if let Message::Text(message) = message {
     for line in message.lines() {
       println!("\n{}", line);
@@ -68,6 +71,10 @@ fn handle_message(message: Message) -> Result<()> {
       );
 
       println!();
+
+      if a.command() == Command::Ping {
+        ws.send(Message::Text("PONG".into())).await?;
+      }
     }
   }
 

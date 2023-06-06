@@ -58,50 +58,6 @@ impl Message {
   }
 }
 
-/*
-function unescape(str: string): string {
-  let out = "";
-  let escape = false;
-  loop:
-  for (const c of str) {
-    if (escape) {
-      // prettier-ignore
-      switch (c) {
-        case ":":
-          out = out.concat(";");
-          escape = false;
-          continue loop;
-        case "s":
-          out = out.concat(" ");
-          escape = false;
-          continue loop;
-        case "\\":
-          out = out.concat("\\");
-          escape = false;
-          continue loop;
-        case "r":
-          out = out.concat("\r");
-          escape = false;
-          continue loop;
-        case "n":
-          out = out.concat("\n");
-          escape = false;
-          continue loop;
-      }
-    }
-
-    if (c === "⸝") {
-      out = out.concat(",");
-    } else if (c === "\\") {
-      escape = true;
-    } else {
-      out = out.concat(c);
-    }
-  }
-  return out;
-}
-*/
-
 pub fn unescape(value: &str) -> String {
   let mut out = String::with_capacity(value.len());
   let mut escape = false;
