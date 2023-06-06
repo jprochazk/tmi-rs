@@ -41,3 +41,4 @@ Benchmarks were run in WSL2 Ubuntu 22.04 on an AMD Ryzen 7950X
 | [irc_rust](https://github.com/MoBlaa/irc_rust/tree/4ae66fb3176b1d46cec6764f1a76aa6e9673d08b)       | Rust 1.72-nightly (871b59520 2023-05-31) | 969.26 µs                |
 | [justgrep](https://github.com/Mm2PL/justgrep/tree/v0.0.6)                                          | Go 1.20                                  | 1.391626 ms              |
 | [minitwitch](https://github.com/Foretack/MiniTwitch/tree/ce17607da83d70e05e2d2cec873d4182abfc03eb) | .NET 6.0                                 | 1.217 ms                 |
+| [go-twitch-irc](https://github.com/jprochazk/go-twitch-irc/tree/v4.2.0)                            | Go 1.20                                  | 3.70118 ms               |

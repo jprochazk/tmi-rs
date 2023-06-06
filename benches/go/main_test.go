@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/Mm2PL/justgrep"
+	"github.com/jprochazk/go-twitch-irc/v4"
 )
 
 func readInput() ([]string, error) {
@@ -41,10 +42,24 @@ func BenchmarkParse(b *testing.B) {
 		return
 	}
 
-	b.Run("justgrep 1000 lines from data.txt", func(b *testing.B) {
+	b.Run("justgrep", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			for _, line := range input {
 				message, err := justgrep.NewMessage(line)
+				if err != nil {
+					fmt.Println(err)
+					b.FailNow()
+					return
+				}
+				_ = message
+			}
+		}
+	})
+
+	b.Run("go-twitch-irc", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			for _, line := range input {
+				message, err := twitch.ParseIRCMessage(line)
 				if err != nil {
 					fmt.Println(err)
 					b.FailNow()
