@@ -21,6 +21,7 @@ tokio-tungstenite = "0.19.0"
 [[bench]]
 name = "parse"
 harness = false
+path = "./benches/rust/parse.rs"
 
 [profile.release]
 lto = "fat"

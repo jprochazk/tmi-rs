@@ -3,7 +3,7 @@ use std::str::FromStr;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 
 fn read_input() -> Vec<String> {
-  std::fs::read_to_string("benches/data.txt")
+  std::fs::read_to_string("benches/rust/data.txt")
     .unwrap()
     .lines()
     .take(1000)
