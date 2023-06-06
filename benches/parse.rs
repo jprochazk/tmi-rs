@@ -2,25 +2,35 @@ use std::str::FromStr;
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 
-fn parse(c: &mut Criterion) {
-  let data = std::fs::read_to_string("benches/data.txt")
+fn read_input() -> Vec<String> {
+  std::fs::read_to_string("benches/data.txt")
     .unwrap()
     .lines()
     .take(1000)
     .map(String::from)
-    .collect::<Vec<_>>();
+    .collect::<Vec<_>>()
+}
 
-  c.bench_with_input(BenchmarkId::new("twitch", "data.txt"), &data, |b, lines| {
-    b.iter(|| {
-      for line in lines.clone() {
-        black_box(twitch::Message::parse(line).expect("failed to parse"));
-      }
-    })
-  });
+fn parse_twitch(c: &mut Criterion) {
+  let input = read_input();
+  c.bench_with_input(
+    BenchmarkId::new("twitch", "data.txt"),
+    &input,
+    |b, lines| {
+      b.iter(|| {
+        for line in lines.clone() {
+          black_box(twitch::Message::parse(line).expect("failed to parse"));
+        }
+      })
+    },
+  );
+}
 
+fn parse_twitch_irc(c: &mut Criterion) {
+  let input = read_input();
   c.bench_with_input(
     BenchmarkId::new("twitch_irc", "data.txt"),
-    &data,
+    &input,
     |b, lines| {
       b.iter(|| {
         for line in lines.clone() {
@@ -29,10 +39,13 @@ fn parse(c: &mut Criterion) {
       })
     },
   );
+}
 
+fn parse_irc_rust(c: &mut Criterion) {
+  let input = read_input();
   c.bench_with_input(
     BenchmarkId::new("irc_rust", "data.txt"),
-    &data,
+    &input,
     |b, lines| {
       b.iter(|| {
         for line in lines.clone() {
@@ -48,5 +61,10 @@ fn parse(c: &mut Criterion) {
   );
 }
 
-criterion_group!(bench, parse);
-criterion_main!(bench);
+criterion_group!(
+  parse_benches,
+  parse_twitch,
+  parse_twitch_irc,
+  parse_irc_rust
+);
+criterion_main!(parse_benches);
