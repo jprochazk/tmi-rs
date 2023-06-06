@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::Display;
 
 #[derive(Clone)]
 pub struct Message {
@@ -57,6 +58,83 @@ impl Message {
   }
 }
 
+/*
+function unescape(str: string): string {
+  let out = "";
+  let escape = false;
+  loop:
+  for (const c of str) {
+    if (escape) {
+      // prettier-ignore
+      switch (c) {
+        case ":":
+          out = out.concat(";");
+          escape = false;
+          continue loop;
+        case "s":
+          out = out.concat(" ");
+          escape = false;
+          continue loop;
+        case "\\":
+          out = out.concat("\\");
+          escape = false;
+          continue loop;
+        case "r":
+          out = out.concat("\r");
+          escape = false;
+          continue loop;
+        case "n":
+          out = out.concat("\n");
+          escape = false;
+          continue loop;
+      }
+    }
+
+    if (c === "⸝") {
+      out = out.concat(",");
+    } else if (c === "\\") {
+      escape = true;
+    } else {
+      out = out.concat(c);
+    }
+  }
+  return out;
+}
+*/
+
+pub fn unescape(value: &str) -> String {
+  let mut out = String::with_capacity(value.len());
+  let mut escape = false;
+  for char in value.chars() {
+    match char {
+      ':' if escape => {
+        out.push(';');
+        escape = false;
+      }
+      's' if escape => {
+        out.push(' ');
+        escape = false;
+      }
+      '\\' if escape => {
+        out.push('\\');
+        escape = false;
+      }
+      'r' if escape => {
+        out.push('\r');
+        escape = false;
+      }
+      'n' if escape => {
+        out.push('\n');
+        escape = false;
+      }
+      '⸝' => out.push(','),
+      '\\' => escape = true,
+      c => out.push(c),
+    }
+  }
+  out
+}
+
 pub type Tags<'src> = HashMap<Tag<'src>, &'src str>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -106,6 +184,46 @@ pub enum Command<'src> {
   Unknown(&'src str),
 }
 
+impl<'src> Display for Command<'src> {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.write_str(self.as_str())
+  }
+}
+
+impl<'src> Command<'src> {
+  pub fn as_str(&self) -> &'src str {
+    use Command::*;
+    match self {
+      Ping => "PING",
+      Pong => "PONG",
+      Join => "JOIN",
+      Part => "PART",
+      Privmsg => "PRIVMSG",
+      Whisper => "WHISPER",
+      Clearchat => "CLEARCHAT",
+      Clearmsg => "CLEARMSG",
+      GlobalUserState => "GLOBALUSERSTATE",
+      HostTarget => "HOSTTARGET",
+      Notice => "NOTICE",
+      Reconnect => "RECONNECT",
+      RoomState => "ROOMSTATE",
+      UserNotice => "USERNOTICE",
+      UserState => "USERSTATE",
+      Capability => "CAP",
+      RplWelcome => "001",
+      RplYourHost => "002",
+      RplCreated => "003",
+      RplMyInfo => "004",
+      RplNamReply => "353",
+      RplEndOfNames => "366",
+      RplMotd => "372",
+      RplMotdStart => "375",
+      RplEndOfMotd => "376",
+      Unknown(cmd) => cmd,
+    }
+  }
+}
+
 /// `@a=a;b=b;c= :<rest>`
 fn parse_tags(remainder: &str) -> (Option<Tags<'static>>, &str) {
   if let Some(remainder) = remainder.strip_prefix('@') {
@@ -120,7 +238,7 @@ fn parse_tags(remainder: &str) -> (Option<Tags<'static>>, &str) {
           value.1 = i;
           if key.1 - key.0 > 0 {
             tags.insert(
-              tag_from_str(unsafe { &*(&remainder[key.0..key.1] as *const _) }),
+              Tag::parse(unsafe { &*(&remainder[key.0..key.1] as *const _) }),
               unsafe { &*(&remainder[value.0..value.1] as *const _) },
             );
           }
@@ -136,7 +254,7 @@ fn parse_tags(remainder: &str) -> (Option<Tags<'static>>, &str) {
           value.1 = i;
 
           tags.insert(
-            tag_from_str(unsafe { &*(&remainder[key.0..key.1] as *const _) }),
+            Tag::parse(unsafe { &*(&remainder[key.0..key.1] as *const _) }),
             unsafe { &*(&remainder[value.0..value.1] as *const _) },
           );
 
@@ -155,7 +273,7 @@ fn parse_tags(remainder: &str) -> (Option<Tags<'static>>, &str) {
 
 macro_rules! tags_def {
   (
-    $tag:ident, $tag_from_str:ident;
+    $tag:ident;
     $($(#[$meta:meta])* $key:literal = $name:ident),*
   ) => {
     #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -167,17 +285,26 @@ macro_rules! tags_def {
       Unknown(&'src str),
     }
 
-    fn $tag_from_str(v: &str) -> Tag {
-      match v {
-        $($key => $tag::$name,)*
-        v => $tag::Unknown(v),
+    impl<'src> $tag<'src> {
+      pub fn as_str(&self) -> &'src str {
+        match self {
+          $(Self::$name => $key,)*
+          Self::Unknown(key) => key,
+        }
+      }
+
+      pub fn parse(s: &'src str) -> Self {
+        match s {
+          $($key => Self::$name,)*
+          s => Self::Unknown(s),
+        }
       }
     }
   }
 }
 
 tags_def! {
-  Tag, tag_from_str;
+  Tag;
   "msg-id" = MsgId,
   "badges" = Badges,
   "badge-info" = BadgeInfo,
