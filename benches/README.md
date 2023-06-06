@@ -32,7 +32,7 @@ $ cd go && go test -bench=.
 
 ## Results
 
-Benchmarks were run in WSL2 on an AMD Ryzen 7950X
+Benchmarks were run in WSL2 Ubuntu 22.04 on an AMD Ryzen 7950X
 
 | library                                                                                            | language          | time to parse 1000 lines |
 | -------------------------------------------------------------------------------------------------- | ----------------- | ------------------------ |
