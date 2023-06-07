@@ -33,6 +33,10 @@ impl Message {
     })
   }
 
+  pub fn into_raw(self) -> String {
+    self.raw
+  }
+
   pub fn raw(&self) -> &str {
     &self.raw
   }
