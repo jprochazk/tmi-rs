@@ -1,5 +1,4 @@
 #![allow(dead_code)]
-#![cfg_attr(feature = "simd", feature(portable_simd))]
 
 mod simd;
 
