@@ -42,8 +42,8 @@ Benchmarks were run in WSL2 Ubuntu 22.04 on an AMD Ryzen 7950X
 
 | library                                                                                                    | language                                 | time to parse 1000 lines |
 | ---------------------------------------------------------------------------------------------------------- | ---------------------------------------- | ------------------------ |
-| [twitch](https://github.com/jprochazk/twitch-rs/tree/68710b3950d1369b4a59990860d48f05f37d9182)             | Rust 1.72-nightly (871b59520 2023-05-31) | 578.55 µs                |
-| [twitch](https://github.com/jprochazk/twitch-rs/tree/68710b3950d1369b4a59990860d48f05f37d9182) + `-F simd` | Rust 1.72-nightly (871b59520 2023-05-31) | 378.64 µs                |
+| [twitch](https://github.com/jprochazk/twitch-rs/tree/3f04961e70a2a4838af535540bb5cbb7b4319e44)             | Rust 1.72-nightly (871b59520 2023-05-31) | 578.55 µs                |
+| [twitch](https://github.com/jprochazk/twitch-rs/tree/3f04961e70a2a4838af535540bb5cbb7b4319e44) + `-F simd` | Rust 1.72-nightly (871b59520 2023-05-31) | 378.64 µs                |
 | [twitch-irc](https://github.com/robotty/twitch-irc-rs/tree/v5.0.0)                                         | Rust 1.72-nightly (871b59520 2023-05-31) | 2.2108 ms                |
 | [irc_rust](https://github.com/MoBlaa/irc_rust/tree/4ae66fb3176b1d46cec6764f1a76aa6e9673d08b)               | Rust 1.72-nightly (871b59520 2023-05-31) | 969.26 µs                |
 | [justgrep](https://github.com/Mm2PL/justgrep/tree/v0.0.6)                                                  | Go 1.20                                  | 1.391626 ms              |
