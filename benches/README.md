@@ -18,6 +18,12 @@ $ cargo bench
 
 C# benchmarks use [BenchmarkDotNet](https://github.com/dotnet/BenchmarkDotNet).
 
+The benchmark is stored as a submodule:
+
+```
+$ git submodule init dotnet && git submodule update
+```
+
 ```
 $ cd dotnet && dotnet run -c Release
 ```
