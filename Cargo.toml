@@ -5,6 +5,9 @@ authors = ["jprochazk <honza.spacir@gmail.com>"]
 edition = "2021"
 license = "MIT"
 
+[features]
+simd = []
+
 [dependencies]
 
 [dev-dependencies]

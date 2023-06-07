@@ -1,3 +1,8 @@
+#![allow(dead_code)]
+#![cfg_attr(feature = "simd", feature(portable_simd))]
+
+mod simd;
+
 use std::collections::HashMap;
 use std::fmt::Display;
 
@@ -17,7 +22,12 @@ impl Message {
     let raw: String = src.into();
     let remainder = &raw[..];
 
-    let (tags, remainder) = parse_tags(remainder);
+    #[cfg(all(feature = "simd", target_arch = "x86_64", target_feature = "sse2"))]
+    let (tags, remainder) = { simd::x86_sse::parse_tags(remainder) };
+
+    #[cfg(not(all(feature = "simd", target_arch = "x86_64", target_feature = "sse2")))]
+    let (tags, remainder) = { parse_tags(remainder) };
+
     let (prefix, remainder) = parse_prefix(remainder);
     let (command, remainder) = parse_command(remainder)?;
     let (channel, remainder) = parse_channel(remainder);
@@ -184,6 +194,10 @@ impl<'src> Command<'src> {
   }
 }
 
+unsafe fn leak(s: &str) -> &'static str {
+  unsafe { ::core::mem::transmute(s) }
+}
+
 /// `@a=a;b=b;c= :<rest>`
 fn parse_tags(remainder: &str) -> (Option<Tags<'static>>, &str) {
   if let Some(remainder) = remainder.strip_prefix('@') {
@@ -191,6 +205,7 @@ fn parse_tags(remainder: &str) -> (Option<Tags<'static>>, &str) {
     let mut key = (0, 0);
     let mut value = (0, 0);
     let mut end = 0;
+
     let bytes = remainder.as_bytes();
     for i in 0..bytes.len() {
       match unsafe { *bytes.get_unchecked(i) } {
@@ -198,8 +213,8 @@ fn parse_tags(remainder: &str) -> (Option<Tags<'static>>, &str) {
           value.1 = i;
           if key.1 - key.0 > 0 {
             tags.insert(
-              Tag::parse(unsafe { &*(&remainder[key.0..key.1] as *const _) }),
-              unsafe { &*(&remainder[value.0..value.1] as *const _) },
+              Tag::parse(unsafe { leak(&remainder[key.0..key.1]) }),
+              unsafe { leak(&remainder[value.0..value.1]) },
             );
           }
           end = i;
