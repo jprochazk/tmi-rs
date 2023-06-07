@@ -1,0 +1,3 @@
+[submodule "benches/dotnet"]
+	path = benches/dotnet
+	url = https://github.com/jprochazk/minitwitch-bench
