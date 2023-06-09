@@ -1,5 +1,9 @@
 #![allow(dead_code)]
 
+#[macro_use]
+mod macros;
+
+#[cfg(feature = "simd")]
 mod simd;
 
 use std::collections::HashMap;
@@ -15,17 +19,59 @@ pub struct Message {
   params: Option<&'static str>,
 }
 
+pub struct Whitelist<F>(F);
+
+impl<F> Whitelist<F>
+where
+  F: for<'a> Fn(&'a mut Tags<'static>, Tag<'static>, &'static str),
+{
+  /// # Safety
+  /// The callback `f` must guarantee not to leak any of its parameters.
+  ///
+  /// The easiest way to ensure safety is to use the `twitch::whitelist` macro.
+  pub unsafe fn new(f: F) -> Self {
+    Self(f)
+  }
+
+  #[inline(always)]
+  pub(crate) fn maybe_insert(
+    &self,
+    map: &mut Tags<'static>,
+    tag: Tag<'static>,
+    value: &'static str,
+  ) {
+    (self.0)(map, tag, value)
+  }
+}
+
+#[inline(always)]
+fn whitelist_insert_all(map: &mut Tags<'static>, tag: Tag<'static>, value: &'static str) {
+  map.insert(tag, value);
+}
+
 impl Message {
   pub fn parse(src: impl Into<String>) -> Option<Self> {
-    // rust-analyzer is not smart enough to infer `String` here...
-    let raw: String = src.into();
+    Self::parse_inner(src.into(), unsafe { Whitelist::new(whitelist_insert_all) })
+  }
+
+  pub fn parse_with_whitelist<F>(src: impl Into<String>, whitelist: Whitelist<F>) -> Option<Self>
+  where
+    F: for<'a> Fn(&'a mut Tags<'static>, Tag<'static>, &'static str),
+  {
+    Self::parse_inner(src.into(), whitelist)
+  }
+
+  fn parse_inner<F>(raw: String, whitelist: Whitelist<F>) -> Option<Self>
+  where
+    F: for<'a> Fn(&'a mut Tags<'static>, Tag<'static>, &'static str),
+  {
     let remainder = &raw[..];
 
     #[cfg(all(feature = "simd", target_arch = "x86_64", target_feature = "sse2"))]
-    let (tags, remainder) = { simd::x86_sse::parse_tags(remainder) };
+    let (tags, remainder) = { simd::x86_sse::parse_tags(remainder, &whitelist) };
 
     #[cfg(not(all(feature = "simd", target_arch = "x86_64", target_feature = "sse2")))]
-    let (tags, remainder) = { parse_tags(remainder) };
+    let (tags, remainder) = { parse_tags(remainder, &whitelist) };
 
     let (prefix, remainder) = parse_prefix(remainder);
     let (command, remainder) = parse_command(remainder)?;
@@ -198,7 +244,13 @@ unsafe fn leak(s: &str) -> &'static str {
 }
 
 /// `@a=a;b=b;c= :<rest>`
-fn parse_tags(remainder: &str) -> (Option<Tags<'static>>, &str) {
+fn parse_tags<'src, F>(
+  remainder: &'src str,
+  whitelist: &Whitelist<F>,
+) -> (Option<Tags<'static>>, &'src str)
+where
+  F: for<'a> Fn(&'a mut Tags<'static>, Tag<'static>, &'static str),
+{
   if let Some(remainder) = remainder.strip_prefix('@') {
     let mut tags = Tags::with_capacity(16);
     let mut key = (0, 0);
@@ -211,10 +263,9 @@ fn parse_tags(remainder: &str) -> (Option<Tags<'static>>, &str) {
         b' ' if unsafe { *bytes.get_unchecked(i + 1) } == b':' => {
           value.1 = i;
           if key.1 - key.0 > 0 {
-            tags.insert(
-              Tag::parse(unsafe { leak(&remainder[key.0..key.1]) }),
-              unsafe { leak(&remainder[value.0..value.1]) },
-            );
+            let tag = Tag::parse(unsafe { leak(&remainder[key.0..key.1]) });
+            let value = unsafe { leak(&remainder[value.0..value.1]) };
+            whitelist.maybe_insert(&mut tags, tag, value);
           }
           end = i;
           break;
@@ -227,10 +278,9 @@ fn parse_tags(remainder: &str) -> (Option<Tags<'static>>, &str) {
         b';' => {
           value.1 = i;
 
-          tags.insert(
-            Tag::parse(unsafe { &*(&remainder[key.0..key.1] as *const _) }),
-            unsafe { &*(&remainder[value.0..value.1] as *const _) },
-          );
+          let tag = Tag::parse(unsafe { leak(&remainder[key.0..key.1]) });
+          let value = unsafe { leak(&remainder[value.0..value.1]) };
+          whitelist.maybe_insert(&mut tags, tag, value);
 
           key.0 = i + 1;
           key.1 = i + 1;
@@ -484,7 +534,7 @@ mod tests {
     fn tags() {
       let data = "@login=test;id=asdf :<rest>";
 
-      let (tags, remainder) = parse_tags(data);
+      let (tags, remainder) = parse_tags(data, &Whitelist(whitelist_insert_all));
       assert_eq!(remainder, &data[20..]);
       let tags = tags.unwrap();
       assert_eq!(
@@ -493,6 +543,16 @@ mod tests {
           .into_iter()
           .collect()
       )
+    }
+
+    #[test]
+    fn whitelist_tags() {
+      let data = "@login=test;id=asdf :<rest>";
+
+      let (tags, remainder) = parse_tags(data, &whitelist!(Login));
+      assert_eq!(remainder, &data[20..]);
+      let tags = tags.unwrap();
+      assert_eq!(&tags, &[(Tag::Login, "test")].into_iter().collect())
     }
 
     #[test]

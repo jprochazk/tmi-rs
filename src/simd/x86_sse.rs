@@ -1,11 +1,17 @@
-use crate::{leak, Tag, Tags};
+use crate::{leak, Tag, Tags, Whitelist};
 
 use core::arch::x86_64 as simd;
 use core::mem;
 use simd::__m128i;
 use std::ops::Add;
 
-pub fn parse_tags(remainder: &str) -> (Option<Tags<'static>>, &str) {
+pub fn parse_tags<'src, F>(
+  remainder: &'src str,
+  whitelist: &Whitelist<F>,
+) -> (Option<Tags<'static>>, &'src str)
+where
+  F: for<'a> Fn(&'a mut Tags<'static>, Tag<'static>, &'static str),
+{
   if let Some(remainder) = remainder.strip_prefix('@') {
     let mut tags = Tags::with_capacity(16);
 
@@ -22,21 +28,21 @@ pub fn parse_tags(remainder: &str) -> (Option<Tags<'static>>, &str) {
         Some(Found::Semi(value_end)) => {
           let key = unsafe { leak(remainder.get_unchecked(..key_end)) };
           let value = unsafe { leak(remainder.get_unchecked(value_start..value_end)) };
-          tags.insert(Tag::parse(key), value);
+          whitelist.maybe_insert(&mut tags, Tag::parse(key), value);
           remainder = unsafe { remainder.get_unchecked(value_end + 1..) };
           continue;
         }
         Some(Found::Space(value_end)) => {
           let key = unsafe { leak(remainder.get_unchecked(..key_end)) };
           let value = unsafe { leak(remainder.get_unchecked(value_start..value_end)) };
-          tags.insert(Tag::parse(key), value);
+          whitelist.maybe_insert(&mut tags, Tag::parse(key), value);
           remainder = unsafe { remainder.get_unchecked(value_end + 1..) };
           break;
         }
         None => {
           let key = unsafe { leak(remainder.get_unchecked(..key_end)) };
           let value = unsafe { leak(remainder.get_unchecked(value_start..)) };
-          tags.insert(Tag::parse(key), value);
+          whitelist.maybe_insert(&mut tags, Tag::parse(key), value);
           remainder = unsafe { remainder.get_unchecked(remainder.len()..) };
           break;
         }
@@ -211,7 +217,7 @@ mod tests {
     ];
 
     for (i, (string, expected)) in cases.into_iter().enumerate() {
-      let result = parse_tags(string);
+      let result = parse_tags(string, &Whitelist(crate::whitelist_insert_all));
       if result != expected {
         eprintln!("[{i}] actual: {result:?}, expected: {expected:?}");
         panic!()
@@ -220,7 +226,29 @@ mod tests {
   }
 
   #[test]
-  fn __test() {
-    parse_tags("@mod=0;id=1000");
+  fn tags_whitelist() {
+    macro_rules! make {
+      ($($key:ident: $value:expr),* $(,)?) => (
+        [
+          $(($crate::Tag::$key, $value)),*
+        ].into_iter().collect::<Tags>()
+      );
+    }
+
+    let cases = [
+      ("", (None, "")),
+      ("mod=0;id=1000", (None, "mod=0;id=1000")),
+      ("@mod=0;id=1000", (Some(make! {Mod: "0"}), "")),
+      ("@mod=0;id=1000 ", (Some(make! {Mod: "0"}), "")),
+      ("@mod=0;id=1000 :asdf", (Some(make! {Mod: "0"}), ":asdf")),
+    ];
+
+    for (i, (string, expected)) in cases.into_iter().enumerate() {
+      let result = parse_tags(string, &whitelist!(Mod));
+      if result != expected {
+        eprintln!("[{i}] actual: {result:?}, expected: {expected:?}");
+        panic!()
+      }
+    }
   }
 }
