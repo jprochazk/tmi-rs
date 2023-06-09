@@ -167,6 +167,21 @@ impl Message {
   pub fn params(&self) -> Option<&str> {
     self.params
   }
+
+  pub fn tag(&self, tag: Tag<'_>) -> Option<&str> {
+    self.tags.as_ref().and_then(|map| map.get(&tag)).copied()
+  }
+
+  /// Returns the contents of the params after the last `:`.
+  pub fn text(&self) -> Option<&str> {
+    match &self.params {
+      Some(params) => match params.find(':') {
+        Some(start) => Some(&params[start..]),
+        None => None,
+      },
+      None => None,
+    }
+  }
 }
 
 pub fn unescape(value: &str) -> String {
