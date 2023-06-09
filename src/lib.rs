@@ -19,9 +19,9 @@ pub struct Message {
   params: Option<&'static str>,
 }
 
-pub struct Whitelist<F>(F);
+pub struct Whitelist<const IC: usize, F>(F);
 
-impl<F> Whitelist<F>
+impl<const IC: usize, F> Whitelist<IC, F>
 where
   F: for<'a> Fn(&'a mut Tags<'static>, Tag<'static>, &'static str),
 {
@@ -49,19 +49,71 @@ fn whitelist_insert_all(map: &mut Tags<'static>, tag: Tag<'static>, value: &'sta
   map.insert(tag, value);
 }
 
+/// Parse a single Twitch IRC message.
+///
+/// Twitch often sends multiple messages in a batch separated by `\r\n`.
+/// Before parsing messages, you should always split them by `\r\n` first:
+///
+/// ```rust,ignore
+/// if let Some(data) = ws.next().await {
+///     if let Message::Text(data) = data? {
+///         for message in data.lines().flat_map(twitch::parse) {
+///             handle(message)
+///         }
+///     }
+/// }
+/// ```
+pub fn parse(src: impl Into<String>) -> Option<Message> {
+  Message::parse(src)
+}
+
+/// Parse a single Twitch IRC message with a tag whitelist.
+///
+/// ```rust,ignore
+/// twitch::parse_with_whitelist(
+///     ":forsen!forsen@forsen.tmi.twitch.tv PRIVMSG #pajlada :AlienPls",
+///     twitch::whitelist!(DisplayName, Id, TmiSentTs, UserId),
+/// )
+/// ```
+///
+/// Twitch often sends multiple messages in a batch separated by `\r\n`.
+/// Before parsing messages, you should always split them by `\r\n` first:
+///
+/// ```rust,ignore
+/// if let Some(data) = ws.next().await {
+///     if let Message::Text(data) = data? {
+///         for message in data.lines().flat_map(twitch::parse) {
+///             handle(message)
+///         }
+///     }
+/// }
+/// ```
+pub fn parse_with_whitelist<const IC: usize, F>(
+  src: impl Into<String>,
+  whitelist: Whitelist<IC, F>,
+) -> Option<Message>
+where
+  F: for<'a> Fn(&'a mut Tags<'static>, Tag<'static>, &'static str),
+{
+  Message::parse_with_whitelist(src, whitelist)
+}
+
 impl Message {
   pub fn parse(src: impl Into<String>) -> Option<Self> {
-    Self::parse_inner(src.into(), unsafe { Whitelist::new(whitelist_insert_all) })
+    Self::parse_inner(src.into(), Whitelist::<16, _>(whitelist_insert_all))
   }
 
-  pub fn parse_with_whitelist<F>(src: impl Into<String>, whitelist: Whitelist<F>) -> Option<Self>
+  pub fn parse_with_whitelist<const IC: usize, F>(
+    src: impl Into<String>,
+    whitelist: Whitelist<IC, F>,
+  ) -> Option<Self>
   where
     F: for<'a> Fn(&'a mut Tags<'static>, Tag<'static>, &'static str),
   {
     Self::parse_inner(src.into(), whitelist)
   }
 
-  fn parse_inner<F>(raw: String, whitelist: Whitelist<F>) -> Option<Self>
+  fn parse_inner<const IC: usize, F>(raw: String, whitelist: Whitelist<IC, F>) -> Option<Self>
   where
     F: for<'a> Fn(&'a mut Tags<'static>, Tag<'static>, &'static str),
   {
@@ -244,15 +296,15 @@ unsafe fn leak(s: &str) -> &'static str {
 }
 
 /// `@a=a;b=b;c= :<rest>`
-fn parse_tags<'src, F>(
+fn parse_tags<'src, const IC: usize, F>(
   remainder: &'src str,
-  whitelist: &Whitelist<F>,
+  whitelist: &Whitelist<IC, F>,
 ) -> (Option<Tags<'static>>, &'src str)
 where
   F: for<'a> Fn(&'a mut Tags<'static>, Tag<'static>, &'static str),
 {
   if let Some(remainder) = remainder.strip_prefix('@') {
-    let mut tags = Tags::with_capacity(16);
+    let mut tags = Tags::with_capacity(IC);
     let mut key = (0, 0);
     let mut value = (0, 0);
     let mut end = 0;
@@ -534,7 +586,7 @@ mod tests {
     fn tags() {
       let data = "@login=test;id=asdf :<rest>";
 
-      let (tags, remainder) = parse_tags(data, &Whitelist(whitelist_insert_all));
+      let (tags, remainder) = parse_tags(data, &Whitelist::<16, _>(whitelist_insert_all));
       assert_eq!(remainder, &data[20..]);
       let tags = tags.unwrap();
       assert_eq!(

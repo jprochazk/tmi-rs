@@ -5,15 +5,15 @@ use core::mem;
 use simd::__m128i;
 use std::ops::Add;
 
-pub fn parse_tags<'src, F>(
+pub fn parse_tags<'src, const IC: usize, F>(
   remainder: &'src str,
-  whitelist: &Whitelist<F>,
+  whitelist: &Whitelist<IC, F>,
 ) -> (Option<Tags<'static>>, &'src str)
 where
   F: for<'a> Fn(&'a mut Tags<'static>, Tag<'static>, &'static str),
 {
   if let Some(remainder) = remainder.strip_prefix('@') {
-    let mut tags = Tags::with_capacity(16);
+    let mut tags = Tags::with_capacity(IC);
 
     let mut remainder = remainder;
     while !remainder.is_empty() {
@@ -160,6 +160,8 @@ fn find_semi_or_space(s: &str) -> Option<Found> {
 
 #[cfg(test)]
 mod tests {
+  use crate::whitelist_insert_all;
+
   use super::*;
 
   #[test]
@@ -217,7 +219,7 @@ mod tests {
     ];
 
     for (i, (string, expected)) in cases.into_iter().enumerate() {
-      let result = parse_tags(string, &Whitelist(crate::whitelist_insert_all));
+      let result = parse_tags(string, &Whitelist::<16, _>(whitelist_insert_all));
       if result != expected {
         eprintln!("[{i}] actual: {result:?}, expected: {expected:?}");
         panic!()
