@@ -43,6 +43,12 @@ $ cd dotnet && DOTNET_TieredPGO=1 dotnet run -c Release
 
 Go benchmarks use the built-in benchmarking tool.
 
+The benchmark is stored as a submodule:
+
+```
+$ git submodule init go && git submodule update
+```
+
 ```
 $ cd go && go test -bench=.
 ```
