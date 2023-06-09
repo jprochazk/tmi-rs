@@ -1,3 +1,6 @@
 [submodule "benches/dotnet"]
 	path = benches/dotnet
 	url = https://github.com/jprochazk/minitwitch-bench
+[submodule "benches/go"]
+	path = benches/go
+	url = https://github.com/jprochazk/irc-go-bench.git
