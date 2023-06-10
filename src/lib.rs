@@ -119,16 +119,22 @@ impl Message {
   {
     let remainder = &raw[..];
 
-    #[cfg(all(feature = "simd", target_arch = "x86_64", target_feature = "sse2"))]
+    #[cfg(all(feature = "simd", target_feature = "sse2"))]
     let (tags, remainder) = { simd::x86_sse::parse_tags(remainder, &whitelist) };
 
-    #[cfg(not(all(feature = "simd", target_arch = "x86_64", target_feature = "sse2")))]
+    #[cfg(all(feature = "simd", target_feature = "neon"))]
+    let (tags, remainder) = { simd::arm_neon::parse_tags(remainder, &whitelist) };
+
+    #[cfg(not(all(
+      feature = "simd",
+      any(target_feature = "sse2", target_feature = "neon")
+    )))]
     let (tags, remainder) = { parse_tags(remainder, &whitelist) };
 
-    #[cfg(all(feature = "simd", target_arch = "x86_64", target_feature = "sse2"))]
+    #[cfg(all(feature = "simd", target_feature = "sse2"))]
     let (prefix, remainder) = { simd::x86_sse::parse_prefix(remainder) };
 
-    #[cfg(not(all(feature = "simd", target_arch = "x86_64", target_feature = "sse2")))]
+    #[cfg(not(all(feature = "simd", target_feature = "sse2")))]
     let (prefix, remainder) = { parse_prefix(remainder) };
 
     let (command, remainder) = parse_command(remainder)?;
@@ -370,7 +376,7 @@ where
 macro_rules! tags_def {
   (
     $tag:ident;
-    $($(#[$meta:meta])* $key:literal = $name:ident),*
+    $($(#[$meta:meta])* $bytes:literal; $key:literal = $name:ident),*
   ) => {
     #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
     pub enum $tag<'src> {
@@ -390,9 +396,9 @@ macro_rules! tags_def {
       }
 
       pub fn parse(s: &'src str) -> Self {
-        match s {
-          $($key => Self::$name,)*
-          s => Self::Unknown(s),
+        match s.as_bytes() {
+          $($bytes => Self::$name,)*
+          _ => Self::Unknown(s),
         }
       }
     }
@@ -401,73 +407,73 @@ macro_rules! tags_def {
 
 tags_def! {
   Tag;
-  "msg-id" = MsgId,
-  "badges" = Badges,
-  "badge-info" = BadgeInfo,
-  "display-name" = DisplayName,
-  "emote-only" = EmoteOnly,
-  "emotes" = Emotes,
-  "flags" = Flags,
-  "id" = Id,
-  "mod" = Mod,
-  "room-id" = RoomId,
-  "subscriber" = Subscriber,
-  "tmi-sent-ts" = TmiSentTs,
-  "turbo" = Turbo,
-  "user-id" = UserId,
-  "user-type" = UserType,
-  "client-nonce" = ClientNonce,
-  "first-msg" = FirstMsg,
-  "reply-parent-display-name" = ReplyParentDisplayName,
-  "reply-parent-msg-body" = ReplyParentMsgBody,
-  "reply-parent-msg-id" = ReplyParentMsgId,
-  "reply-parent-user-id" = ReplyParentUserId,
-  "reply-parent-user-login" = ReplyParentUserLogin,
-  "followers-only" = FollowersOnly,
-  "r9k" = R9K,
-  "rituals" = Rituals,
-  "slow" = Slow,
-  "subs-only" = SubsOnly,
-  "msg-param-cumulative-months" = MsgParamCumulativeMonths,
-  "msg-param-displayName" = MsgParamDisplayName,
-  "msg-param-login" = MsgParamLogin,
-  "msg-param-months" = MsgParamMonths,
-  "msg-param-promo-gift-total" = MsgParamPromoGiftTotal,
-  "msg-param-promo-name" = MsgParamPromoName,
-  "msg-param-recipient-display-name" = MsgParamRecipientDisplayName,
-  "msg-param-recipient-id" = MsgParamRecipientId,
-  "msg-param-recipient-user-name" = MsgParamRecipientUserName,
-  "msg-param-sender-login" = MsgParamSenderLogin,
-  "msg-param-sender-name" = MsgParamSenderName,
-  "msg-param-should-share-streak" = MsgParamShouldShareStreak,
-  "msg-param-streak-months" = MsgParamStreakMonths,
-  "msg-param-sub-plan" = MsgParamSubPlan,
-  "msg-param-sub-plan-name" = MsgParamSubPlanName,
-  "msg-param-viewerCount" = MsgParamViewerCount,
-  "msg-param-ritual-name" = MsgParamRitualName,
-  "msg-param-threshold" = MsgParamThreshold,
-  "msg-param-gift-months" = MsgParamGiftMonths,
-  "login" = Login,
-  "system-msg" = SystemMsg,
-  "emote-sets" = EmoteSets,
-  "thread-id" = ThreadId,
-  "message-id" = MessageId,
-  "returning-chatter" = ReturningChatter,
-  "color" = Color,
-  "vip" = Vip,
-  "target-user-id" = TargetUserId,
-  "ban-duration" = BanDuration,
-  "msg-param-multimonth-duration" = MsgParamMultimonthDuration,
-  "msg-param-was-gifted" = MsgParamWasGifted,
-  "msg-param-multimonth-tenure" = MsgParamMultimonthTenure,
-  "sent-ts" = SentTs,
-  "msg-param-origin-id" = MsgParamOriginId,
-  "msg-param-fun-string" = MsgParamFunString,
-  "msg-param-sender-count" = MsgParamSenderCount,
-  "msg-param-profileImageURL" = MsgParamProfileImageUrl,
-  "msg-param-mass-gift-count" = MsgParamMassGiftCount,
-  "msg-param-gift-month-being-redeemed" = MsgParamGiftMonthBeingRedeemed,
-  "msg-param-anon-gift" = MsgParamAnonGift
+  b"msg-id"; "msg-id" = MsgId,
+  b"badges"; "badges" = Badges,
+  b"badge-info"; "badge-info" = BadgeInfo,
+  b"display-name"; "display-name" = DisplayName,
+  b"emote-only"; "emote-only" = EmoteOnly,
+  b"emotes"; "emotes" = Emotes,
+  b"flags"; "flags" = Flags,
+  b"id"; "id" = Id,
+  b"mod"; "mod" = Mod,
+  b"room-id"; "room-id" = RoomId,
+  b"subscriber"; "subscriber" = Subscriber,
+  b"tmi-sent-ts"; "tmi-sent-ts" = TmiSentTs,
+  b"turbo"; "turbo" = Turbo,
+  b"user-id"; "user-id" = UserId,
+  b"user-type"; "user-type" = UserType,
+  b"client-nonce"; "client-nonce" = ClientNonce,
+  b"first-msg"; "first-msg" = FirstMsg,
+  b"reply-parent-display-name"; "reply-parent-display-name" = ReplyParentDisplayName,
+  b"reply-parent-msg-body"; "reply-parent-msg-body" = ReplyParentMsgBody,
+  b"reply-parent-msg-id"; "reply-parent-msg-id" = ReplyParentMsgId,
+  b"reply-parent-user-id"; "reply-parent-user-id" = ReplyParentUserId,
+  b"reply-parent-user-login"; "reply-parent-user-login" = ReplyParentUserLogin,
+  b"followers-only"; "followers-only" = FollowersOnly,
+  b"r9k"; "r9k" = R9K,
+  b"rituals"; "rituals" = Rituals,
+  b"slow"; "slow" = Slow,
+  b"subs-only"; "subs-only" = SubsOnly,
+  b"msg-param-cumulative-months"; "msg-param-cumulative-months" = MsgParamCumulativeMonths,
+  b"msg-param-displayName"; "msg-param-displayName" = MsgParamDisplayName,
+  b"msg-param-login"; "msg-param-login" = MsgParamLogin,
+  b"msg-param-months"; "msg-param-months" = MsgParamMonths,
+  b"msg-param-promo-gift-total"; "msg-param-promo-gift-total" = MsgParamPromoGiftTotal,
+  b"msg-param-promo-name"; "msg-param-promo-name" = MsgParamPromoName,
+  b"msg-param-recipient-display-name"; "msg-param-recipient-display-name" = MsgParamRecipientDisplayName,
+  b"msg-param-recipient-id"; "msg-param-recipient-id" = MsgParamRecipientId,
+  b"msg-param-recipient-user-name"; "msg-param-recipient-user-name" = MsgParamRecipientUserName,
+  b"msg-param-sender-login"; "msg-param-sender-login" = MsgParamSenderLogin,
+  b"msg-param-sender-name"; "msg-param-sender-name" = MsgParamSenderName,
+  b"msg-param-should-share-streak"; "msg-param-should-share-streak" = MsgParamShouldShareStreak,
+  b"msg-param-streak-months"; "msg-param-streak-months" = MsgParamStreakMonths,
+  b"msg-param-sub-plan"; "msg-param-sub-plan" = MsgParamSubPlan,
+  b"msg-param-sub-plan-name"; "msg-param-sub-plan-name" = MsgParamSubPlanName,
+  b"msg-param-viewerCount"; "msg-param-viewerCount" = MsgParamViewerCount,
+  b"msg-param-ritual-name"; "msg-param-ritual-name" = MsgParamRitualName,
+  b"msg-param-threshold"; "msg-param-threshold" = MsgParamThreshold,
+  b"msg-param-gift-months"; "msg-param-gift-months" = MsgParamGiftMonths,
+  b"login"; "login" = Login,
+  b"system-msg"; "system-msg" = SystemMsg,
+  b"emote-sets"; "emote-sets" = EmoteSets,
+  b"thread-id"; "thread-id" = ThreadId,
+  b"message-id"; "message-id" = MessageId,
+  b"returning-chatter"; "returning-chatter" = ReturningChatter,
+  b"color"; "color" = Color,
+  b"vip"; "vip" = Vip,
+  b"target-user-id"; "target-user-id" = TargetUserId,
+  b"ban-duration"; "ban-duration" = BanDuration,
+  b"msg-param-multimonth-duration"; "msg-param-multimonth-duration" = MsgParamMultimonthDuration,
+  b"msg-param-was-gifted"; "msg-param-was-gifted" = MsgParamWasGifted,
+  b"msg-param-multimonth-tenure"; "msg-param-multimonth-tenure" = MsgParamMultimonthTenure,
+  b"sent-ts"; "sent-ts" = SentTs,
+  b"msg-param-origin-id"; "msg-param-origin-id" = MsgParamOriginId,
+  b"msg-param-fun-string"; "msg-param-fun-string" = MsgParamFunString,
+  b"msg-param-sender-count"; "msg-param-sender-count" = MsgParamSenderCount,
+  b"msg-param-profileImageURL"; "msg-param-profileImageURL" = MsgParamProfileImageUrl,
+  b"msg-param-mass-gift-count"; "msg-param-mass-gift-count" = MsgParamMassGiftCount,
+  b"msg-param-gift-month-being-redeemed"; "msg-param-gift-month-being-redeemed" = MsgParamGiftMonthBeingRedeemed,
+  b"msg-param-anon-gift"; "msg-param-anon-gift" = MsgParamAnonGift
 }
 
 impl<'src> Display for Tag<'src> {
