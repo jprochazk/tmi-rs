@@ -1,4 +1,4 @@
-use crate::{leak, Prefix, Tag, Tags, Whitelist};
+use crate::{leak, Prefix, Tags, Whitelist};
 
 use core::arch::x86_64 as simd;
 use core::mem;
@@ -28,21 +28,21 @@ where
         Some(Found::Semi(value_end)) => {
           let key = unsafe { leak(remainder.get_unchecked(..key_end)) };
           let value = unsafe { leak(remainder.get_unchecked(value_start..value_end)) };
-          whitelist.maybe_insert(&mut tags, Tag::parse(key), value);
+          whitelist.maybe_insert(&mut tags, key, value);
           remainder = unsafe { remainder.get_unchecked(value_end + 1..) };
           continue;
         }
         Some(Found::Space(value_end)) => {
           let key = unsafe { leak(remainder.get_unchecked(..key_end)) };
           let value = unsafe { leak(remainder.get_unchecked(value_start..value_end)) };
-          whitelist.maybe_insert(&mut tags, Tag::parse(key), value);
+          whitelist.maybe_insert(&mut tags, key, value);
           remainder = unsafe { remainder.get_unchecked(value_end + 1..) };
           break;
         }
         None => {
           let key = unsafe { leak(remainder.get_unchecked(..key_end)) };
           let value = unsafe { leak(remainder.get_unchecked(value_start..)) };
-          whitelist.maybe_insert(&mut tags, Tag::parse(key), value);
+          whitelist.maybe_insert(&mut tags, key, value);
           remainder = unsafe { remainder.get_unchecked(remainder.len()..) };
           break;
         }
