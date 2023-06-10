@@ -8,14 +8,14 @@ $ cargo add --git https://github.com/jprochazk/twitch-rs.git
 ```
 
 ```rust
+use twitch::{Command, Tag};
+
 for message in data.lines().flat_map(twitch::parse) {
-  if let (Some(prefix), Some(params)) = (message.prefix(), message.params()) {
-    println!(
-      "{}: {}",
-      prefix.user.unwrap_or("<server>"),
-      params.strip_prefix(':').unwrap_or(params),
-    )
-  };
+  if message.command() == Command::Privmsg {
+    let name = message.tag(Tag::DisplayName).unwrap();
+    let text = message.text().unwrap();
+    println!("{name}: {text}");
+  }
 }
 ```
 
