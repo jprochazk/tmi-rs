@@ -28,3 +28,7 @@ path = "./benches/rust/parse.rs"
 
 [profile.release]
 lto = "fat"
+
+[profile.release-debug]
+inherits = "release"
+debug = true
