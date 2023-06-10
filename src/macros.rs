@@ -13,7 +13,7 @@ macro_rules! whitelist {
         #[allow(unused_variables)]
         #[inline]
         |map: &mut $crate::Tags, tag: &str, value: &str| {
-          match tag {
+          match tag.as_bytes() {
             $($crate::tags::$tag => {map.insert($crate::Tag::$tag, value);})*
             _ => {}
           };

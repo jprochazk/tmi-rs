@@ -390,7 +390,7 @@ macro_rules! tags_def {
     #[allow(non_upper_case_globals)]
     #[doc(hidden)]
     pub mod $tag_mod {
-      $(pub const $name: &'static str = $key;)*
+      $(pub const $name: &'static [u8] = $bytes;)*
     }
 
     impl<'src> $tag<'src> {
