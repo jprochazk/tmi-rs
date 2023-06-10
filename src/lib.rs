@@ -23,7 +23,7 @@ pub struct Whitelist<const IC: usize, F>(F);
 
 impl<const IC: usize, F> Whitelist<IC, F>
 where
-  F: for<'a> Fn(&'a mut Tags<'static>, Tag<'static>, &'static str),
+  F: for<'a> Fn(&'a mut Tags<'static>, &'static str, &'static str),
 {
   /// # Safety
   /// The callback `f` must guarantee not to leak any of its parameters.
@@ -37,7 +37,7 @@ where
   pub(crate) fn maybe_insert(
     &self,
     map: &mut Tags<'static>,
-    tag: Tag<'static>,
+    tag: &'static str,
     value: &'static str,
   ) {
     (self.0)(map, tag, value)
@@ -45,8 +45,8 @@ where
 }
 
 #[inline(always)]
-fn whitelist_insert_all(map: &mut Tags<'static>, tag: Tag<'static>, value: &'static str) {
-  map.insert(tag, value);
+fn whitelist_insert_all(map: &mut Tags<'static>, tag: &'static str, value: &'static str) {
+  map.insert(Tag::parse(tag), value);
 }
 
 /// Parse a single Twitch IRC message.
@@ -93,7 +93,7 @@ pub fn parse_with_whitelist<const IC: usize, F>(
   whitelist: Whitelist<IC, F>,
 ) -> Option<Message>
 where
-  F: for<'a> Fn(&'a mut Tags<'static>, Tag<'static>, &'static str),
+  F: for<'a> Fn(&'a mut Tags<'static>, &'static str, &'static str),
 {
   Message::parse_with_whitelist(src, whitelist)
 }
@@ -108,14 +108,14 @@ impl Message {
     whitelist: Whitelist<IC, F>,
   ) -> Option<Self>
   where
-    F: for<'a> Fn(&'a mut Tags<'static>, Tag<'static>, &'static str),
+    F: for<'a> Fn(&'a mut Tags<'static>, &'static str, &'static str),
   {
     Self::parse_inner(src.into(), whitelist)
   }
 
   fn parse_inner<const IC: usize, F>(raw: String, whitelist: Whitelist<IC, F>) -> Option<Self>
   where
-    F: for<'a> Fn(&'a mut Tags<'static>, Tag<'static>, &'static str),
+    F: for<'a> Fn(&'a mut Tags<'static>, &'static str, &'static str),
   {
     let remainder = &raw[..];
 
@@ -327,7 +327,7 @@ fn parse_tags<'src, const IC: usize, F>(
   whitelist: &Whitelist<IC, F>,
 ) -> (Option<Tags<'static>>, &'src str)
 where
-  F: for<'a> Fn(&'a mut Tags<'static>, Tag<'static>, &'static str),
+  F: for<'a> Fn(&'a mut Tags<'static>, &'static str, &'static str),
 {
   if let Some(remainder) = remainder.strip_prefix('@') {
     let mut tags = Tags::with_capacity(IC);
@@ -341,7 +341,7 @@ where
         b' ' if unsafe { *bytes.get_unchecked(i + 1) } == b':' => {
           value.1 = i;
           if key.1 - key.0 > 0 {
-            let tag = Tag::parse(unsafe { leak(&remainder[key.0..key.1]) });
+            let tag = unsafe { leak(&remainder[key.0..key.1]) };
             let value = unsafe { leak(&remainder[value.0..value.1]) };
             whitelist.maybe_insert(&mut tags, tag, value);
           }
@@ -356,7 +356,7 @@ where
         b';' => {
           value.1 = i;
 
-          let tag = Tag::parse(unsafe { leak(&remainder[key.0..key.1]) });
+          let tag = unsafe { leak(&remainder[key.0..key.1]) };
           let value = unsafe { leak(&remainder[value.0..value.1]) };
           whitelist.maybe_insert(&mut tags, tag, value);
 
@@ -375,7 +375,7 @@ where
 
 macro_rules! tags_def {
   (
-    $tag:ident;
+    $tag:ident, $tag_mod:ident;
     $($(#[$meta:meta])* $bytes:literal; $key:literal = $name:ident),*
   ) => {
     #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -385,6 +385,12 @@ macro_rules! tags_def {
         $name,
       )*
       Unknown(&'src str),
+    }
+
+    #[allow(non_upper_case_globals)]
+    #[doc(hidden)]
+    pub mod $tag_mod {
+      $(pub const $name: &'static str = $key;)*
     }
 
     impl<'src> $tag<'src> {
@@ -406,7 +412,7 @@ macro_rules! tags_def {
 }
 
 tags_def! {
-  Tag;
+  Tag, tags;
   b"msg-id"; "msg-id" = MsgId,
   b"badges"; "badges" = Badges,
   b"badge-info"; "badge-info" = BadgeInfo,

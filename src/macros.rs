@@ -12,9 +12,9 @@ macro_rules! whitelist {
       $crate::Whitelist::<{$crate::__count!($($tag)*)}, _>::new({
         #[allow(unused_variables)]
         #[inline]
-        |map: &mut $crate::Tags, tag: $crate::Tag, value: &str| {
+        |map: &mut $crate::Tags, tag: &str, value: &str| {
           match tag {
-            $($crate::Tag::$tag => {map.insert(tag, value);})*
+            $($crate::tags::$tag => {map.insert($crate::Tag::$tag, value);})*
             _ => {}
           };
         }

@@ -10,7 +10,7 @@ pub fn parse_tags<'src, const IC: usize, F>(
   whitelist: &Whitelist<IC, F>,
 ) -> (Option<Tags<'static>>, &'src str)
 where
-  F: for<'a> Fn(&'a mut Tags<'static>, Tag<'static>, &'static str),
+  F: for<'a> Fn(&'a mut Tags<'static>, &'static str, &'static str),
 {
   if let Some(remainder) = remainder.strip_prefix('@') {
     let mut tags = Tags::with_capacity(IC);
