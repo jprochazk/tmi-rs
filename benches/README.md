@@ -55,6 +55,8 @@ $ cd go && go test -bench=.
 
 ## Results
 
+### x86
+
 Benchmarks were run in WSL2 Ubuntu 22.04 on an AMD Ryzen 7950X
 
 | library                                                                                                               | language                                    | time to parse 1000 lines |
@@ -65,6 +67,24 @@ Benchmarks were run in WSL2 Ubuntu 22.04 on an AMD Ryzen 7950X
 | [twitch-irc](https://github.com/robotty/twitch-irc-rs/tree/v5.0.0)                                                    | rustc 1.72.0-nightly (101fa903b 2023-06-04) | 2.2193 ms ± 2.58 µs      |
 | [irc_rust](https://github.com/MoBlaa/irc_rust/tree/4ae66fb3176b1d46cec6764f1a76aa6e9673d08b)                          | rustc 1.72.0-nightly (101fa903b 2023-06-04) | 969.86 µs ± 0.83 µs      |
 | [justgrep](https://github.com/Mm2PL/justgrep/tree/v0.0.6)                                                             | Go 1.20                                     | 1.395126 ms              |
+| [go-twitch-irc](https://github.com/jprochazk/go-twitch-irc/tree/v4.2.0)                                               | Go 1.20                                     | 3.75188 ms               |
 | [minitwitch](https://github.com/jprochazk/minitwitch-bench/tree/a5d2c7b7f5717ff00e6a2f29fd1c0099ff02a59d)             | .NET 8.0.100-preview.4.23260.5              | 883.4 µs ± 4.78 µs       |
 | [minitwitch](https://github.com/jprochazk/minitwitch-bench/tree/a5d2c7b7f5717ff00e6a2f29fd1c0099ff02a59d) (+ AOT)     | .NET 8.0.100-preview.4.23260.5              | 772.0 µs ± 5.27 µs       |
-| [go-twitch-irc](https://github.com/jprochazk/go-twitch-irc/tree/v4.2.0)                                               | Go 1.20                                     | 3.75188 ms               |
+
+### arm64
+
+Benchmarks were run with macOS 13.4 running on an M2 MacBook Air 16 GB
+
+| library                                                                                                               | language                                    | time to parse 1000 lines |
+| --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | ------------------------ |
+| [twitch](https://github.com/jprochazk/twitch-rs/tree/3f04961e70a2a4838af535540bb5cbb7b4319e44)                        | rustc 1.72.0-nightly (101fa903b 2023-06-04) | 1.0960 ms ± 3.16 µs      |
+| [twitch](https://github.com/jprochazk/twitch-rs/tree/3f04961e70a2a4838af535540bb5cbb7b4319e44) (`-F simd`)            | rustc 1.72.0-nightly (101fa903b 2023-06-04) | 604.93 µs ± 0.50 µs      |
+| [twitch](https://github.com/jprochazk/twitch-rs/tree/3f04961e70a2a4838af535540bb5cbb7b4319e44) (`-F simd` + cheating) | rustc 1.72.0-nightly (101fa903b 2023-06-04) | 422.62 µs ± 1.00 µs      |
+| [twitch-irc](https://github.com/robotty/twitch-irc-rs/tree/v5.0.0)                                                    | rustc 1.72.0-nightly (101fa903b 2023-06-04) | 3.2780 ms ± 5.72 µs      |
+| [irc_rust](https://github.com/MoBlaa/irc_rust/tree/4ae66fb3176b1d46cec6764f1a76aa6e9673d08b)                          | rustc 1.72.0-nightly (101fa903b 2023-06-04) | 1.6897 ms ± 9.81 µs      |
+| [justgrep](https://github.com/Mm2PL/justgrep/tree/v0.0.6)                                                             | Go 1.20                                     | 1.707313 ms              |
+| [go-twitch-irc](https://github.com/jprochazk/go-twitch-irc/tree/v4.2.0)                                               | Go 1.20                                     | 4.714300 ms              |
+| *[minitwitch](https://github.com/jprochazk/minitwitch-bench/tree/a5d2c7b7f5717ff00e6a2f29fd1c0099ff02a59d)            | .NET 8.0.100-preview.4.23260.5              | 1.387 ms ± 0.0013 ms     |
+| *[minitwitch](https://github.com/jprochazk/minitwitch-bench/tree/a5d2c7b7f5717ff00e6a2f29fd1c0099ff02a59d) (+ AOT)    | .NET 8.0.100-preview.4.23260.5              | 1.263 ms ± 0.0119 ms     |
+
+NOTE: `minitwitch` was not run with `DOTNET_TieredPGO=1`, because the benchmark would segfault each time I attempted to run it.
