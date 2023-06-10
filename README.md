@@ -8,7 +8,7 @@ $ cargo add --git https://github.com/jprochazk/twitch-rs.git
 ```
 
 ```rust
-for message in data.lines().flat_map(crate::parse) {
+for message in data.lines().flat_map(twitch::parse) {
   if let (Some(prefix), Some(params)) = (message.prefix(), message.params()) {
     println!(
       "{}: {}",

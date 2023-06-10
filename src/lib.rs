@@ -125,7 +125,12 @@ impl Message {
     #[cfg(not(all(feature = "simd", target_arch = "x86_64", target_feature = "sse2")))]
     let (tags, remainder) = { parse_tags(remainder, &whitelist) };
 
-    let (prefix, remainder) = parse_prefix(remainder);
+    #[cfg(all(feature = "simd", target_arch = "x86_64", target_feature = "sse2"))]
+    let (prefix, remainder) = { simd::x86_sse::parse_prefix(remainder) };
+
+    #[cfg(not(all(feature = "simd", target_arch = "x86_64", target_feature = "sse2")))]
+    let (prefix, remainder) = { parse_prefix(remainder) };
+
     let (command, remainder) = parse_command(remainder)?;
     let (channel, remainder) = parse_channel(remainder);
     let params = parse_params(remainder);
@@ -559,7 +564,7 @@ fn parse_command(remainder: &str) -> Option<(Command<'static>, &str)> {
     "372" => RplMotd,
     "375" => RplMotdStart,
     "376" => RplEndOfMotd,
-    other if !other.is_empty() => Unknown(unsafe { &*(cmd as *const _) }),
+    other if !other.is_empty() => Unknown(unsafe { leak(cmd) }),
     _ => return None,
   };
 

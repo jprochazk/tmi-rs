@@ -1,4 +1,4 @@
-use crate::{leak, Tag, Tags, Whitelist};
+use crate::{leak, Prefix, Tag, Tags, Whitelist};
 
 use core::arch::x86_64 as simd;
 use core::mem;
@@ -53,6 +53,86 @@ where
   } else {
     (None, remainder)
   }
+}
+
+pub fn parse_prefix(remainder: &str) -> (Option<Prefix<'static>>, &str) {
+  if let Some(remainder) = remainder.strip_prefix(':') {
+    let bytes: &[i8] = unsafe { mem::transmute(remainder.as_bytes()) };
+    const SPACE: __m128i = unsafe { mem::transmute([b' ' as i8; 16]) };
+    const AT: __m128i = unsafe { mem::transmute([b'@' as i8; 16]) };
+    const BANG: __m128i = unsafe { mem::transmute([b'!' as i8; 16]) };
+
+    let mut at = usize::MAX;
+    let mut bang = usize::MAX;
+
+    macro_rules! parse_chunk {
+      ($i:ident, $data:ident) => {
+        let end_mask = unsafe { simd::_mm_movemask_epi8(simd::_mm_cmpeq_epi8($data, SPACE)) };
+        let at_mask = unsafe { simd::_mm_movemask_epi8(simd::_mm_cmpeq_epi8($data, AT)) };
+        let bang_mask = unsafe { simd::_mm_movemask_epi8(simd::_mm_cmpeq_epi8($data, BANG)) };
+
+        if at_mask != 0 {
+          at = $i + at_mask.trailing_zeros() as usize
+        };
+        if bang_mask != 0 {
+          bang = $i + bang_mask.trailing_zeros() as usize
+        };
+
+        if end_mask != 0 {
+          let end = $i + end_mask.trailing_zeros() as usize;
+
+          let (prefix, remainder) = unsafe {
+            (
+              remainder.get_unchecked(..end),
+              remainder.get_unchecked(end + 1..),
+            )
+          };
+
+          let prefix = match (bang, at) {
+            (usize::MAX, usize::MAX) => Prefix {
+              nick: None,
+              user: None,
+              host: unsafe { leak(prefix) },
+            },
+            (usize::MAX, _) => Prefix {
+              nick: Some(unsafe { leak(prefix.get_unchecked(..at)) }),
+              user: None,
+              host: unsafe { leak(prefix.get_unchecked(at + 1..)) },
+            },
+            // nick!host -> invalid
+            (_, usize::MAX) => return (None, remainder),
+            (bang, at) => Prefix {
+              nick: Some(unsafe { leak(prefix.get_unchecked(..bang)) }),
+              user: Some(unsafe { leak(prefix.get_unchecked(bang + 1..at)) }),
+              host: unsafe { leak(prefix.get_unchecked(at + 1..)) },
+            },
+          };
+
+          return (Some(prefix), remainder);
+        }
+      };
+    }
+
+    let mut i = 0usize;
+    while i + 16 <= bytes.len() {
+      let data = unsafe { simd::_mm_loadu_si128(bytes.as_ptr().add(i) as *const _) };
+
+      parse_chunk!(i, data);
+
+      i += 16;
+    }
+    if i < bytes.len() {
+      #[repr(align(16))]
+      struct Data([i8; 16]);
+      let mut buf = Data([0; 16]);
+      buf.0[..bytes.len() - i].copy_from_slice(&bytes[i..]);
+      let data = unsafe { simd::_mm_load_si128(buf.0.as_ptr() as *const _) };
+
+      parse_chunk!(i, data);
+    }
+  }
+
+  (None, remainder)
 }
 
 #[inline]
@@ -252,5 +332,36 @@ mod tests {
         panic!()
       }
     }
+  }
+
+  #[test]
+  fn prefix() {
+    let data = ":nick!user@host <rest>";
+
+    let (prefix, remainder) = parse_prefix(data);
+    assert_eq!(remainder, &data[16..]);
+    let prefix = prefix.unwrap();
+    assert_eq!(prefix.nick.unwrap(), "nick");
+    assert_eq!(prefix.user.unwrap(), "user");
+    assert_eq!(prefix.host, "host");
+    assert_eq!(remainder, "<rest>");
+
+    let data = ":nick@host <rest>";
+    let (prefix, remainder) = parse_prefix(data);
+    assert_eq!(remainder, &data[11..]);
+    let prefix = prefix.unwrap();
+    assert_eq!(prefix.nick.unwrap(), "nick");
+    assert!(prefix.user.is_none());
+    assert_eq!(prefix.host, "host");
+    assert_eq!(remainder, "<rest>");
+
+    let data = ":host <rest>";
+    let (prefix, remainder) = parse_prefix(data);
+    assert_eq!(remainder, &data[6..]);
+    let prefix = prefix.unwrap();
+    assert!(prefix.nick.is_none());
+    assert!(prefix.user.is_none());
+    assert_eq!(prefix.host, "host");
+    assert_eq!(remainder, "<rest>");
   }
 }
