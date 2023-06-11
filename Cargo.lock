@@ -555,12 +555,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "irc-rust"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a30b75ee8d2f922d0322333c151d7cd879630bd1028a592a5d1dafd11746fba"
-
-[[package]]
 name = "is-terminal"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1316,7 +1310,6 @@ version = "0.1.0"
 dependencies = [
  "criterion",
  "futures-util",
- "irc-rust",
  "pretty_assertions",
  "tokio",
  "tokio-tungstenite",

@@ -6,18 +6,34 @@ mod macros;
 #[cfg(feature = "simd")]
 mod simd;
 
-use std::collections::HashMap;
 use std::fmt::Display;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Message {
   raw: String,
-  tags: Option<Tags<'static>>,
+  tags: Option<ParsedTags<'static>>,
   prefix: Option<Prefix<'static>>,
   command: Command<'static>,
   channel: Option<&'static str>,
   params: Option<&'static str>,
 }
+
+/* unsafe fn map_str_to_new_base(base: &str, existing: &str) -> &str {
+  existing
+}
+
+impl Clone for Message {
+  fn clone(&self) -> Self {
+    Self {
+      raw: self.raw.clone(),
+      tags: self.tags.clone(),
+      prefix: self.prefix.clone(),
+      command: self.command.clone(),
+      channel: self.channel.clone(),
+      params: self.params.clone(),
+    }
+  }
+} */
 
 pub struct Whitelist<const IC: usize, F>(F);
 
@@ -46,7 +62,7 @@ where
 
 #[inline(always)]
 fn whitelist_insert_all(map: &mut Tags<'static>, tag: &'static str, value: &'static str) {
-  map.insert(Tag::parse(tag), value);
+  map.push((Tag::parse(tag), value));
 }
 
 /// Parse a single Twitch IRC message.
@@ -159,8 +175,8 @@ impl Message {
     &self.raw
   }
 
-  pub fn tags(&self) -> Option<&Tags> {
-    self.tags.as_ref()
+  pub fn tags(&self) -> Option<&[(Tag<'_>, &str)]> {
+    self.tags.as_ref().map(|v| &v[..])
   }
 
   pub fn prefix(&self) -> Option<Prefix<'_>> {
@@ -180,7 +196,12 @@ impl Message {
   }
 
   pub fn tag(&self, tag: Tag<'_>) -> Option<&str> {
-    self.tags.as_ref().and_then(|map| map.get(&tag)).copied()
+    self
+      .tags
+      .as_ref()
+      .and_then(|map| map.iter().find(|(key, _)| key == &tag))
+      .map(|(_, value)| value)
+      .copied()
   }
 
   /// Returns the contents of the params after the last `:`.
@@ -228,7 +249,10 @@ pub fn unescape(value: &str) -> String {
   out
 }
 
-pub type Tags<'src> = HashMap<Tag<'src>, &'src str>;
+#[doc(hidden)]
+pub type Tags<'src> = Vec<(Tag<'src>, &'src str)>;
+#[doc(hidden)]
+pub type ParsedTags<'src> = Box<[(Tag<'src>, &'src str)]>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Command<'src> {
@@ -325,7 +349,7 @@ unsafe fn leak(s: &str) -> &'static str {
 fn parse_tags<'src, const IC: usize, F>(
   remainder: &'src str,
   whitelist: &Whitelist<IC, F>,
-) -> (Option<Tags<'static>>, &'src str)
+) -> (Option<ParsedTags<'static>>, &'src str)
 where
   F: for<'a> Fn(&'a mut Tags<'static>, &'static str, &'static str),
 {
@@ -367,7 +391,7 @@ where
       }
     }
 
-    (Some(tags), &remainder[end + 1..])
+    (Some(tags.into_boxed_slice()), &remainder[end + 1..])
   } else {
     (None, remainder)
   }
@@ -621,12 +645,7 @@ mod tests {
       let (tags, remainder) = parse_tags(data, &Whitelist::<16, _>(whitelist_insert_all));
       assert_eq!(remainder, &data[20..]);
       let tags = tags.unwrap();
-      assert_eq!(
-        &tags,
-        &[(Tag::Login, "test"), (Tag::Id, "asdf")]
-          .into_iter()
-          .collect()
-      )
+      assert_eq!(&tags[..], &[(Tag::Login, "test"), (Tag::Id, "asdf")])
     }
 
     #[test]
@@ -636,7 +655,7 @@ mod tests {
       let (tags, remainder) = parse_tags(data, &whitelist!(Login));
       assert_eq!(remainder, &data[20..]);
       let tags = tags.unwrap();
-      assert_eq!(&tags, &[(Tag::Login, "test")].into_iter().collect())
+      assert_eq!(&tags[..], &[(Tag::Login, "test")])
     }
 
     #[test]
@@ -705,8 +724,8 @@ mod tests {
       let a = Message::parse(data).unwrap();
       let mut a = a
         .tags()
+        .unwrap()
         .iter()
-        .flat_map(|v| v.iter())
         .map(|(tag, value)| (tag.as_str(), unescape(value)))
         .collect::<Vec<_>>();
       a.sort_by_key(|(tag, _)| *tag);

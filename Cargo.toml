@@ -11,7 +11,6 @@ simd = []
 [dependencies]
 
 [dev-dependencies]
-irc-rust = "0.4.0"
 twitch-irc = "5.0.0"
 
 criterion = "0.5.1"

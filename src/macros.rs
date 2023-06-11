@@ -14,7 +14,7 @@ macro_rules! whitelist {
         #[inline]
         |map: &mut $crate::Tags, tag: &str, value: &str| {
           match tag.as_bytes() {
-            $($crate::tags::$tag => {map.insert($crate::Tag::$tag, value);})*
+            $($crate::tags::$tag => {map.push(($crate::Tag::$tag, value));})*
             _ => {}
           };
         }

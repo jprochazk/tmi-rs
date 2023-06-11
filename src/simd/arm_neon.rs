@@ -1,4 +1,4 @@
-use crate::{leak, Tags, Whitelist};
+use crate::{leak, ParsedTags, Tags, Whitelist};
 
 use core::arch::aarch64 as simd;
 use core::mem;
@@ -8,7 +8,7 @@ use std::ops::Add;
 pub fn parse_tags<'src, const IC: usize, F>(
   remainder: &'src str,
   whitelist: &Whitelist<IC, F>,
-) -> (Option<Tags<'static>>, &'src str)
+) -> (Option<ParsedTags<'static>>, &'src str)
 where
   F: for<'a> Fn(&'a mut Tags<'static>, &'static str, &'static str),
 {
@@ -49,7 +49,7 @@ where
       }
     }
 
-    (Some(tags), remainder)
+    (Some(tags.into_boxed_slice()), remainder)
   } else {
     (None, remainder)
   }
@@ -228,7 +228,7 @@ mod tests {
 
     for (i, (string, expected)) in cases.into_iter().enumerate() {
       let result = parse_tags(string, &Whitelist::<16, _>(whitelist_insert_all));
-      if result != expected {
+      if result.1 != expected.1 || result.0.as_deref() != expected.0.as_deref() {
         eprintln!("[{i}] actual: {result:?}, expected: {expected:?}");
         panic!()
       }
@@ -255,7 +255,7 @@ mod tests {
 
     for (i, (string, expected)) in cases.into_iter().enumerate() {
       let result = parse_tags(string, &whitelist!(Mod));
-      if result != expected {
+      if result.1 != expected.1 || result.0.as_deref() != expected.0.as_deref() {
         eprintln!("[{i}] actual: {result:?}, expected: {expected:?}");
         panic!()
       }
