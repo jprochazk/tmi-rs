@@ -18,23 +18,6 @@ pub struct Message {
   params: Option<&'static str>,
 }
 
-/* unsafe fn map_str_to_new_base(base: &str, existing: &str) -> &str {
-  existing
-}
-
-impl Clone for Message {
-  fn clone(&self) -> Self {
-    Self {
-      raw: self.raw.clone(),
-      tags: self.tags.clone(),
-      prefix: self.prefix.clone(),
-      command: self.command.clone(),
-      channel: self.channel.clone(),
-      params: self.params.clone(),
-    }
-  }
-} */
-
 pub struct Whitelist<const IC: usize, F>(F);
 
 impl<const IC: usize, F> Whitelist<IC, F>
@@ -179,12 +162,12 @@ impl Message {
     self.tags.as_ref().map(|v| &v[..])
   }
 
-  pub fn prefix(&self) -> Option<Prefix<'_>> {
-    self.prefix
+  pub fn prefix(&self) -> Option<&Prefix<'_>> {
+    self.prefix.as_ref()
   }
 
-  pub fn command(&self) -> Command<'_> {
-    self.command
+  pub fn command(&self) -> &Command<'_> {
+    &self.command
   }
 
   pub fn channel(&self) -> Option<&str> {
@@ -249,12 +232,87 @@ pub fn unescape(value: &str) -> String {
   out
 }
 
+#[inline(always)]
+unsafe fn map_str_to_new_base(
+  prev_base: &str,
+  new_base: &str,
+  existing: &'static str,
+) -> &'static str {
+  let start = existing.as_ptr() as usize - prev_base.as_ptr() as usize;
+  debug_assert!(start + existing.len() <= new_base.len());
+  let out = leak(new_base.get_unchecked(start..start + existing.len()));
+  debug_assert!(existing == out);
+  out
+}
+
+impl Clone for Message {
+  fn clone(&self) -> Self {
+    let prev_base = &self.raw;
+    let new_base = self.raw.clone();
+
+    let tags = match &self.tags {
+      Some(tags) => {
+        let mut out = Vec::new();
+        out.reserve_exact(tags.len());
+        for (tag, value) in tags.iter() {
+          let tag = match tag {
+            Tag::Unknown(s) => {
+              Tag::Unknown(unsafe { map_str_to_new_base(prev_base, &new_base, s) })
+            }
+            tag => tag.private_clone(),
+          };
+          let value = unsafe { map_str_to_new_base(prev_base, &new_base, value) };
+          out.push((tag, value));
+        }
+        Some(out.into_boxed_slice())
+      }
+      None => None,
+    };
+
+    let prefix = self.prefix.as_ref().map(|prefix| Prefix {
+      nick: prefix
+        .nick
+        .map(|s| unsafe { map_str_to_new_base(prev_base, &new_base, s) }),
+      user: prefix
+        .user
+        .map(|s| unsafe { map_str_to_new_base(prev_base, &new_base, s) }),
+      host: unsafe { map_str_to_new_base(prev_base, &new_base, prefix.host) },
+    });
+
+    let command = match &self.command {
+      Command::Unknown(s) => {
+        Command::Unknown(unsafe { map_str_to_new_base(prev_base, &new_base, s) })
+      }
+      other => other.private_clone(),
+    };
+
+    let channel = self
+      .channel
+      .as_ref()
+      .map(|channel| unsafe { map_str_to_new_base(prev_base, &new_base, channel) });
+
+    let params = self
+      .params
+      .as_ref()
+      .map(|params| unsafe { map_str_to_new_base(prev_base, &new_base, params) });
+
+    Self {
+      tags,
+      prefix,
+      command,
+      channel,
+      params,
+      raw: new_base,
+    }
+  }
+}
+
 #[doc(hidden)]
 pub type Tags<'src> = Vec<(Tag<'src>, &'src str)>;
 #[doc(hidden)]
 pub type ParsedTags<'src> = Box<[(Tag<'src>, &'src str)]>;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Command<'src> {
   Ping,
   Pong,
@@ -339,6 +397,38 @@ impl<'src> Command<'src> {
       Unknown(cmd) => cmd,
     }
   }
+
+  pub(crate) fn private_clone(&self) -> Self {
+    use Command::*;
+    match self {
+      Ping => Ping,
+      Pong => Pong,
+      Join => Join,
+      Part => Part,
+      Privmsg => Privmsg,
+      Whisper => Whisper,
+      Clearchat => Clearchat,
+      Clearmsg => Clearmsg,
+      GlobalUserState => GlobalUserState,
+      HostTarget => HostTarget,
+      Notice => Notice,
+      Reconnect => Reconnect,
+      RoomState => RoomState,
+      UserNotice => UserNotice,
+      UserState => UserState,
+      Capability => Capability,
+      RplWelcome => RplWelcome,
+      RplYourHost => RplYourHost,
+      RplCreated => RplCreated,
+      RplMyInfo => RplMyInfo,
+      RplNamReply => RplNamReply,
+      RplEndOfNames => RplEndOfNames,
+      RplMotd => RplMotd,
+      RplMotdStart => RplMotdStart,
+      RplEndOfMotd => RplEndOfMotd,
+      Unknown(cmd) => Unknown(cmd),
+    }
+  }
 }
 
 unsafe fn leak(s: &str) -> &'static str {
@@ -402,7 +492,7 @@ macro_rules! tags_def {
     $tag:ident, $tag_mod:ident;
     $($(#[$meta:meta])* $bytes:literal; $key:literal = $name:ident),*
   ) => {
-    #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+    #[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
     pub enum $tag<'src> {
       $(
         $(#[$meta])*
@@ -429,6 +519,13 @@ macro_rules! tags_def {
         match s.as_bytes() {
           $($bytes => Self::$name,)*
           _ => Self::Unknown(s),
+        }
+      }
+
+      pub(crate) fn private_clone(&self) -> Self {
+        match self {
+          $(Self::$name => Self::$name,)*
+          Self::Unknown(key) => Self::Unknown(key),
         }
       }
     }
@@ -512,7 +609,7 @@ impl<'src> Display for Tag<'src> {
   }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug)]
 pub struct Prefix<'src> {
   pub nick: Option<&'src str>,
   pub user: Option<&'src str>,
@@ -741,5 +838,13 @@ mod tests {
 
       assert_eq!(a, b);
     }
+  }
+
+  #[allow(clippy::redundant_clone)]
+  #[test]
+  fn clone_message() {
+    let message = "@display-name=Dixtor334;emotes=;first-msg=0;flags=;id=0b4c70e4-9a47-4ce1-9c3e-8f78111cdc19;mod=0;reply-parent-display-name=minosura;reply-parent-msg-body=https://youtu.be/-ek4MFjz_eM?list=PL91C6439FD45DE2F3\\sannytfDinkDonk\\sstrimmer\\skorean\\sone;reply-parent-msg-id=7f811788-b897-4b4c-9f91-99fafe70eb7f;reply-parent-user-id=141993641;reply-parent-user-login=minosura;returning-chatter=0;room-id=56418014;subscriber=1;tmi-sent-ts=1686049636367;turbo=0;user-id=73714767;user-type= :dixtor334!dixtor334@dixtor334.tmi.twitch.tv PRIVMSG #anny :@minosura @anny";
+    let message = parse(message).unwrap();
+    let _ = message.clone();
   }
 }

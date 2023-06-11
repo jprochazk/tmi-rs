@@ -73,7 +73,7 @@ async fn handle_message(ws: &mut WebSocket, message: Message) -> Result<()> {
 
       println!();
 
-      if a.command() == Command::Ping {
+      if a.command() == &Command::Ping {
         ws.send(Message::Text("PONG".into())).await?;
       }
     }
