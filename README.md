@@ -19,7 +19,7 @@ for message in data.lines().flat_map(twitch::parse) {
 }
 ```
 
-If you're on x86, you can enable the `simd` feature for a ~50% increase in performance:
+If your cpu supports SSE2 (x86) or NEON (arm), you can enable the `simd` feature for a ~50% increase in performance:
 ```
 $ cargo add --git https://github.com/jprochazk/twitch-rs.git -F simd
 ```
