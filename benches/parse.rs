@@ -11,7 +11,7 @@ fn read_input() -> Vec<String> {
     .collect::<Vec<_>>()
 }
 
-fn parse_whitelist_twitch(c: &mut Criterion) {
+fn twitch(c: &mut Criterion) {
   let input = read_input();
   c.bench_with_input(
     BenchmarkId::new("twitch", "data.txt (whitelist)"),
@@ -46,22 +46,7 @@ fn parse_whitelist_twitch(c: &mut Criterion) {
   );
 }
 
-fn parse_twitch(c: &mut Criterion) {
-  let input = read_input();
-  c.bench_with_input(
-    BenchmarkId::new("twitch", "data.txt"),
-    &input,
-    |b, lines| {
-      b.iter(|| {
-        for line in lines.clone() {
-          black_box(twitch::Message::parse(line).expect("failed to parse"));
-        }
-      })
-    },
-  );
-}
-
-fn parse_twitch_irc(c: &mut Criterion) {
+fn twitch_irc(c: &mut Criterion) {
   let input = read_input();
   c.bench_with_input(
     BenchmarkId::new("twitch_irc", "data.txt"),
@@ -76,7 +61,7 @@ fn parse_twitch_irc(c: &mut Criterion) {
   );
 }
 
-fn parse_irc_rust(c: &mut Criterion) {
+fn irc_rust(c: &mut Criterion) {
   let input = read_input();
   c.bench_with_input(
     BenchmarkId::new("irc_rust", "data.txt"),
@@ -96,11 +81,5 @@ fn parse_irc_rust(c: &mut Criterion) {
   );
 }
 
-criterion_group!(whitelisted, parse_whitelist_twitch,);
-criterion_group!(
-  parse_benches,
-  parse_twitch,
-  parse_twitch_irc,
-  parse_irc_rust
-);
-criterion_main!(parse_benches, whitelisted);
+criterion_group!(benches, twitch, twitch_irc, irc_rust);
+criterion_main!(benches);
