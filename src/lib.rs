@@ -50,6 +50,8 @@ fn whitelist_insert_all(map: &mut Tags<'static>, tag: &'static str, value: &'sta
 
 /// Parse a single Twitch IRC message.
 ///
+/// If the message can't be parsed, the string is returned in the result as `Err`.
+///
 /// Twitch often sends multiple messages in a batch separated by `\r\n`.
 /// Before parsing messages, you should always split them by `\r\n` first:
 ///
@@ -62,7 +64,7 @@ fn whitelist_insert_all(map: &mut Tags<'static>, tag: &'static str, value: &'sta
 ///     }
 /// }
 /// ```
-pub fn parse(src: impl Into<String>) -> Option<Message> {
+pub fn parse(src: impl Into<String>) -> Result<Message, String> {
   Message::parse(src)
 }
 
@@ -74,6 +76,8 @@ pub fn parse(src: impl Into<String>) -> Option<Message> {
 ///     twitch::whitelist!(DisplayName, Id, TmiSentTs, UserId),
 /// )
 /// ```
+///
+/// If the message can't be parsed, the string is returned in the result as `Err`.
 ///
 /// Twitch often sends multiple messages in a batch separated by `\r\n`.
 /// Before parsing messages, you should always split them by `\r\n` first:
@@ -90,7 +94,7 @@ pub fn parse(src: impl Into<String>) -> Option<Message> {
 pub fn parse_with_whitelist<const IC: usize, F>(
   src: impl Into<String>,
   whitelist: Whitelist<IC, F>,
-) -> Option<Message>
+) -> Result<Message, String>
 where
   F: for<'a> Fn(&'a mut Tags<'static>, &'static str, &'static str),
 {
@@ -98,21 +102,24 @@ where
 }
 
 impl Message {
-  pub fn parse(src: impl Into<String>) -> Option<Self> {
+  pub fn parse(src: impl Into<String>) -> Result<Self, String> {
     Self::parse_inner(src.into(), Whitelist::<16, _>(whitelist_insert_all))
   }
 
   pub fn parse_with_whitelist<const IC: usize, F>(
     src: impl Into<String>,
     whitelist: Whitelist<IC, F>,
-  ) -> Option<Self>
+  ) -> Result<Self, String>
   where
     F: for<'a> Fn(&'a mut Tags<'static>, &'static str, &'static str),
   {
     Self::parse_inner(src.into(), whitelist)
   }
 
-  fn parse_inner<const IC: usize, F>(raw: String, whitelist: Whitelist<IC, F>) -> Option<Self>
+  fn parse_inner<const IC: usize, F>(
+    raw: String,
+    whitelist: Whitelist<IC, F>,
+  ) -> Result<Self, String>
   where
     F: for<'a> Fn(&'a mut Tags<'static>, &'static str, &'static str),
   {
@@ -136,11 +143,14 @@ impl Message {
     #[cfg(not(all(feature = "simd", target_feature = "sse2")))]
     let (prefix, remainder) = { parse_prefix(remainder) };
 
-    let (command, remainder) = parse_command(remainder)?;
+    let (command, remainder) = match parse_command(remainder) {
+      Some((command, remainder)) => (command, remainder),
+      None => return Err(raw),
+    };
     let (channel, remainder) = parse_channel(remainder);
     let params = parse_params(remainder);
 
-    Some(Self {
+    Ok(Self {
       raw,
       tags,
       prefix,

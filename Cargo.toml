@@ -12,6 +12,7 @@ simd = []
 
 [dev-dependencies]
 twitch-irc = "5.0.0"
+mimalloc = { version = "0.1.37", default-features = false }
 
 criterion = "0.5.1"
 pretty_assertions = "1.0.0"
