@@ -26,7 +26,7 @@ $ cargo add --git https://github.com/jprochazk/twitch-rs.git -F simd
 
 ## Performance
 
-Calling the library blazingly fast is done in jest, but it is true that `twitch-rs` is very fast. `twitch-rs` is part of the [twitch-irc-benchmarks](https://github.com/jprochazk/twitch-irc-benchmarks), where it is currently the fastest implementation by a significant margin, nearly twice as fast as the second best implementation.
+Calling the library blazingly fast is done in jest, but it is true that `twitch-rs` is very fast. `twitch-rs` is part of the [twitch-irc-benchmarks](https://github.com/jprochazk/twitch-irc-benchmarks), where it is currently the fastest implementation by a significant margin (roughly 2.5x faster than the second best implementation).
 
 The SIMD implementation is quite portable, as on x86 it relies only on SSE2, which is available in every x86 CPU created in the last two decades, and on ARM it relies on Neon, which is also well supported.
 
