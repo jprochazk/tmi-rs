@@ -88,9 +88,9 @@ fn find_equals(s: &str) -> Option<usize> {
   #[inline(always)]
   fn test(data: uint8x16_t) -> Option<usize> {
     const EQUALS: uint8x16_t = unsafe { mem::transmute([b'='; 16]) };
-    let mask = unsafe { eq_mask(data, EQUALS) };
-    if mask != 0 {
-      Some(mask.trailing_zeros() as usize)
+    let mask = unsafe { Mask::eq(data, EQUALS) };
+    if mask.has_match() {
+      Some(mask.first_match_index())
     } else {
       None
     }
@@ -134,21 +134,21 @@ fn find_semi_or_space(s: &str) -> Option<Found> {
     const SEMI: uint8x16_t = unsafe { mem::transmute([b';'; 16]) };
     const SPACE: uint8x16_t = unsafe { mem::transmute([b' '; 16]) };
 
-    let semi_mask = unsafe { eq_mask(data, SEMI) };
-    let space_mask = unsafe { eq_mask(data, SPACE) };
+    let semi_mask = unsafe { Mask::eq(data, SEMI) };
+    let space_mask = unsafe { Mask::eq(data, SPACE) };
 
-    match (semi_mask != 0, space_mask != 0) {
+    match (semi_mask.has_match(), space_mask.has_match()) {
       (true, true) => {
-        let semi_tz = semi_mask.trailing_zeros() as usize;
-        let space_tz = space_mask.trailing_zeros() as usize;
-        if semi_tz < space_tz {
-          Some(Found::Semi(semi_tz))
+        let semi = semi_mask.first_match_index();
+        let space = space_mask.first_match_index();
+        if semi < space {
+          Some(Found::Semi(semi))
         } else {
-          Some(Found::Space(space_tz))
+          Some(Found::Space(space))
         }
       }
-      (true, false) => Some(Found::Semi(semi_mask.trailing_zeros() as usize)),
-      (false, true) => Some(Found::Space(space_mask.trailing_zeros() as usize)),
+      (true, false) => Some(Found::Semi(semi_mask.first_match_index())),
+      (false, true) => Some(Found::Space(space_mask.first_match_index())),
       _ => None,
     }
   }
@@ -156,14 +156,26 @@ fn find_semi_or_space(s: &str) -> Option<Found> {
   chunk16_test(s, test)
 }
 
-#[inline(always)]
-unsafe fn eq_mask(a: uint8x16_t, b: uint8x16_t) -> u32 {
-  let vector = simd::vceqq_u8(a, b);
-  let high_bits = simd::vreinterpretq_u16_u8(simd::vshrq_n_u8(vector, 7));
-  let paired16 = simd::vreinterpretq_u32_u16(simd::vsraq_n_u16(high_bits, high_bits, 7));
-  let paired32 = simd::vreinterpretq_u64_u32(simd::vsraq_n_u32(paired16, paired16, 14));
-  let paired64 = simd::vreinterpretq_u8_u64(simd::vsraq_n_u64(paired32, paired32, 28));
-  (simd::vgetq_lane_u8::<0>(paired64) as u32) | ((simd::vgetq_lane_u8::<8>(paired64) as u32) << 8)
+struct Mask(u64);
+
+impl Mask {
+  #[inline(always)]
+  unsafe fn eq(a: uint8x16_t, b: uint8x16_t) -> Self {
+    let mask = simd::vreinterpretq_u16_u8(simd::vceqq_u8(a, b));
+    let res = simd::vshrn_n_u16(mask, 4);
+    let matches = simd::vget_lane_u64(simd::vreinterpret_u64_u8(res), 0);
+    Mask(matches)
+  }
+
+  #[inline(always)]
+  fn has_match(&self) -> bool {
+    self.0 != 0
+  }
+
+  #[inline(always)]
+  fn first_match_index(&self) -> usize {
+    (self.0.trailing_zeros() >> 2) as usize
+  }
 }
 
 #[cfg(test)]
