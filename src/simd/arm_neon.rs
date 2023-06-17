@@ -5,6 +5,8 @@ use core::mem;
 use simd::uint8x16_t;
 use std::ops::Add;
 
+pub use crate::parse_prefix;
+
 pub fn parse_tags<'src, const IC: usize, F>(
   remainder: &'src str,
   whitelist: &Whitelist<IC, F>,
