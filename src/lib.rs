@@ -6,11 +6,10 @@ mod macros;
 #[cfg(feature = "simd")]
 mod simd;
 
+mod scalar;
+
 #[cfg(feature = "simd")]
 use simd::{parse_prefix, parse_tags};
-
-#[cfg(not(feature = "simd"))]
-mod scalar;
 
 #[cfg(not(feature = "simd"))]
 use scalar::{parse_prefix, parse_tags};
