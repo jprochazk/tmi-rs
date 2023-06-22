@@ -91,7 +91,7 @@ async fn handle_message(ws: &mut WebSocket, state: &mut State, msg: Message) -> 
         Command::Privmsg => {
           use twitch::Tag::*;
 
-          let name = msg.tag(DisplayName).unwrap_or("???");
+          let name = msg.tag(DisplayName).unwrap_or("???").to_lowercase();
           let text = msg.text().unwrap_or("???");
           let count = state.message_counts.entry(name.to_string()).or_insert(0);
           println!("{count} {name}:\t{text}");
