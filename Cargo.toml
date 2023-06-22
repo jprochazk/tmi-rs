@@ -34,3 +34,6 @@ lto = "fat"
 [profile.release-debug]
 inherits = "release"
 debug = true
+
+[workspace]
+members = ["bin/*"]
