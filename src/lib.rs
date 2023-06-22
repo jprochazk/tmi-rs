@@ -193,7 +193,7 @@ impl Message {
   pub fn text(&self) -> Option<&str> {
     match &self.params {
       Some(params) => match params.find(':') {
-        Some(start) => Some(&params[start..]),
+        Some(start) => Some(&params[start + 1..]),
         None => None,
       },
       None => None,
