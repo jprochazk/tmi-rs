@@ -4,7 +4,7 @@ This is a Twitch-specific IRC parser, it is not guaranteed to work for any other
 It is also fairly low level, and doesn't provide a convenient high-level interface to build bots with.
 
 ```
-$ cargo add --git https://github.com/jprochazk/twitch-rs.git
+$ cargo add --git https://github.com/jprochazk/twitch-rs.git twitch
 ```
 
 ```rust
@@ -21,7 +21,7 @@ for message in data.lines().flat_map(twitch::parse) {
 
 If your cpu supports SSE2 (x86) or NEON (arm), you can enable the `simd` feature for a ~50% increase in performance:
 ```
-$ cargo add --git https://github.com/jprochazk/twitch-rs.git -F simd
+$ cargo add --git https://github.com/jprochazk/twitch-rs.git -F simd twitch
 ```
 
 ## Performance
