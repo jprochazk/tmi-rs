@@ -24,7 +24,7 @@ where
             let value = unsafe { leak(&remainder[value.0..value.1]) };
             whitelist.maybe_insert(&mut tags, tag, value);
           }
-          end = i;
+          end = i + 1;
           break;
         }
         b'=' if value.1 <= key.1 => {
@@ -46,7 +46,7 @@ where
       }
     }
 
-    (Some(tags.into_boxed_slice()), &remainder[end + 1..])
+    (Some(tags.into_boxed_slice()), &remainder[end..])
   } else {
     (None, remainder)
   }
@@ -94,5 +94,63 @@ pub fn parse_prefix(remainder: &str) -> (Option<Prefix<'static>>, &str) {
     (None, remainder)
   } else {
     (None, remainder)
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use crate::{whitelist_insert_all, Tag};
+
+  use super::*;
+
+  #[test]
+  fn tags() {
+    let data = "@login=test;id=asdf :<rest>";
+
+    let (tags, remainder) = parse_tags(data, &Whitelist::<16, _>(whitelist_insert_all));
+    assert_eq!(remainder, &data[20..]);
+    let tags = tags.unwrap();
+    assert_eq!(&tags[..], &[(Tag::Login, "test"), (Tag::Id, "asdf")])
+  }
+
+  #[test]
+  fn whitelist_tags() {
+    let data = "@login=test;id=asdf :<rest>";
+
+    let (tags, remainder) = parse_tags(data, &whitelist!(Login));
+    assert_eq!(remainder, &data[20..]);
+    let tags = tags.unwrap();
+    assert_eq!(&tags[..], &[(Tag::Login, "test")])
+  }
+
+  #[test]
+  fn prefix() {
+    let data = ":nick!user@host <rest>";
+
+    let (prefix, remainder) = parse_prefix(data);
+    assert_eq!(remainder, &data[16..]);
+    let prefix = prefix.unwrap();
+    assert_eq!(prefix.nick.unwrap(), "nick");
+    assert_eq!(prefix.user.unwrap(), "user");
+    assert_eq!(prefix.host, "host");
+    assert_eq!(remainder, "<rest>");
+
+    let data = ":nick@host <rest>";
+    let (prefix, remainder) = parse_prefix(data);
+    assert_eq!(remainder, &data[11..]);
+    let prefix = prefix.unwrap();
+    assert_eq!(prefix.nick.unwrap(), "nick");
+    assert!(prefix.user.is_none());
+    assert_eq!(prefix.host, "host");
+    assert_eq!(remainder, "<rest>");
+
+    let data = ":host <rest>";
+    let (prefix, remainder) = parse_prefix(data);
+    assert_eq!(remainder, &data[6..]);
+    let prefix = prefix.unwrap();
+    assert!(prefix.nick.is_none());
+    assert!(prefix.user.is_none());
+    assert_eq!(prefix.host, "host");
+    assert_eq!(remainder, "<rest>");
   }
 }
