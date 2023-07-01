@@ -1,7 +1,6 @@
 [Blazingly fast](#performance) 🚀 Twitch IRC parsing library written in Rust 🦀
 
-This is a Twitch-specific IRC parser, it is not guaranteed to work for any other kind of IRC message.
-It is also fairly low level, and doesn't provide a convenient high-level interface to build bots with.
+This is a Twitch-specific IRC parser, it is not guaranteed to work for any other kind of IRC message. It also mostly assumes messages are not malformed. You will probably get out of bounds panics for malformed messages. It is also fairly low level, and doesn't provide a convenient high-level interface to build bots with.
 
 ```
 $ cargo add --git https://github.com/jprochazk/twitch-rs.git twitch
