@@ -14,7 +14,9 @@ use simd::{parse_prefix, parse_tags};
 #[cfg(not(feature = "simd"))]
 use scalar::{parse_prefix, parse_tags};
 
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
+use std::ops::{Deref, Index};
+use std::slice::SliceIndex;
 
 #[derive(Debug)]
 pub struct Message {
@@ -161,7 +163,7 @@ impl Message {
   }
 
   pub fn tags(&self) -> Option<&[(Tag<'_>, &str)]> {
-    self.tags.as_ref().map(|v| &v[..])
+    self.tags.as_ref().map(|v| v.as_slice())
   }
 
   pub fn prefix(&self) -> Option<&Prefix<'_>> {
@@ -266,7 +268,7 @@ impl Clone for Message {
           let value = unsafe { map_str_to_new_base(prev_base, &new_base, value) };
           out.push((tag, value));
         }
-        Some(out.into_boxed_slice())
+        Some(out.into())
       }
       None => None,
     };
@@ -310,9 +312,82 @@ impl Clone for Message {
 }
 
 #[doc(hidden)]
-pub type Tags<'src> = Vec<(Tag<'src>, &'src str)>;
+pub type TagPair<'src> = (Tag<'src>, &'src str);
+
 #[doc(hidden)]
-pub type ParsedTags<'src> = Box<[(Tag<'src>, &'src str)]>;
+pub type Tags<'src> = Vec<TagPair<'src>>;
+
+#[doc(hidden)]
+pub struct ParsedTags<'src> {
+  ptr: *mut TagPair<'src>,
+  length: usize,
+  capacity: usize,
+}
+
+impl<'src> ParsedTags<'src> {
+  #[inline]
+  pub fn as_slice(&self) -> &[TagPair<'src>] {
+    unsafe { std::slice::from_raw_parts(self.ptr, self.length) }
+  }
+
+  #[inline]
+  pub fn len(&self) -> usize {
+    self.length
+  }
+
+  #[inline]
+  pub fn is_empty(&self) -> bool {
+    self.length == 0
+  }
+
+  #[inline]
+  pub fn iter(&self) -> impl Iterator<Item = &TagPair<'src>> {
+    self.as_slice().iter()
+  }
+}
+
+impl<'src> From<Tags<'src>> for ParsedTags<'src> {
+  #[inline(always)]
+  fn from(mut value: Tags<'src>) -> Self {
+    let (ptr, length, capacity) = (value.as_mut_ptr(), value.len(), value.capacity());
+    std::mem::forget(value);
+
+    Self {
+      ptr,
+      length,
+      capacity,
+    }
+  }
+}
+
+impl<'src> Deref for ParsedTags<'src> {
+  type Target = [TagPair<'src>];
+
+  fn deref(&self) -> &Self::Target {
+    self.as_slice()
+  }
+}
+
+impl<'src, Idx: SliceIndex<[TagPair<'src>]>> Index<Idx> for ParsedTags<'src> {
+  type Output = Idx::Output;
+
+  fn index(&self, index: Idx) -> &Self::Output {
+    self.as_slice().index(index)
+  }
+}
+
+impl<'src> Drop for ParsedTags<'src> {
+  #[inline]
+  fn drop(&mut self) {
+    let _ = unsafe { Vec::from_raw_parts(self.ptr, self.length, self.capacity) };
+  }
+}
+
+impl<'src> Debug for ParsedTags<'src> {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    Debug::fmt(self.as_slice(), f)
+  }
+}
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Command<'src> {

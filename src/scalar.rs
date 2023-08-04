@@ -46,7 +46,7 @@ where
       }
     }
 
-    (Some(tags.into_boxed_slice()), &remainder[end..])
+    (Some(tags.into()), &remainder[end..])
   } else {
     (None, remainder)
   }

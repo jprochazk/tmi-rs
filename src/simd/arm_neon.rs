@@ -72,7 +72,7 @@ where
       }
     }
 
-    (Some(tags.into_boxed_slice()), remainder)
+    (Some(tags.into()), remainder)
   } else {
     (None, remainder)
   }
