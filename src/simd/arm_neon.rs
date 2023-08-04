@@ -24,6 +24,7 @@ pub use crate::scalar::parse_prefix;
 ///
 /// Tags consist of semicolon-separated key-value pairs.
 /// The tag list is terminated by a ` ` character.
+#[inline(always)]
 pub fn parse_tags<'src, const IC: usize, F>(
   remainder: &'src str,
   whitelist: &Whitelist<IC, F>,
@@ -78,7 +79,7 @@ where
   }
 }
 
-#[inline]
+#[inline(always)]
 fn chunk16_test<T, F>(s: &str, test: F) -> Option<T>
 where
   T: Add<usize, Output = T>,
@@ -164,6 +165,7 @@ enum Found {
 impl Add<usize> for Found {
   type Output = Self;
 
+  #[inline(always)]
   fn add(self, rhs: usize) -> Self::Output {
     match self {
       Found::Semi(v) => Found::Semi(v + rhs),
@@ -175,6 +177,7 @@ impl Add<usize> for Found {
 impl Add<Found> for usize {
   type Output = Found;
 
+  #[inline(always)]
   fn add(self, rhs: Found) -> Self::Output {
     match rhs {
       Found::Semi(v) => Found::Semi(self + v),

@@ -26,10 +26,14 @@ name = "parse"
 harness = false
 
 [profile.bench]
+opt-level = 3
 lto = "fat"
+codegen-units = 1
 
 [profile.release]
+opt-level = 3
 lto = "fat"
+codegen-units = 1
 
 [profile.release-debug]
 inherits = "release"

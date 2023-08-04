@@ -1,6 +1,7 @@
 use crate::{leak, ParsedTags, Prefix, Tags, Whitelist};
 
 /// `@a=a;b=b;c= :<rest>`
+#[inline(always)]
 pub fn parse_tags<'src, const IC: usize, F>(
   remainder: &'src str,
   whitelist: &Whitelist<IC, F>,
@@ -53,6 +54,7 @@ where
 }
 
 /// `:nick!user@host <rest>`
+#[inline(always)]
 pub fn parse_prefix(remainder: &str) -> (Option<Prefix<'static>>, &str) {
   if let Some(remainder) = remainder.strip_prefix(':') {
     // :host <rest>

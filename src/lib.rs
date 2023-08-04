@@ -126,6 +126,7 @@ impl Message {
     Self::parse_inner(src.into(), whitelist)
   }
 
+  #[inline(always)]
   fn parse_inner<const IC: usize, F>(
     raw: String,
     whitelist: Whitelist<IC, F>,
@@ -508,6 +509,7 @@ impl<'src> Command<'src> {
   }
 }
 
+#[inline(always)]
 unsafe fn leak(s: &str) -> &'static str {
   unsafe { ::core::mem::transmute(s) }
 }
@@ -540,6 +542,7 @@ macro_rules! tags_def {
         }
       }
 
+      #[inline(never)]
       pub fn parse(s: &'src str) -> Self {
         match s.as_bytes() {
           $($bytes => Self::$name,)*
@@ -644,6 +647,7 @@ pub struct Prefix<'src> {
 /// `COMMAND <rest>`
 ///
 /// Returns `None` if command is unknown *and* empty
+#[inline(always)]
 fn parse_command(remainder: &str) -> Option<(Command<'static>, &str)> {
   let (cmd, remainder) = match remainder.split_once(' ') {
     Some(v) => v,
@@ -685,6 +689,7 @@ fn parse_command(remainder: &str) -> Option<(Command<'static>, &str)> {
 }
 
 /// #channel <rest>
+#[inline(always)]
 fn parse_channel(remainder: &str) -> (Option<&'static str>, &str) {
   if remainder.starts_with('#') {
     let (channel, remainder) = match remainder.split_once(' ') {
@@ -699,6 +704,7 @@ fn parse_channel(remainder: &str) -> (Option<&'static str>, &str) {
   }
 }
 
+#[inline(always)]
 fn parse_params(remainder: &str) -> Option<&'static str> {
   if !remainder.is_empty() {
     // SAFETY: `remainder` is a subslice of `base`.

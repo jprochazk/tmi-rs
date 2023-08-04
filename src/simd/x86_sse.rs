@@ -11,6 +11,7 @@ use std::ops::Add;
 ///
 /// Tags consist of semicolon-separated key-value pairs.
 /// The tag list is terminated by a ` ` character.
+#[inline(always)]
 pub fn parse_tags<'src, const IC: usize, F>(
   remainder: &'src str,
   whitelist: &Whitelist<IC, F>,
@@ -176,6 +177,7 @@ enum Found {
 impl Add<usize> for Found {
   type Output = Self;
 
+  #[inline(always)]
   fn add(self, rhs: usize) -> Self::Output {
     match self {
       Found::Semi(v) => Found::Semi(v + rhs),
@@ -187,6 +189,7 @@ impl Add<usize> for Found {
 impl Add<Found> for usize {
   type Output = Found;
 
+  #[inline(always)]
   fn add(self, rhs: Found) -> Self::Output {
     match rhs {
       Found::Semi(v) => Found::Semi(self + v),
@@ -243,6 +246,7 @@ fn find_semi_or_space(s: &str) -> Option<Found> {
 /// `:nick!user@host`
 ///
 /// Twitch never sends the `nick@host` form, but we still handle it.
+#[inline(always)]
 pub fn parse_prefix(remainder: &str) -> (Option<Prefix<'static>>, &str) {
   if let Some(remainder) = remainder.strip_prefix(':') {
     let bytes: &[i8] = unsafe { mem::transmute(remainder.as_bytes()) };
