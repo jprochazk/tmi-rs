@@ -384,6 +384,12 @@ impl<'src> Drop for ParsedTags<'src> {
   }
 }
 
+impl<'src> PartialEq for ParsedTags<'src> {
+  fn eq(&self, other: &Self) -> bool {
+    self.as_slice() == other.as_slice()
+  }
+}
+
 impl<'src> Debug for ParsedTags<'src> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     Debug::fmt(self.as_slice(), f)
@@ -550,6 +556,7 @@ macro_rules! tags_def {
         }
       }
 
+      #[inline]
       pub(crate) fn private_clone(&self) -> Self {
         match self {
           $(Self::$name => Self::$name,)*
