@@ -26,6 +26,11 @@ pub struct Message {
   params: Option<&'static str>,
 }
 
+const fn assert_send<T: Send>() {}
+const _: () = {
+  let _ = assert_send::<Message>;
+};
+
 pub struct Whitelist<const IC: usize, F>(F);
 
 impl<const IC: usize, F> Whitelist<IC, F>
