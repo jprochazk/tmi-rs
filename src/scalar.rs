@@ -47,7 +47,7 @@ where
       }
     }
 
-    (Some(tags.into()), &remainder[end..])
+    (Some(tags), &remainder[end..])
   } else {
     (None, remainder)
   }

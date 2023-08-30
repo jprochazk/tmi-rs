@@ -73,7 +73,7 @@ where
       }
     }
 
-    (Some(tags.into()), remainder)
+    (Some(tags), remainder)
   } else {
     (None, remainder)
   }
