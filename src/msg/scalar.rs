@@ -1,4 +1,4 @@
-use crate::{leak, ParsedTags, Prefix, Tags, Whitelist};
+use super::{leak, ParsedTags, Prefix, Tags, Whitelist};
 
 /// `@a=a;b=b;c= :<rest>`
 #[inline(always)]
@@ -101,7 +101,7 @@ pub fn parse_prefix(remainder: &str) -> (Option<Prefix<'static>>, &str) {
 
 #[cfg(test)]
 mod tests {
-  use crate::{whitelist_insert_all, Tag};
+  use crate::msg::{whitelist_insert_all, Tag};
 
   use super::*;
 

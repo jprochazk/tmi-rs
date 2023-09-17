@@ -5,7 +5,7 @@ use std::arch::x86_64::{
 };
 use std::mem::transmute;
 
-use crate::{leak, ParsedTags, Tags, Whitelist};
+use crate::msg::{leak, ParsedTags, Tags, Whitelist};
 
 const LANE_SIZE: usize = 64;
 type Vector = x86_64::__m512i;
@@ -14,7 +14,7 @@ const fn fill(e: u8) -> Vector {
   unsafe { transmute([e; LANE_SIZE]) }
 }
 
-pub use crate::scalar::parse_prefix;
+pub use crate::msg::scalar::parse_prefix;
 
 #[inline(always)]
 pub fn parse_tags<'src, const IC: usize, F>(

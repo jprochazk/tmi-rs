@@ -7,7 +7,7 @@
 //!
 //! Archived link: https://web.archive.org/web/20230603011837/https://community.arm.com/arm-community-blogs/b/infrastructure-solutions-blog/posts/porting-x86-vector-bitmask-optimizations-to-arm-neon
 
-use crate::{leak, ParsedTags, Tags, Whitelist};
+use crate::msg::{leak, ParsedTags, Tags, Whitelist};
 
 use core::arch::aarch64 as simd;
 use core::mem;
@@ -16,7 +16,7 @@ use std::ops::Add;
 
 /// We don't have a SIMD implementation of `parse_prefix` in NEON,
 /// because it was not faster. Instead just re-export the scalar impl.
-pub use crate::scalar::parse_prefix;
+pub use crate::msg::scalar::parse_prefix;
 
 /// Parse IRC message tags:
 ///

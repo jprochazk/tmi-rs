@@ -1,4 +1,4 @@
-use crate::{leak, ParsedTags, Prefix, Tags, Whitelist};
+use crate::msg::{leak, ParsedTags, Prefix, Tags, Whitelist};
 
 use core::arch::x86_64 as simd;
 use core::mem;
@@ -329,7 +329,7 @@ pub fn parse_prefix(remainder: &str) -> (Option<Prefix<'static>>, &str) {
 
 #[cfg(test)]
 mod tests {
-  use crate::whitelist_insert_all;
+  use crate::msg::whitelist_insert_all;
 
   use super::*;
 
