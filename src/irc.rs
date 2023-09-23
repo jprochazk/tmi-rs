@@ -715,8 +715,9 @@ impl<'src> Display for Tag<'src> {
   }
 }
 
+#[doc(hidden)]
 #[derive(Clone, Copy)]
-struct RawPrefix {
+pub struct RawPrefix {
   nick: Option<Span>,
   user: Option<Span>,
   host: Span,
