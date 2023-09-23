@@ -1,725 +1,284 @@
-#![allow(dead_code)]
+// TODO: collect large amount of messages and get median number of badges
+//       to have statistically significant value for use as the inline
+//       slots in `SmallVec`
+// TODO: `serde` derives under feature
+// TODO: replace all `ok()?` with `and_then`
 
-#[macro_use]
-mod macros;
+use crate::irc::{IrcMessage, IrcMessageRef};
+use crate::Span;
 
-#[cfg(feature = "simd")]
-mod simd;
-
-mod scalar;
-
-#[cfg(feature = "simd")]
-use simd::{parse_prefix, parse_tags};
-
-#[cfg(not(feature = "simd"))]
-use scalar::{parse_prefix, parse_tags};
-
-use std::fmt::{Debug, Display};
-
-#[derive(Clone)]
-pub struct Message<'src> {
-  src: &'src str,
-  tags: Option<RawTags>,
-  prefix: Option<RawPrefix>,
-  command: RawCommand,
-  channel: Option<Span>,
-  params: Option<Span>,
-}
-
-const fn assert_send<T: Send>() {}
-const _: () = {
-  let _ = assert_send::<Message>;
-};
-
-impl<'src> Message<'src> {
-  /// Parse a single Twitch IRC message.
-  ///
-  /// If the message can't be parsed, the string is returned in the result as `Err`.
-  ///
-  /// Twitch often sends multiple messages in a batch separated by `\r\n`.
-  /// Before parsing messages, you should always split them by `\r\n` first:
-  ///
-  /// ```rust,ignore
-  /// if let Some(data) = ws.next().await {
-  ///     if let Message::Text(data) = data? {
-  ///         for message in data.lines().flat_map(twitch::Message::parse) {
-  ///             handle(message)
-  ///         }
-  ///     }
-  /// }
-  /// ```
-  pub fn parse(src: &'src str) -> Option<Self> {
-    Self::parse_inner(src, Whitelist::<16, _>(whitelist_insert_all))
-  }
-
-  /// Parse a single Twitch IRC message with a tag whitelist.
-  ///
-  /// ```rust,ignore
-  /// twitch::parse_with_whitelist(
-  ///     ":forsen!forsen@forsen.tmi.twitch.tv PRIVMSG #pajlada :AlienPls",
-  ///     twitch::whitelist!(DisplayName, Id, TmiSentTs, UserId),
-  /// )
-  /// ```
-  ///
-  /// If the message can't be parsed, the string is returned in the result as `Err`.
-  ///
-  /// Twitch often sends multiple messages in a batch separated by `\r\n`.
-  /// Before parsing messages, you should always split them by `\r\n` first:
-  ///
-  /// ```rust,ignore
-  /// if let Some(data) = ws.next().await {
-  ///     if let Message::Text(data) = data? {
-  ///         for message in data.lines().flat_map(twitch::Message::parse) {
-  ///             handle(message)
-  ///         }
-  ///     }
-  /// }
-  /// ```
-  pub fn parse_with_whitelist<const IC: usize, F>(
-    src: &'src str,
-    whitelist: Whitelist<IC, F>,
-  ) -> Option<Self>
-  where
-    F: Fn(&str, &mut RawTags, Span, Span),
-  {
-    Self::parse_inner(src, whitelist)
-  }
-
-  #[inline(always)]
-  fn parse_inner<const IC: usize, F>(src: &'src str, whitelist: Whitelist<IC, F>) -> Option<Self>
-  where
-    F: Fn(&str, &mut RawTags, Span, Span),
-  {
-    let mut pos = 0usize;
-
-    let tags = parse_tags(src, &mut pos, &whitelist);
-    let prefix = parse_prefix(src, &mut pos);
-    let command = parse_command(src, &mut pos)?;
-    let channel = parse_channel(src, &mut pos);
-    let params = parse_params(src, &pos);
-
-    Some(Self {
-      src,
-      tags,
-      prefix,
-      command,
-      channel,
-      params,
-    })
-  }
-
-  pub fn raw(&self) -> &'src str {
-    self.src
-  }
-
-  pub fn tags(&self) -> Option<impl Iterator<Item = (Tag<'src>, &'src str)> + '_> {
-    self
-      .tags
-      .as_ref()
-      .map(|tags| tags.iter().map(|pair| pair.get(self.src)))
-  }
-
-  pub fn prefix(&self) -> Option<Prefix<'_>> {
-    self.prefix.map(|prefix| prefix.get(self.src))
-  }
-
-  pub fn command(&self) -> Command<'src> {
-    self.command.get(self.src)
-  }
-
-  pub fn channel(&self) -> Option<&str> {
-    self.channel.map(|span| &self.src[span])
-  }
-
-  pub fn params(&self) -> Option<&str> {
-    self.params.map(|span| &self.src[span])
-  }
-
-  pub fn tag(&self, tag: Tag<'_>) -> Option<&str> {
-    self
-      .tags
-      .as_ref()
-      .and_then(|map| {
-        map
-          .iter()
-          .find(|RawTagPair(key, _)| key.get(self.src) == tag)
-      })
-      .map(|RawTagPair(_, value)| &self.src[*value])
-  }
-
-  /// Returns the contents of the params after the last `:`.
-  pub fn text(&self) -> Option<&str> {
-    match self.params {
-      Some(params) => {
-        let params = &self.src[params];
-        match params.find(':') {
-          Some(start) => Some(&params[start + 1..]),
-          None => None,
-        }
-      }
-      None => None,
-    }
+impl IrcMessage {
+  pub fn cast<'src, T: FromIrc<'src>>(&'src self) -> Option<T> {
+    T::from_irc(self.as_ref())
   }
 }
 
-pub fn unescape(value: &str) -> String {
-  let mut out = String::with_capacity(value.len());
-  let mut escape = false;
-  for char in value.chars() {
-    match char {
-      ':' if escape => {
-        out.push(';');
-        escape = false;
-      }
-      's' if escape => {
-        out.push(' ');
-        escape = false;
-      }
-      '\\' if escape => {
-        out.push('\\');
-        escape = false;
-      }
-      'r' if escape => {
-        out.push('\r');
-        escape = false;
-      }
-      'n' if escape => {
-        out.push('\n');
-        escape = false;
-      }
-      '⸝' => out.push(','),
-      '\\' => escape = true,
-      c => out.push(c),
-    }
-  }
-  out
-}
-
-pub struct Whitelist<const IC: usize, F>(F);
-
-impl<const IC: usize, F> Whitelist<IC, F>
-where
-  F: Fn(&str, &mut RawTags, Span, Span),
-{
-  /// # Safety
-  /// The callback `f` must guarantee not to leak any of its parameters.
-  ///
-  /// The easiest way to ensure safety is to use the `twitch::whitelist` macro.
-  pub unsafe fn new(f: F) -> Self {
-    Self(f)
-  }
-
-  #[inline(always)]
-  pub(crate) fn maybe_insert(&self, src: &str, map: &mut RawTags, tag: Span, value: Span) {
-    (self.0)(src, map, tag, value)
+impl<'src> IrcMessageRef<'src> {
+  pub fn cast<T: FromIrc<'src>>(self) -> Option<T> {
+    T::from_irc(self)
   }
 }
 
-#[inline(always)]
-fn whitelist_insert_all(src: &str, map: &mut RawTags, tag: Span, value: Span) {
-  map.push(RawTagPair(RawTag::parse(src, tag), value));
+pub trait FromIrc<'src>: Sized {
+  fn from_irc(message: IrcMessageRef<'src>) -> Option<Self>;
 }
 
-#[doc(hidden)]
-#[derive(Clone)]
-pub struct RawTagPair(pub RawTag, pub Span);
-
-#[doc(hidden)]
-pub type RawTags = Vec<RawTagPair>;
-
-impl RawTagPair {
-  #[doc(hidden)]
-  #[inline]
-  pub fn get<'src>(&self, src: &'src str) -> (Tag<'src>, &'src str) {
-    (self.0.get(src), &src[self.1])
-  }
-}
-
-#[derive(Clone, Copy)]
-enum RawCommand {
-  Ping,
-  Pong,
-  Join,
-  Part,
-  Privmsg,
-  Whisper,
-  Clearchat,
-  Clearmsg,
-  GlobalUserState,
-  HostTarget,
-  Notice,
+#[derive(Clone, Debug)]
+pub enum Message<'src> {
+  ClearChat(ClearChat<'src>),
+  ClearMsg(ClearMsg<'src>),
+  GlobalUserState(GlobalUserState<'src>),
+  Join(Join<'src>),
+  Notice(Notice<'src>),
+  Part(Part<'src>),
+  Ping(Ping<'src>),
+  Pong(Pong<'src>),
+  Privmsg(Privmsg<'src>),
   Reconnect,
-  RoomState,
-  UserNotice,
-  UserState,
-  Capability,
-  RplWelcome,
-  RplYourHost,
-  RplCreated,
-  RplMyInfo,
-  RplNamReply,
-  RplEndOfNames,
-  RplMotd,
-  RplMotdStart,
-  RplEndOfMotd,
-  Other(Span),
+  RoomState(RoomState<'src>),
+  UserNotice(UserNotice<'src>),
+  UserState(UserState<'src>),
+  Whisper(Whisper<'src>),
 }
 
-impl RawCommand {
-  #[inline]
-  fn get<'src>(&self, src: &'src str) -> Command<'src> {
-    match self {
-      RawCommand::Ping => Command::Ping,
-      RawCommand::Pong => Command::Pong,
-      RawCommand::Join => Command::Join,
-      RawCommand::Part => Command::Part,
-      RawCommand::Privmsg => Command::Privmsg,
-      RawCommand::Whisper => Command::Whisper,
-      RawCommand::Clearchat => Command::Clearchat,
-      RawCommand::Clearmsg => Command::Clearmsg,
-      RawCommand::GlobalUserState => Command::GlobalUserState,
-      RawCommand::HostTarget => Command::HostTarget,
-      RawCommand::Notice => Command::Notice,
-      RawCommand::Reconnect => Command::Reconnect,
-      RawCommand::RoomState => Command::RoomState,
-      RawCommand::UserNotice => Command::UserNotice,
-      RawCommand::UserState => Command::UserState,
-      RawCommand::Capability => Command::Capability,
-      RawCommand::RplWelcome => Command::RplWelcome,
-      RawCommand::RplYourHost => Command::RplYourHost,
-      RawCommand::RplCreated => Command::RplCreated,
-      RawCommand::RplMyInfo => Command::RplMyInfo,
-      RawCommand::RplNamReply => Command::RplNamReply,
-      RawCommand::RplEndOfNames => Command::RplEndOfNames,
-      RawCommand::RplMotd => Command::RplMotd,
-      RawCommand::RplMotdStart => Command::RplMotdStart,
-      RawCommand::RplEndOfMotd => Command::RplEndOfMotd,
-      RawCommand::Other(span) => Command::Other(&src[*span]),
+impl<'src> FromIrc<'src> for Message<'src> {
+  fn from_irc(message: IrcMessageRef<'src>) -> Option<Self> {
+    use crate::irc::Command as C;
+    let message = match message.command() {
+      C::ClearChat => ClearChat::from_irc(message)?.into(),
+      C::ClearMsg => ClearMsg::from_irc(message)?.into(),
+      C::GlobalUserState => GlobalUserState::from_irc(message)?.into(),
+      C::Join => Join::from_irc(message)?.into(),
+      C::Notice => Notice::from_irc(message)?.into(),
+      C::Part => Part::from_irc(message)?.into(),
+      C::Ping => Ping::from_irc(message)?.into(),
+      C::Pong => Pong::from_irc(message)?.into(),
+      C::Privmsg => Privmsg::from_irc(message)?.into(),
+      C::Reconnect => Self::Reconnect,
+      C::RoomState => RoomState::from_irc(message)?.into(),
+      C::UserNotice => UserNotice::from_irc(message)?.into(),
+      C::UserState => UserState::from_irc(message)?.into(),
+      C::Whisper => Whisper::from_irc(message)?.into(),
+      _ => return None,
+    };
+    Some(message)
+  }
+}
+
+type SmallVec<T, const N: usize> = smallvec::SmallVec<[T; N]>;
+
+/// A chat badge.
+#[derive(Clone, Debug)]
+pub enum Badge<'src> {
+  Staff,
+  Turbo,
+  Broadcaster,
+  Moderator,
+  Subscriber {
+    version: &'src str,
+    months: &'src str,
+  },
+  Other(BadgeData<'src>),
+}
+
+impl<'src> From<Badge<'src>> for BadgeData<'src> {
+  fn from(value: Badge<'src>) -> Self {
+    match value {
+      Badge::Staff => BadgeData {
+        name: "staff",
+        version: "1",
+        extra: None,
+      },
+      Badge::Turbo => BadgeData {
+        name: "turbo",
+        version: "1",
+        extra: None,
+      },
+      Badge::Broadcaster => BadgeData {
+        name: "broadcaster",
+        version: "1",
+        extra: None,
+      },
+      Badge::Moderator => BadgeData {
+        name: "moderator",
+        version: "1",
+        extra: None,
+      },
+      Badge::Subscriber { version, months } => BadgeData {
+        name: "subscriber",
+        version,
+        extra: Some(months),
+      },
+      Badge::Other(data) => data,
     }
   }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Command<'src> {
-  Ping,
-  Pong,
-  /// Join channel
-  Join,
-  /// Leave channel
-  Part,
-  /// Twitch Private Message
-  Privmsg,
-  // Twitch extensions
-  /// Send message to a single user
-  Whisper,
-  /// Purge a user's messages
-  Clearchat,
-  /// Single message removal
-  Clearmsg,
-  /// Sent upon successful authentication (PASS/NICK command)
-  GlobalUserState,
-  /// Channel starts or stops host mode
-  HostTarget,
-  /// General notices from the server
-  Notice,
-  /// Rejoins channels after a restart
-  Reconnect,
-  /// Identifies the channel's chat settings
-  RoomState,
-  /// Announces Twitch-specific events to the channel
-  UserNotice,
-  /// Identifies a user's chat settings or properties
-  UserState,
-  /// Requesting an IRC capability
-  Capability,
-  // Numeric commands
-  RplWelcome,
-  RplYourHost,
-  RplCreated,
-  RplMyInfo,
-  RplNamReply,
-  RplEndOfNames,
-  RplMotd,
-  RplMotdStart,
-  RplEndOfMotd,
-  /// Unknown command
-  Other(&'src str),
-}
-
-impl<'src> Display for Command<'src> {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    f.write_str(self.as_str())
-  }
-}
-
-impl<'src> Command<'src> {
-  pub fn as_str(&self) -> &'src str {
-    use Command::*;
-    match self {
-      Ping => "PING",
-      Pong => "PONG",
-      Join => "JOIN",
-      Part => "PART",
-      Privmsg => "PRIVMSG",
-      Whisper => "WHISPER",
-      Clearchat => "CLEARCHAT",
-      Clearmsg => "CLEARMSG",
-      GlobalUserState => "GLOBALUSERSTATE",
-      HostTarget => "HOSTTARGET",
-      Notice => "NOTICE",
-      Reconnect => "RECONNECT",
-      RoomState => "ROOMSTATE",
-      UserNotice => "USERNOTICE",
-      UserState => "USERSTATE",
-      Capability => "CAP",
-      RplWelcome => "001",
-      RplYourHost => "002",
-      RplCreated => "003",
-      RplMyInfo => "004",
-      RplNamReply => "353",
-      RplEndOfNames => "366",
-      RplMotd => "372",
-      RplMotdStart => "375",
-      RplEndOfMotd => "376",
-      Other(cmd) => cmd,
-    }
-  }
-}
-
-macro_rules! tags_def {
-  (
-    $tag:ident, $raw_tag:ident, $tag_mod:ident;
-    $($(#[$meta:meta])* $bytes:literal; $key:literal = $name:ident),*
-  ) => {
-    #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
-    pub enum $tag<'src> {
-      $(
-        $(#[$meta])*
-        $name,
-      )*
-      Other(&'src str),
-    }
-
-    impl<'src> $tag<'src> {
-      pub fn as_str(&self) -> &'src str {
-        match self {
-          $(Self::$name => $key,)*
-          Self::Other(key) => key,
-        }
-      }
-    }
-
-    #[doc(hidden)]
-    #[derive(Clone, Copy)]
-    pub enum $raw_tag {
-      $($name,)*
-      Other(Span),
-    }
-
-    impl $raw_tag {
-      #[doc(hidden)]
-      #[inline]
-      fn get<'src>(&self, src: &'src str) -> $tag<'src> {
-        match self {
-          $(Self::$name => $tag::$name,)*
-          Self::Other(span) => $tag::Other(&src[*span]),
-        }
-      }
-
-      #[doc(hidden)]
-      #[inline(never)]
-      pub fn parse(src: &str, span: Span) -> Self {
-        match src[span].as_bytes() {
-          $($bytes => Self::$name,)*
-          _ => Self::Other(span),
-        }
-      }
-    }
-
-    #[allow(non_upper_case_globals)]
-    #[doc(hidden)]
-    pub mod $tag_mod {
-      $(pub const $name: &'static [u8] = $bytes;)*
-    }
-  }
-}
-
-tags_def! {
-  Tag, RawTag, tags;
-  b"msg-id"; "msg-id" = MsgId,
-  b"badges"; "badges" = Badges,
-  b"badge-info"; "badge-info" = BadgeInfo,
-  b"display-name"; "display-name" = DisplayName,
-  b"emote-only"; "emote-only" = EmoteOnly,
-  b"emotes"; "emotes" = Emotes,
-  b"flags"; "flags" = Flags,
-  b"id"; "id" = Id,
-  b"mod"; "mod" = Mod,
-  b"room-id"; "room-id" = RoomId,
-  b"subscriber"; "subscriber" = Subscriber,
-  b"tmi-sent-ts"; "tmi-sent-ts" = TmiSentTs,
-  b"turbo"; "turbo" = Turbo,
-  b"user-id"; "user-id" = UserId,
-  b"user-type"; "user-type" = UserType,
-  b"client-nonce"; "client-nonce" = ClientNonce,
-  b"first-msg"; "first-msg" = FirstMsg,
-  b"reply-parent-display-name"; "reply-parent-display-name" = ReplyParentDisplayName,
-  b"reply-parent-msg-body"; "reply-parent-msg-body" = ReplyParentMsgBody,
-  b"reply-parent-msg-id"; "reply-parent-msg-id" = ReplyParentMsgId,
-  b"reply-parent-user-id"; "reply-parent-user-id" = ReplyParentUserId,
-  b"reply-parent-user-login"; "reply-parent-user-login" = ReplyParentUserLogin,
-  b"followers-only"; "followers-only" = FollowersOnly,
-  b"r9k"; "r9k" = R9K,
-  b"rituals"; "rituals" = Rituals,
-  b"slow"; "slow" = Slow,
-  b"subs-only"; "subs-only" = SubsOnly,
-  b"msg-param-cumulative-months"; "msg-param-cumulative-months" = MsgParamCumulativeMonths,
-  b"msg-param-displayName"; "msg-param-displayName" = MsgParamDisplayName,
-  b"msg-param-login"; "msg-param-login" = MsgParamLogin,
-  b"msg-param-months"; "msg-param-months" = MsgParamMonths,
-  b"msg-param-promo-gift-total"; "msg-param-promo-gift-total" = MsgParamPromoGiftTotal,
-  b"msg-param-promo-name"; "msg-param-promo-name" = MsgParamPromoName,
-  b"msg-param-recipient-display-name"; "msg-param-recipient-display-name" = MsgParamRecipientDisplayName,
-  b"msg-param-recipient-id"; "msg-param-recipient-id" = MsgParamRecipientId,
-  b"msg-param-recipient-user-name"; "msg-param-recipient-user-name" = MsgParamRecipientUserName,
-  b"msg-param-sender-login"; "msg-param-sender-login" = MsgParamSenderLogin,
-  b"msg-param-sender-name"; "msg-param-sender-name" = MsgParamSenderName,
-  b"msg-param-should-share-streak"; "msg-param-should-share-streak" = MsgParamShouldShareStreak,
-  b"msg-param-streak-months"; "msg-param-streak-months" = MsgParamStreakMonths,
-  b"msg-param-sub-plan"; "msg-param-sub-plan" = MsgParamSubPlan,
-  b"msg-param-sub-plan-name"; "msg-param-sub-plan-name" = MsgParamSubPlanName,
-  b"msg-param-viewerCount"; "msg-param-viewerCount" = MsgParamViewerCount,
-  b"msg-param-ritual-name"; "msg-param-ritual-name" = MsgParamRitualName,
-  b"msg-param-threshold"; "msg-param-threshold" = MsgParamThreshold,
-  b"msg-param-gift-months"; "msg-param-gift-months" = MsgParamGiftMonths,
-  b"login"; "login" = Login,
-  b"system-msg"; "system-msg" = SystemMsg,
-  b"emote-sets"; "emote-sets" = EmoteSets,
-  b"thread-id"; "thread-id" = ThreadId,
-  b"message-id"; "message-id" = MessageId,
-  b"returning-chatter"; "returning-chatter" = ReturningChatter,
-  b"color"; "color" = Color,
-  b"vip"; "vip" = Vip,
-  b"target-user-id"; "target-user-id" = TargetUserId,
-  b"ban-duration"; "ban-duration" = BanDuration,
-  b"msg-param-multimonth-duration"; "msg-param-multimonth-duration" = MsgParamMultimonthDuration,
-  b"msg-param-was-gifted"; "msg-param-was-gifted" = MsgParamWasGifted,
-  b"msg-param-multimonth-tenure"; "msg-param-multimonth-tenure" = MsgParamMultimonthTenure,
-  b"sent-ts"; "sent-ts" = SentTs,
-  b"msg-param-origin-id"; "msg-param-origin-id" = MsgParamOriginId,
-  b"msg-param-fun-string"; "msg-param-fun-string" = MsgParamFunString,
-  b"msg-param-sender-count"; "msg-param-sender-count" = MsgParamSenderCount,
-  b"msg-param-profileImageURL"; "msg-param-profileImageURL" = MsgParamProfileImageUrl,
-  b"msg-param-mass-gift-count"; "msg-param-mass-gift-count" = MsgParamMassGiftCount,
-  b"msg-param-gift-month-being-redeemed"; "msg-param-gift-month-being-redeemed" = MsgParamGiftMonthBeingRedeemed,
-  b"msg-param-anon-gift"; "msg-param-anon-gift" = MsgParamAnonGift
-}
-
-impl<'src> Display for Tag<'src> {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    f.write_str(self.as_str())
-  }
-}
-
-#[derive(Clone, Copy)]
-struct RawPrefix {
-  nick: Option<Span>,
-  user: Option<Span>,
-  host: Span,
-}
-
-impl RawPrefix {
-  fn get<'src>(&self, src: &'src str) -> Prefix<'src> {
-    Prefix {
-      nick: self.nick.map(|span| &src[span]),
-      user: self.user.map(|span| &src[span]),
-      host: &src[self.host],
+impl<'src> From<BadgeData<'src>> for Badge<'src> {
+  fn from(value: BadgeData<'src>) -> Self {
+    match value.name {
+      "staff" => Self::Staff,
+      "turbo" => Self::Turbo,
+      "broadcaster" => Self::Broadcaster,
+      "moderator" => Self::Moderator,
+      "subscriber" => Self::Subscriber {
+        version: value.version,
+        months: value.extra.unwrap_or("0"),
+      },
+      _ => Self::Other(value),
     }
   }
 }
 
 #[derive(Clone, Debug)]
-pub struct Prefix<'src> {
-  pub nick: Option<&'src str>,
-  pub user: Option<&'src str>,
-  pub host: &'src str,
+pub struct BadgeData<'src> {
+  /// Name of the badge, e.g. `subscriber`.
+  pub name: &'src str,
+
+  /// Version of the badge,
+  pub version: &'src str,
+
+  /// Extra badge info, such as the exact number of
+  /// subscribed months for `subscriber`.
+  pub extra: Option<&'src str>,
 }
 
-#[doc(hidden)]
-#[derive(Clone, Copy)]
-pub struct Span {
-  start: u32,
-  end: u32,
+#[derive(Clone, Debug)]
+pub struct User<'src> {
+  /// Id of the user.
+  pub id: &'src str,
+
+  /// Login of the user.
+  pub login: &'src str,
+
+  /// Display name.
+  ///
+  /// This is the name which appears in chat, and may contain arbitrary unicode characters.
+  /// This is in contrast to [`User::login`] which is always only ASCII.
+  pub name: &'src str,
 }
 
-impl Span {
-  #[doc(hidden)]
-  #[inline]
-  fn get<'src>(&self, src: &'src str) -> &'src str {
-    &src[*self]
+#[derive(Clone, Debug)]
+pub struct Emote<'src> {
+  pub id: &'src str,
+  ranges: &'src str,
+}
+
+impl<'src> Emote<'src> {
+  pub fn ranges(&self) -> impl Iterator<Item = Span> + '_ {
+    self
+      .ranges
+      .split(',')
+      .flat_map(|range| range.split_once('-'))
+      .flat_map(|(start, end)| {
+        Some(Span {
+          start: start.parse().ok()?,
+          end: end.parse().ok()?,
+        })
+      })
   }
 }
 
-impl From<std::ops::Range<usize>> for Span {
-  #[inline]
-  fn from(value: std::ops::Range<usize>) -> Self {
-    Span {
-      start: value.start as u32,
-      end: value.end as u32,
-    }
-  }
+fn parse_timestamp(s: &str) -> Option<chrono::DateTime<chrono::Utc>> {
+  use chrono::TimeZone;
+  chrono::Utc.timestamp_millis_opt(s.parse().ok()?).single()
 }
 
-impl From<Span> for std::ops::Range<usize> {
-  #[inline]
-  fn from(value: Span) -> Self {
-    value.start as usize..value.end as usize
-  }
+fn parse_duration(s: &str) -> Option<chrono::Duration> {
+  Some(chrono::Duration::seconds(s.parse().ok()?))
 }
 
-impl std::ops::Index<Span> for str {
-  type Output = <str as std::ops::Index<std::ops::Range<usize>>>::Output;
-
-  #[inline]
-  fn index(&self, index: Span) -> &Self::Output {
-    self.index(std::ops::Range::from(index))
-  }
-}
-
-/// `COMMAND <rest>`
-///
-/// Returns `None` if command is unknown *and* empty
-#[inline(always)]
-fn parse_command(src: &str, pos: &mut usize) -> Option<RawCommand> {
-  let end = match src[*pos..].find(' ') {
-    Some(end) => *pos + end,
-    None => src.len(),
+fn parse_message_text(s: &str) -> (&str, bool) {
+  let Some(s) = s.strip_prefix("\u{0001}ACTION ") else {
+    return (s, false);
   };
-
-  use RawCommand as C;
-  let cmd = match &src[*pos..end] {
-    "PING" => C::Ping,
-    "PONG" => C::Pong,
-    "JOIN" => C::Join,
-    "PART" => C::Part,
-    "PRIVMSG" => C::Privmsg,
-    "WHISPER" => C::Whisper,
-    "CLEARCHAT" => C::Clearchat,
-    "CLEARMSG" => C::Clearmsg,
-    "GLOBALUSERSTATE" => C::GlobalUserState,
-    "HOSTTARGET" => C::HostTarget,
-    "NOTICE" => C::Notice,
-    "RECONNECT" => C::Reconnect,
-    "ROOMSTATE" => C::RoomState,
-    "USERNOTICE" => C::UserNotice,
-    "USERSTATE" => C::UserState,
-    "CAP" => C::Capability,
-    "001" => C::RplWelcome,
-    "002" => C::RplYourHost,
-    "003" => C::RplCreated,
-    "004" => C::RplMyInfo,
-    "353" => C::RplNamReply,
-    "366" => C::RplEndOfNames,
-    "372" => C::RplMotd,
-    "375" => C::RplMotdStart,
-    "376" => C::RplEndOfMotd,
-    other if !other.is_empty() => C::Other(Span::from(*pos..end)),
-    _ => return None,
+  let Some(s) = s.strip_suffix('\u{0001}') else {
+    return (s, false);
   };
-
-  *pos = end + 1;
-
-  Some(cmd)
+  (s, true)
 }
 
-/// #channel <rest>
-#[inline(always)]
-fn parse_channel(src: &str, pos: &mut usize) -> Option<Span> {
-  match src[*pos..].starts_with('#') {
-    true => {
-      let start = *pos;
-      match src[start..].find(' ') {
-        Some(end) => {
-          let end = start + end;
-          *pos = end + 1;
-          Some(Span::from(start..end))
-        }
-        None => {
-          let end = src.len();
-          *pos = end;
-          Some(Span::from(start..end))
-        }
-      }
-    }
-    false => None,
+fn split_comma(s: &str) -> impl Iterator<Item = &str> + '_ {
+  s.split(',')
+}
+
+fn parse_badges<'src>(badges: &'src str, badge_info: &'src str) -> SmallVec<Badge<'src>, 2> {
+  if badges.is_empty() {
+    return SmallVec::new();
   }
+
+  let badge_info = badge_info
+    .split(',')
+    .flat_map(|info| info.split_once('/'))
+    .collect::<SmallVec<_, 16>>();
+
+  badges
+    .split(',')
+    .flat_map(|badge| badge.split_once('/'))
+    .map(|(name, version)| match name {
+      "staff" => Badge::Staff,
+      "turbo" => Badge::Turbo,
+      "broadcaster" => Badge::Broadcaster,
+      "moderator" => Badge::Moderator,
+      "subscriber" => Badge::Subscriber {
+        version,
+        months: badge_info
+          .iter()
+          .find(|(name, _)| *name == "subscriber")
+          .map(|(_, value)| *value)
+          .unwrap_or("0"),
+      },
+      name => Badge::Other(BadgeData {
+        name,
+        version,
+        extra: badge_info
+          .iter()
+          .find(|(name, _)| *name == "subscriber")
+          .map(|(_, value)| *value),
+      }),
+    })
+    .collect()
 }
 
-#[inline(always)]
-fn parse_params(src: &str, pos: &usize) -> Option<Span> {
-  if !src[*pos..].is_empty() {
-    Some(Span::from(*pos..src.len()))
-  } else {
-    None
+fn parse_emotes(emotes: &str) -> Vec<Emote<'_>> {
+  if emotes.is_empty() {
+    return Vec::new();
   }
+
+  emotes
+    .split('/')
+    .flat_map(|emote| emote.split_once(':'))
+    .map(|(id, ranges)| Emote { id, ranges })
+    .collect()
 }
 
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  mod parse {
-    use super::*;
-
-    #[test]
-    fn command() {
-      let data = "PING <rest>";
-      let mut pos = 0;
-
-      let command = parse_command(data, &mut pos).unwrap();
-      assert_eq!(command.get(data), Command::Ping);
-      assert_eq!(&data[pos..], "<rest>");
-    }
-
-    #[test]
-    fn channel() {
-      let data = "#channel <rest>";
-      let mut pos = 0;
-
-      let channel = parse_channel(data, &mut pos).unwrap();
-      assert_eq!(channel.get(data), "#channel");
-      assert_eq!(&data[pos..], "<rest>");
-    }
-
-    #[test]
-    fn params() {
-      let data = ":param_a :param_b";
-      let params = parse_params(data, &0).unwrap();
-      assert_eq!(params.get(data), data)
-    }
-
-    #[test]
-    fn regression_equals_in_tag_value() {
-      let data = "@display-name=Dixtor334;emotes=;first-msg=0;flags=;id=0b4c70e4-9a47-4ce1-9c3e-8f78111cdc19;mod=0;reply-parent-display-name=minosura;reply-parent-msg-body=https://youtu.be/-ek4MFjz_eM?list=PL91C6439FD45DE2F3\\sannytfDinkDonk\\sstrimmer\\skorean\\sone;reply-parent-msg-id=7f811788-b897-4b4c-9f91-99fafe70eb7f;reply-parent-user-id=141993641;reply-parent-user-login=minosura;returning-chatter=0;room-id=56418014;subscriber=1;tmi-sent-ts=1686049636367;turbo=0;user-id=73714767;user-type= :dixtor334!dixtor334@dixtor334.tmi.twitch.tv PRIVMSG #anny :@minosura @anny";
-
-      let a = Message::parse(data).unwrap();
-      let mut a = a
-        .tags()
-        .unwrap()
-        .map(|(tag, value)| (tag.as_str(), unescape(value)))
-        .collect::<Vec<_>>();
-      a.sort_by_key(|(tag, _)| *tag);
-
-      let b = twitch_irc::message::IRCMessage::parse(data).unwrap();
-      let mut b = b
-        .tags
-        .0
-        .iter()
-        .map(|(tag, value)| (tag.as_str(), String::from(value.as_deref().unwrap_or(""))))
-        .collect::<Vec<_>>();
-      b.sort_by_key(|(tag, _)| *tag);
-
-      assert_eq!(a, b);
-    }
-  }
+fn parse_bool(v: &str) -> bool {
+  v.parse::<u8>().ok().map(|n| n > 0).unwrap_or(false)
 }
+
+pub mod clear_chat;
+pub use clear_chat::*;
+pub mod clear_msg;
+pub use clear_msg::*;
+pub mod global_user_state;
+pub use global_user_state::*;
+pub mod join;
+pub use join::*;
+pub mod notice;
+pub use notice::*;
+pub mod part;
+pub use part::*;
+pub mod ping;
+pub use ping::*;
+pub mod pong;
+pub use pong::*;
+pub mod privmsg;
+pub use privmsg::*;
+pub mod room_state;
+pub use room_state::*;
+pub mod user_notice;
+pub use user_notice::*;
+pub mod user_state;
+pub use user_state::*;
+pub mod whisper;
+pub use whisper::*;

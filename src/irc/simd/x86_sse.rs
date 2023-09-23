@@ -1,4 +1,4 @@
-use crate::msg::{RawPrefix, RawTags, Span, Whitelist};
+use crate::irc::{RawPrefix, RawTags, Span, Whitelist};
 
 use core::arch::x86_64 as simd;
 use core::mem;
@@ -16,12 +16,12 @@ pub fn parse_tags<const IC: usize, F>(
   src: &str,
   pos: &mut usize,
   whitelist: &Whitelist<IC, F>,
-) -> Option<RawTags>
+) -> RawTags
 where
   F: Fn(&str, &mut RawTags, Span, Span),
 {
   if !src[*pos..].starts_with('@') {
-    return None;
+    return RawTags::new();
   }
 
   // pre-allocate space for the tags
@@ -81,7 +81,7 @@ where
 
   *pos = key_start;
 
-  Some(tags)
+  tags
 }
 
 /// This function splits `s` into 16-byte chunks, loads each chunk into a 128-bit vector,
@@ -332,7 +332,7 @@ pub fn parse_prefix(src: &str, pos: &mut usize) -> Option<RawPrefix> {
 
 #[cfg(test)]
 mod tests {
-  use crate::msg::whitelist_insert_all;
+  use crate::irc::whitelist_insert_all;
 
   use super::*;
 
@@ -380,20 +380,23 @@ mod tests {
   #[test]
   fn tags() {
     let cases = [
-      ("", (None, "")),
-      ("mod=0;id=1000", (None, "mod=0;id=1000")),
-      ("@mod=0;id=1000", (Some(make! {Mod: "0", Id: "1000",}), "")),
-      ("@mod=0;id=1000 ", (Some(make! {Mod: "0", Id: "1000",}), "")),
+      ("", (vec![], "")),
+      ("mod=0;id=1000", (vec![], "mod=0;id=1000")),
+      ("@mod=0;id=1000", (make! {Mod: "0", Id: "1000",}, "")),
+      ("@mod=0;id=1000 ", (make! {Mod: "0", Id: "1000",}, "")),
       (
         "@mod=0;id=1000 :asdf",
-        (Some(make! {Mod: "0", Id: "1000",}), ":asdf"),
+        (make! {Mod: "0", Id: "1000",}, ":asdf"),
       ),
     ];
 
     for (src, (expected_tags, expected_remainder)) in cases.into_iter() {
       let mut pos = 0;
-      let actual_tags = parse_tags(src, &mut pos, &Whitelist::<16, _>(whitelist_insert_all))
-        .map(|tags| tags.into_iter().map(|tag| tag.get(src)).collect());
+      let actual_tags: Vec<_> =
+        parse_tags(src, &mut pos, &Whitelist::<16, _>(whitelist_insert_all))
+          .into_iter()
+          .map(|tag| tag.get(src))
+          .collect();
       assert_eq!(actual_tags, expected_tags);
       assert_eq!(&src[pos..], expected_remainder);
     }
@@ -402,17 +405,19 @@ mod tests {
   #[test]
   fn tags_whitelist() {
     let cases = [
-      ("", (None, "")),
-      ("mod=0;id=1000", (None, "mod=0;id=1000")),
-      ("@mod=0;id=1000", (Some(make! {Mod: "0"}), "")),
-      ("@mod=0;id=1000 ", (Some(make! {Mod: "0"}), "")),
-      ("@mod=0;id=1000 :asdf", (Some(make! {Mod: "0"}), ":asdf")),
+      ("", (vec![], "")),
+      ("mod=0;id=1000", (vec![], "mod=0;id=1000")),
+      ("@mod=0;id=1000", (make! {Mod: "0"}, "")),
+      ("@mod=0;id=1000 ", (make! {Mod: "0"}, "")),
+      ("@mod=0;id=1000 :asdf", (make! {Mod: "0"}, ":asdf")),
     ];
 
     for (src, (expected_tags, expected_remainder)) in cases.into_iter() {
       let mut pos = 0;
-      let actual_tags = parse_tags(src, &mut pos, &whitelist!(Mod))
-        .map(|tags| tags.into_iter().map(|tag| tag.get(src)).collect());
+      let actual_tags: Vec<_> = parse_tags(src, &mut pos, &whitelist!(Mod))
+        .into_iter()
+        .map(|tag| tag.get(src))
+        .collect();
       assert_eq!(actual_tags, expected_tags);
       assert_eq!(&src[pos..], expected_remainder)
     }
@@ -447,6 +452,6 @@ mod tests {
 
   #[test]
   fn test_parse_data_0() {
-    crate::Message::parse(r"@badge-info=;badges=premium/1;color=#000000;display-name=Vicarun;emotes=;flags=;id=a0414f65-b471-46be-b6cc-f8d7cd0aa62c;login=vicarun;mod=0;msg-id=resub;msg-param-cumulative-months=20;msg-param-months=0;msg-param-multimonth-duration=1;msg-param-multimonth-tenure=0;msg-param-should-share-streak=0;msg-param-sub-plan-name=Channel\sSubscription\s(forsenlol);msg-param-sub-plan=Prime;msg-param-was-gifted=false;room-id=22484632;subscriber=1;system-msg=Vicarun\ssubscribed\swith\sPrime.\sThey've\ssubscribed\sfor\s20\smonths!;tmi-sent-ts=1685664553875;user-id=691811336;user-type= :tmi.twitch.tv USERNOTICE #forsen").unwrap();
+    crate::IrcMessageRef::parse(r"@badge-info=;badges=premium/1;color=#000000;display-name=Vicarun;emotes=;flags=;id=a0414f65-b471-46be-b6cc-f8d7cd0aa62c;login=vicarun;mod=0;msg-id=resub;msg-param-cumulative-months=20;msg-param-months=0;msg-param-multimonth-duration=1;msg-param-multimonth-tenure=0;msg-param-should-share-streak=0;msg-param-sub-plan-name=Channel\sSubscription\s(forsenlol);msg-param-sub-plan=Prime;msg-param-was-gifted=false;room-id=22484632;subscriber=1;system-msg=Vicarun\ssubscribed\swith\sPrime.\sThey've\ssubscribed\sfor\s20\smonths!;tmi-sent-ts=1685664553875;user-id=691811336;user-type= :tmi.twitch.tv USERNOTICE #forsen").unwrap();
   }
 }

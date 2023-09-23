@@ -2,13 +2,29 @@
 #[macro_use]
 extern crate tracing;
 
-// #[cfg(feature = "client")]
-// pub mod client;
+pub(crate) const fn assert_send<T: Send>() {}
+macro_rules! assert_send {
+  ($T:ty) => {
+    const _: () = {
+      let _ = $crate::assert_send::<$T>;
+    };
+  };
+}
 
+#[cfg(feature = "client")]
+pub mod client;
+
+#[cfg(feature = "message-types")]
 pub mod msg;
-
+#[cfg(feature = "message-types")]
 pub use msg::*;
 
+pub mod irc;
+pub use irc::*;
+
+pub mod common;
+pub use common::Span;
+
 pub mod prelude {
-  pub use crate::msg::{unescape, Command, Message, Prefix, Tag, Whitelist};
+  pub use crate::irc::{unescape, Command, IrcMessage, IrcMessageRef, Prefix, Tag, Whitelist};
 }

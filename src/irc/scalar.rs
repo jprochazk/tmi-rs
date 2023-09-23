@@ -6,12 +6,12 @@ pub fn parse_tags<const IC: usize, F>(
   src: &str,
   pos: &mut usize,
   whitelist: &Whitelist<IC, F>,
-) -> Option<RawTags>
+) -> RawTags
 where
   F: Fn(&str, &mut RawTags, Span, Span),
 {
   if !src[*pos..].starts_with('@') {
-    return None;
+    return RawTags::new();
   }
 
   let start = *pos + 1;
@@ -52,7 +52,7 @@ where
 
   *pos = end;
 
-  Some(tags)
+  tags
 }
 
 /// `:nick!user@host <rest>`
@@ -100,7 +100,7 @@ pub fn parse_prefix(src: &str, pos: &mut usize) -> Option<RawPrefix> {
 
 #[cfg(test)]
 mod tests {
-  use crate::msg::{whitelist_insert_all, Tag};
+  use crate::irc::{whitelist_insert_all, Tag};
 
   use super::*;
 
@@ -112,7 +112,6 @@ mod tests {
     let tags = parse_tags(data, &mut pos, &Whitelist::<16, _>(whitelist_insert_all));
     assert_eq!(pos, 20);
     let tags = tags
-      .unwrap()
       .into_iter()
       .map(|tag| tag.get(data))
       .collect::<Vec<_>>();
@@ -127,7 +126,6 @@ mod tests {
     let tags = parse_tags(data, &mut pos, &whitelist!(Login));
     assert_eq!(pos, 20);
     let tags = tags
-      .unwrap()
       .into_iter()
       .map(|tag| tag.get(data))
       .collect::<Vec<_>>();

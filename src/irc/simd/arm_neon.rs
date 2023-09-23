@@ -29,7 +29,7 @@ pub fn parse_tags<const IC: usize, F>(
   src: &str,
   pos: &mut usize,
   whitelist: &Whitelist<IC, F>,
-) -> Option<RawTags>
+) -> RawTags
 where
   F: Fn(&str, &mut RawTags, Span, Span),
 {
@@ -37,7 +37,7 @@ where
   // It should not be duplicated, but seeing as there are only two SIMD implementations,
   // I believe it is simpler to just copy the implementation, at least for now.
   if !src[*pos..].starts_with('@') {
-    return None;
+    return RawTags::new();
   }
 
   let mut tags = RawTags::with_capacity(IC);
@@ -82,7 +82,7 @@ where
 
   *pos = key_start;
 
-  Some(tags)
+  tags
 }
 
 #[inline(always)]
@@ -303,20 +303,23 @@ mod tests {
   #[test]
   fn tags() {
     let cases = [
-      ("", (None, "")),
-      ("mod=0;id=1000", (None, "mod=0;id=1000")),
-      ("@mod=0;id=1000", (Some(make! {Mod: "0", Id: "1000",}), "")),
-      ("@mod=0;id=1000 ", (Some(make! {Mod: "0", Id: "1000",}), "")),
+      ("", (vec![], "")),
+      ("mod=0;id=1000", (vec![], "mod=0;id=1000")),
+      ("@mod=0;id=1000", (make! {Mod: "0", Id: "1000",}, "")),
+      ("@mod=0;id=1000 ", (make! {Mod: "0", Id: "1000",}, "")),
       (
         "@mod=0;id=1000 :asdf",
-        (Some(make! {Mod: "0", Id: "1000",}), ":asdf"),
+        (make! {Mod: "0", Id: "1000",}, ":asdf"),
       ),
     ];
 
     for (src, (expected_tags, expected_remainder)) in cases.into_iter() {
       let mut pos = 0;
-      let actual_tags = parse_tags(src, &mut pos, &Whitelist::<16, _>(whitelist_insert_all))
-        .map(|tags| tags.into_iter().map(|tag| tag.get(src)).collect());
+      let actual_tags: Vec<_> =
+        parse_tags(src, &mut pos, &Whitelist::<16, _>(whitelist_insert_all))
+          .into_iter()
+          .map(|tag| tag.get(src))
+          .collect();
       assert_eq!(actual_tags, expected_tags);
       assert_eq!(&src[pos..], expected_remainder);
     }
@@ -325,17 +328,19 @@ mod tests {
   #[test]
   fn tags_whitelist() {
     let cases = [
-      ("", (None, "")),
-      ("mod=0;id=1000", (None, "mod=0;id=1000")),
-      ("@mod=0;id=1000", (Some(make! {Mod: "0"}), "")),
-      ("@mod=0;id=1000 ", (Some(make! {Mod: "0"}), "")),
-      ("@mod=0;id=1000 :asdf", (Some(make! {Mod: "0"}), ":asdf")),
+      ("", (vec![], "")),
+      ("mod=0;id=1000", (vec![], "mod=0;id=1000")),
+      ("@mod=0;id=1000", (make! {Mod: "0"}, "")),
+      ("@mod=0;id=1000 ", (make! {Mod: "0"}, "")),
+      ("@mod=0;id=1000 :asdf", (make! {Mod: "0"}, ":asdf")),
     ];
 
     for (src, (expected_tags, expected_remainder)) in cases.into_iter() {
       let mut pos = 0;
-      let actual_tags = parse_tags(src, &mut pos, &whitelist!(Mod))
-        .map(|tags| tags.into_iter().map(|tag| tag.get(src)).collect());
+      let actual_tags: Vec<_> = parse_tags(src, &mut pos, &whitelist!(Mod))
+        .into_iter()
+        .map(|tag| tag.get(src))
+        .collect();
       assert_eq!(actual_tags, expected_tags);
       assert_eq!(&src[pos..], expected_remainder)
     }

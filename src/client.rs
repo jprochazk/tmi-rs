@@ -1,18 +1,26 @@
-mod channel;
+macro_rules! with_scratch {
+  ($client:ident, |$scratch:ident| $body:block) => {{
+    let mut scratch = std::mem::take(&mut $client.scratch);
+    let $scratch = &mut scratch;
+    let result = { $body };
+    scratch.clear();
+    $client.scratch = scratch;
+    result
+  }};
+}
+
 mod conn;
-mod ratelimit;
 mod read;
 mod util;
 mod write;
 
-use self::channel::Channel;
 use self::conn::TlsConfig;
-use self::read::{ReadError, ReadStream};
+use self::read::ReadStream;
 use self::write::WriteStream;
-use crate::msg::Command;
+use crate::irc::Command;
+use crate::IrcMessage;
 use futures_util::StreamExt;
 use rand::{thread_rng, Rng};
-use std::collections::HashMap;
 use std::fmt::{Display, Write};
 use std::future::Future;
 use std::io;
@@ -24,6 +32,8 @@ use tokio_stream::wrappers::LinesStream;
 use util::Timeout;
 
 pub use self::conn::{OpenStreamError, TlsConfigError};
+pub use self::read::ReadError;
+pub use self::write::{SameMessageBypass, WriteError};
 
 #[derive(Clone)]
 pub struct Credentials {
@@ -76,14 +86,23 @@ pub struct ClientBuilder {
   config: Config,
 }
 
+pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
+
 impl ClientBuilder {
   pub fn credentials(mut self, credentials: Credentials) -> Self {
     self.config.credentials = credentials;
     self
   }
 
-  pub fn connect(self, timeout: Duration) -> impl Future<Output = Result<Client, ConnectionError>> {
-    Client::connect(self.config, timeout)
+  pub fn connect(self) -> impl Future<Output = Result<Client, ConnectionError>> {
+    Client::connect_with_timeout(self.config, DEFAULT_TIMEOUT)
+  }
+
+  pub fn connect_with_timeout(
+    self,
+    timeout: Duration,
+  ) -> impl Future<Output = Result<Client, ConnectionError>> {
+    Client::connect_with_timeout(self.config, timeout)
   }
 }
 
@@ -94,8 +113,6 @@ pub struct Client {
   scratch: String,
   tls: TlsConfig,
   credentials: Credentials,
-
-  channels: HashMap<String, Channel>,
 }
 
 impl Client {
@@ -105,7 +122,14 @@ impl Client {
     }
   }
 
-  pub async fn connect(config: Config, timeout: Duration) -> Result<Client, ConnectionError> {
+  pub fn connect(config: Config) -> impl Future<Output = Result<Client, ConnectionError>> {
+    Self::connect_with_timeout(config, DEFAULT_TIMEOUT)
+  }
+
+  pub async fn connect_with_timeout(
+    config: Config,
+    timeout: Duration,
+  ) -> Result<Client, ConnectionError> {
     trace!("connecting");
     let tls = TlsConfig::load(ServerName::try_from(conn::HOST)?)?;
     trace!("opening connection to twitch");
@@ -117,7 +141,6 @@ impl Client {
       scratch: String::with_capacity(1024),
       tls,
       credentials: config.credentials,
-      channels: HashMap::new(),
     };
     chat.handshake().timeout(timeout).await??;
     Ok(chat)
@@ -159,7 +182,7 @@ impl Client {
   async fn handshake(&mut self) -> Result<(), ConnectionError> {
     trace!("performing handshake");
 
-    const CAP: &str = "twitch.tv/commands twitch.tv/tags";
+    const CAP: &str = "twitch.tv/commands twitch.tv/tags twitch.tv/membership";
     trace!("CAP REQ {CAP}; NICK {}; PASS ***", self.credentials.nick);
 
     write!(&mut self.scratch, "CAP REQ :{CAP}\r\n").unwrap();
@@ -249,13 +272,13 @@ pub enum ConnectionError {
   Timeout(tokio::time::error::Elapsed),
 
   /// Connection received invalid welcome message.
-  Welcome(String),
+  Welcome(IrcMessage),
 
   /// Failed to connect because of invalid credentials.
   Auth,
 
   /// Twitch sent a notice that we didn't expect during the handshake.
-  Notice(String),
+  Notice(IrcMessage),
 
   /// Failed to reconnect.
   Reconnect,
@@ -327,3 +350,6 @@ impl Display for ConnectionError {
 }
 
 impl std::error::Error for ConnectionError {}
+
+assert_send!(ConnectionError);
+assert_send!(Client);

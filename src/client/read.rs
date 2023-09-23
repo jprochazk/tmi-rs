@@ -1,5 +1,5 @@
 use super::{conn, Client};
-use crate::msg::Message;
+use crate::irc::IrcMessage;
 use futures_util::stream::Fuse;
 use std::fmt::Display;
 use tokio::io;
@@ -10,10 +10,10 @@ use tokio_stream::StreamExt;
 pub type ReadStream = Fuse<LinesStream<BufReader<ReadHalf<conn::Stream>>>>;
 
 impl Client {
-  pub async fn message(&mut self) -> Result<Message, ReadError> {
+  pub async fn message(&mut self) -> Result<IrcMessage, ReadError> {
     if let Some(message) = self.reader.next().await {
       let message = message?;
-      Ok(Message::parse(&message).ok_or_else(|| ReadError::Parse(message))?)
+      Ok(IrcMessage::parse(&message).ok_or_else(|| ReadError::Parse(message))?)
     } else {
       Err(ReadError::StreamClosed)
     }
@@ -25,6 +25,23 @@ pub enum ReadError {
   Io(io::Error),
   Parse(String),
   StreamClosed,
+}
+
+impl ReadError {
+  pub fn is_disconnect(&self) -> bool {
+    match self {
+      ReadError::StreamClosed => true,
+      ReadError::Io(e)
+        if matches!(
+          e.kind(),
+          io::ErrorKind::UnexpectedEof | io::ErrorKind::ConnectionAborted | io::ErrorKind::TimedOut
+        ) =>
+      {
+        true
+      }
+      _ => false,
+    }
+  }
 }
 
 impl From<io::Error> for ReadError {
