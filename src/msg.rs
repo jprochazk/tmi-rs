@@ -16,14 +16,14 @@ use scalar::{parse_prefix, parse_tags};
 
 use std::fmt::{Debug, Display};
 
-#[derive(Debug)]
-pub struct Message {
-  raw: String,
-  tags: Option<ParsedTags<'static>>,
-  prefix: Option<Prefix<'static>>,
-  command: Command<'static>,
-  channel: Option<&'static str>,
-  params: Option<&'static str>,
+#[derive(Clone)]
+pub struct Message<'src> {
+  src: &'src str,
+  tags: Option<RawTags>,
+  prefix: Option<RawPrefix>,
+  command: RawCommand,
+  channel: Option<Span>,
+  params: Option<Span>,
 }
 
 const fn assert_send<T: Send>() {}
@@ -31,125 +31,75 @@ const _: () = {
   let _ = assert_send::<Message>;
 };
 
-pub struct Whitelist<const IC: usize, F>(F);
-
-impl<const IC: usize, F> Whitelist<IC, F>
-where
-  F: for<'a> Fn(&'a mut Tags<'static>, &'static str, &'static str),
-{
-  /// # Safety
-  /// The callback `f` must guarantee not to leak any of its parameters.
+impl<'src> Message<'src> {
+  /// Parse a single Twitch IRC message.
   ///
-  /// The easiest way to ensure safety is to use the `twitch::whitelist` macro.
-  pub unsafe fn new(f: F) -> Self {
-    Self(f)
+  /// If the message can't be parsed, the string is returned in the result as `Err`.
+  ///
+  /// Twitch often sends multiple messages in a batch separated by `\r\n`.
+  /// Before parsing messages, you should always split them by `\r\n` first:
+  ///
+  /// ```rust,ignore
+  /// if let Some(data) = ws.next().await {
+  ///     if let Message::Text(data) = data? {
+  ///         for message in data.lines().flat_map(twitch::Message::parse) {
+  ///             handle(message)
+  ///         }
+  ///     }
+  /// }
+  /// ```
+  pub fn parse(src: &'src str) -> Option<Self> {
+    Self::parse_inner(src, Whitelist::<16, _>(whitelist_insert_all))
   }
 
-  #[inline(always)]
-  pub(crate) fn maybe_insert(
-    &self,
-    map: &mut Tags<'static>,
-    tag: &'static str,
-    value: &'static str,
-  ) {
-    (self.0)(map, tag, value)
-  }
-}
-
-#[inline(always)]
-fn whitelist_insert_all(map: &mut Tags<'static>, tag: &'static str, value: &'static str) {
-  map.push((Tag::parse(tag), value));
-}
-
-/// Parse a single Twitch IRC message.
-///
-/// If the message can't be parsed, the string is returned in the result as `Err`.
-///
-/// Twitch often sends multiple messages in a batch separated by `\r\n`.
-/// Before parsing messages, you should always split them by `\r\n` first:
-///
-/// ```rust,ignore
-/// if let Some(data) = ws.next().await {
-///     if let Message::Text(data) = data? {
-///         for message in data.lines().flat_map(twitch::parse) {
-///             handle(message)
-///         }
-///     }
-/// }
-/// ```
-pub fn parse(src: impl Into<String>) -> Result<Message, String> {
-  Message::parse(src)
-}
-
-/// Parse a single Twitch IRC message with a tag whitelist.
-///
-/// ```rust,ignore
-/// twitch::parse_with_whitelist(
-///     ":forsen!forsen@forsen.tmi.twitch.tv PRIVMSG #pajlada :AlienPls",
-///     twitch::whitelist!(DisplayName, Id, TmiSentTs, UserId),
-/// )
-/// ```
-///
-/// If the message can't be parsed, the string is returned in the result as `Err`.
-///
-/// Twitch often sends multiple messages in a batch separated by `\r\n`.
-/// Before parsing messages, you should always split them by `\r\n` first:
-///
-/// ```rust,ignore
-/// if let Some(data) = ws.next().await {
-///     if let Message::Text(data) = data? {
-///         for message in data.lines().flat_map(twitch::parse) {
-///             handle(message)
-///         }
-///     }
-/// }
-/// ```
-pub fn parse_with_whitelist<const IC: usize, F>(
-  src: impl Into<String>,
-  whitelist: Whitelist<IC, F>,
-) -> Result<Message, String>
-where
-  F: for<'a> Fn(&'a mut Tags<'static>, &'static str, &'static str),
-{
-  Message::parse_with_whitelist(src, whitelist)
-}
-
-impl Message {
-  pub fn parse(src: impl Into<String>) -> Result<Self, String> {
-    Self::parse_inner(src.into(), Whitelist::<16, _>(whitelist_insert_all))
-  }
-
+  /// Parse a single Twitch IRC message with a tag whitelist.
+  ///
+  /// ```rust,ignore
+  /// twitch::parse_with_whitelist(
+  ///     ":forsen!forsen@forsen.tmi.twitch.tv PRIVMSG #pajlada :AlienPls",
+  ///     twitch::whitelist!(DisplayName, Id, TmiSentTs, UserId),
+  /// )
+  /// ```
+  ///
+  /// If the message can't be parsed, the string is returned in the result as `Err`.
+  ///
+  /// Twitch often sends multiple messages in a batch separated by `\r\n`.
+  /// Before parsing messages, you should always split them by `\r\n` first:
+  ///
+  /// ```rust,ignore
+  /// if let Some(data) = ws.next().await {
+  ///     if let Message::Text(data) = data? {
+  ///         for message in data.lines().flat_map(twitch::Message::parse) {
+  ///             handle(message)
+  ///         }
+  ///     }
+  /// }
+  /// ```
   pub fn parse_with_whitelist<const IC: usize, F>(
-    src: impl Into<String>,
+    src: &'src str,
     whitelist: Whitelist<IC, F>,
-  ) -> Result<Self, String>
+  ) -> Option<Self>
   where
-    F: for<'a> Fn(&'a mut Tags<'static>, &'static str, &'static str),
+    F: Fn(&str, &mut RawTags, Span, Span),
   {
-    Self::parse_inner(src.into(), whitelist)
+    Self::parse_inner(src, whitelist)
   }
 
   #[inline(always)]
-  fn parse_inner<const IC: usize, F>(
-    raw: String,
-    whitelist: Whitelist<IC, F>,
-  ) -> Result<Self, String>
+  fn parse_inner<const IC: usize, F>(src: &'src str, whitelist: Whitelist<IC, F>) -> Option<Self>
   where
-    F: for<'a> Fn(&'a mut Tags<'static>, &'static str, &'static str),
+    F: Fn(&str, &mut RawTags, Span, Span),
   {
-    let remainder = &raw[..];
+    let mut pos = 0usize;
 
-    let (tags, remainder) = parse_tags(remainder, &whitelist);
-    let (prefix, remainder) = parse_prefix(remainder);
-    let (command, remainder) = match parse_command(remainder) {
-      Some((command, remainder)) => (command, remainder),
-      None => return Err(raw),
-    };
-    let (channel, remainder) = parse_channel(remainder);
-    let params = parse_params(remainder);
+    let tags = parse_tags(src, &mut pos, &whitelist);
+    let prefix = parse_prefix(src, &mut pos);
+    let command = parse_command(src, &mut pos)?;
+    let channel = parse_channel(src, &mut pos);
+    let params = parse_params(src, &pos);
 
-    Ok(Self {
-      raw,
+    Some(Self {
+      src,
       tags,
       prefix,
       command,
@@ -158,50 +108,55 @@ impl Message {
     })
   }
 
-  pub fn into_raw(self) -> String {
-    self.raw
+  pub fn raw(&self) -> &'src str {
+    self.src
   }
 
-  pub fn raw(&self) -> &str {
-    &self.raw
+  pub fn tags(&self) -> Option<impl Iterator<Item = (Tag<'src>, &'src str)> + '_> {
+    self
+      .tags
+      .as_ref()
+      .map(|tags| tags.iter().map(|pair| pair.get(self.src)))
   }
 
-  pub fn tags(&self) -> Option<&[(Tag<'_>, &str)]> {
-    self.tags.as_deref()
+  pub fn prefix(&self) -> Option<Prefix<'_>> {
+    self.prefix.map(|prefix| prefix.get(self.src))
   }
 
-  pub fn prefix(&self) -> Option<&Prefix<'_>> {
-    self.prefix.as_ref()
-  }
-
-  pub fn command(&self) -> &Command<'_> {
-    &self.command
+  pub fn command(&self) -> Command<'src> {
+    self.command.get(self.src)
   }
 
   pub fn channel(&self) -> Option<&str> {
-    self.channel
+    self.channel.map(|span| &self.src[span])
   }
 
   pub fn params(&self) -> Option<&str> {
-    self.params
+    self.params.map(|span| &self.src[span])
   }
 
   pub fn tag(&self, tag: Tag<'_>) -> Option<&str> {
     self
       .tags
       .as_ref()
-      .and_then(|map| map.iter().find(|(key, _)| key == &tag))
-      .map(|(_, value)| value)
-      .copied()
+      .and_then(|map| {
+        map
+          .iter()
+          .find(|RawTagPair(key, _)| key.get(self.src) == tag)
+      })
+      .map(|RawTagPair(_, value)| &self.src[*value])
   }
 
   /// Returns the contents of the params after the last `:`.
   pub fn text(&self) -> Option<&str> {
-    match &self.params {
-      Some(params) => match params.find(':') {
-        Some(start) => Some(&params[start + 1..]),
-        None => None,
-      },
+    match self.params {
+      Some(params) => {
+        let params = &self.src[params];
+        match params.find(':') {
+          Some(start) => Some(&params[start + 1..]),
+          None => None,
+        }
+      }
       None => None,
     }
   }
@@ -240,87 +195,111 @@ pub fn unescape(value: &str) -> String {
   out
 }
 
-#[inline(always)]
-unsafe fn map_str_to_new_base(
-  prev_base: &str,
-  new_base: &str,
-  existing: &'static str,
-) -> &'static str {
-  let start = existing.as_ptr() as usize - prev_base.as_ptr() as usize;
-  debug_assert!(start + existing.len() <= new_base.len());
-  let out = leak(new_base.get_unchecked(start..start + existing.len()));
-  debug_assert!(existing == out);
-  out
+pub struct Whitelist<const IC: usize, F>(F);
+
+impl<const IC: usize, F> Whitelist<IC, F>
+where
+  F: Fn(&str, &mut RawTags, Span, Span),
+{
+  /// # Safety
+  /// The callback `f` must guarantee not to leak any of its parameters.
+  ///
+  /// The easiest way to ensure safety is to use the `twitch::whitelist` macro.
+  pub unsafe fn new(f: F) -> Self {
+    Self(f)
+  }
+
+  #[inline(always)]
+  pub(crate) fn maybe_insert(&self, src: &str, map: &mut RawTags, tag: Span, value: Span) {
+    (self.0)(src, map, tag, value)
+  }
 }
 
-impl Clone for Message {
-  fn clone(&self) -> Self {
-    let prev_base = &self.raw;
-    let new_base = self.raw.clone();
+#[inline(always)]
+fn whitelist_insert_all(src: &str, map: &mut RawTags, tag: Span, value: Span) {
+  map.push(RawTagPair(RawTag::parse(src, tag), value));
+}
 
-    let tags = match &self.tags {
-      Some(tags) => {
-        let mut out = Vec::new();
-        out.reserve_exact(tags.len());
-        for (tag, value) in tags.iter() {
-          let tag = match tag {
-            Tag::Other(s) => Tag::Other(unsafe { map_str_to_new_base(prev_base, &new_base, s) }),
-            tag => tag.private_clone(),
-          };
-          let value = unsafe { map_str_to_new_base(prev_base, &new_base, value) };
-          out.push((tag, value));
-        }
-        Some(out)
-      }
-      None => None,
-    };
+#[doc(hidden)]
+#[derive(Clone)]
+pub struct RawTagPair(pub RawTag, pub Span);
 
-    let prefix = self.prefix.as_ref().map(|prefix| Prefix {
-      nick: prefix
-        .nick
-        .map(|s| unsafe { map_str_to_new_base(prev_base, &new_base, s) }),
-      user: prefix
-        .user
-        .map(|s| unsafe { map_str_to_new_base(prev_base, &new_base, s) }),
-      host: unsafe { map_str_to_new_base(prev_base, &new_base, prefix.host) },
-    });
+#[doc(hidden)]
+pub type RawTags = Vec<RawTagPair>;
 
-    let command = match &self.command {
-      Command::Other(s) => Command::Other(unsafe { map_str_to_new_base(prev_base, &new_base, s) }),
-      other => other.private_clone(),
-    };
+impl RawTagPair {
+  #[doc(hidden)]
+  #[inline]
+  pub fn get<'src>(&self, src: &'src str) -> (Tag<'src>, &'src str) {
+    (self.0.get(src), &src[self.1])
+  }
+}
 
-    let channel = self
-      .channel
-      .as_ref()
-      .map(|channel| unsafe { map_str_to_new_base(prev_base, &new_base, channel) });
+#[derive(Clone, Copy)]
+enum RawCommand {
+  Ping,
+  Pong,
+  Join,
+  Part,
+  Privmsg,
+  Whisper,
+  Clearchat,
+  Clearmsg,
+  GlobalUserState,
+  HostTarget,
+  Notice,
+  Reconnect,
+  RoomState,
+  UserNotice,
+  UserState,
+  Capability,
+  RplWelcome,
+  RplYourHost,
+  RplCreated,
+  RplMyInfo,
+  RplNamReply,
+  RplEndOfNames,
+  RplMotd,
+  RplMotdStart,
+  RplEndOfMotd,
+  Other(Span),
+}
 
-    let params = self
-      .params
-      .as_ref()
-      .map(|params| unsafe { map_str_to_new_base(prev_base, &new_base, params) });
-
-    Self {
-      tags,
-      prefix,
-      command,
-      channel,
-      params,
-      raw: new_base,
+impl RawCommand {
+  #[inline]
+  fn get<'src>(&self, src: &'src str) -> Command<'src> {
+    match self {
+      RawCommand::Ping => Command::Ping,
+      RawCommand::Pong => Command::Pong,
+      RawCommand::Join => Command::Join,
+      RawCommand::Part => Command::Part,
+      RawCommand::Privmsg => Command::Privmsg,
+      RawCommand::Whisper => Command::Whisper,
+      RawCommand::Clearchat => Command::Clearchat,
+      RawCommand::Clearmsg => Command::Clearmsg,
+      RawCommand::GlobalUserState => Command::GlobalUserState,
+      RawCommand::HostTarget => Command::HostTarget,
+      RawCommand::Notice => Command::Notice,
+      RawCommand::Reconnect => Command::Reconnect,
+      RawCommand::RoomState => Command::RoomState,
+      RawCommand::UserNotice => Command::UserNotice,
+      RawCommand::UserState => Command::UserState,
+      RawCommand::Capability => Command::Capability,
+      RawCommand::RplWelcome => Command::RplWelcome,
+      RawCommand::RplYourHost => Command::RplYourHost,
+      RawCommand::RplCreated => Command::RplCreated,
+      RawCommand::RplMyInfo => Command::RplMyInfo,
+      RawCommand::RplNamReply => Command::RplNamReply,
+      RawCommand::RplEndOfNames => Command::RplEndOfNames,
+      RawCommand::RplMotd => Command::RplMotd,
+      RawCommand::RplMotdStart => Command::RplMotdStart,
+      RawCommand::RplEndOfMotd => Command::RplEndOfMotd,
+      RawCommand::Other(span) => Command::Other(&src[*span]),
     }
   }
 }
 
-#[doc(hidden)]
-pub type TagPair<'src> = (Tag<'src>, &'src str);
-
-#[doc(hidden)]
-pub type Tags<'src> = Vec<TagPair<'src>>;
-
-#[doc(hidden)]
-pub type ParsedTags<'src> = Vec<TagPair<'src>>;
-
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Command<'src> {
   Ping,
   Pong,
@@ -405,63 +384,20 @@ impl<'src> Command<'src> {
       Other(cmd) => cmd,
     }
   }
-
-  pub(crate) fn private_clone(&self) -> Self {
-    use Command::*;
-    match self {
-      Ping => Ping,
-      Pong => Pong,
-      Join => Join,
-      Part => Part,
-      Privmsg => Privmsg,
-      Whisper => Whisper,
-      Clearchat => Clearchat,
-      Clearmsg => Clearmsg,
-      GlobalUserState => GlobalUserState,
-      HostTarget => HostTarget,
-      Notice => Notice,
-      Reconnect => Reconnect,
-      RoomState => RoomState,
-      UserNotice => UserNotice,
-      UserState => UserState,
-      Capability => Capability,
-      RplWelcome => RplWelcome,
-      RplYourHost => RplYourHost,
-      RplCreated => RplCreated,
-      RplMyInfo => RplMyInfo,
-      RplNamReply => RplNamReply,
-      RplEndOfNames => RplEndOfNames,
-      RplMotd => RplMotd,
-      RplMotdStart => RplMotdStart,
-      RplEndOfMotd => RplEndOfMotd,
-      Other(cmd) => Other(cmd),
-    }
-  }
-}
-
-#[inline(always)]
-unsafe fn leak(s: &str) -> &'static str {
-  unsafe { ::core::mem::transmute(s) }
 }
 
 macro_rules! tags_def {
   (
-    $tag:ident, $tag_mod:ident;
+    $tag:ident, $raw_tag:ident, $tag_mod:ident;
     $($(#[$meta:meta])* $bytes:literal; $key:literal = $name:ident),*
   ) => {
-    #[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+    #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
     pub enum $tag<'src> {
       $(
         $(#[$meta])*
         $name,
       )*
       Other(&'src str),
-    }
-
-    #[allow(non_upper_case_globals)]
-    #[doc(hidden)]
-    pub mod $tag_mod {
-      $(pub const $name: &'static [u8] = $bytes;)*
     }
 
     impl<'src> $tag<'src> {
@@ -471,28 +407,45 @@ macro_rules! tags_def {
           Self::Other(key) => key,
         }
       }
+    }
 
-      #[inline(never)]
-      pub fn parse(s: &'src str) -> Self {
-        match s.as_bytes() {
-          $($bytes => Self::$name,)*
-          _ => Self::Other(s),
-        }
-      }
+    #[doc(hidden)]
+    #[derive(Clone, Copy)]
+    pub enum $raw_tag {
+      $($name,)*
+      Other(Span),
+    }
 
+    impl $raw_tag {
+      #[doc(hidden)]
       #[inline]
-      pub(crate) fn private_clone(&self) -> Self {
+      fn get<'src>(&self, src: &'src str) -> $tag<'src> {
         match self {
-          $(Self::$name => Self::$name,)*
-          Self::Other(key) => Self::Other(key),
+          $(Self::$name => $tag::$name,)*
+          Self::Other(span) => $tag::Other(&src[*span]),
         }
       }
+
+      #[doc(hidden)]
+      #[inline(never)]
+      pub fn parse(src: &str, span: Span) -> Self {
+        match src[span].as_bytes() {
+          $($bytes => Self::$name,)*
+          _ => Self::Other(span),
+        }
+      }
+    }
+
+    #[allow(non_upper_case_globals)]
+    #[doc(hidden)]
+    pub mod $tag_mod {
+      $(pub const $name: &'static [u8] = $bytes;)*
     }
   }
 }
 
 tags_def! {
-  Tag, tags;
+  Tag, RawTag, tags;
   b"msg-id"; "msg-id" = MsgId,
   b"badges"; "badges" = Badges,
   b"badge-info"; "badge-info" = BadgeInfo,
@@ -568,78 +521,144 @@ impl<'src> Display for Tag<'src> {
   }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy)]
+struct RawPrefix {
+  nick: Option<Span>,
+  user: Option<Span>,
+  host: Span,
+}
+
+impl RawPrefix {
+  fn get<'src>(&self, src: &'src str) -> Prefix<'src> {
+    Prefix {
+      nick: self.nick.map(|span| &src[span]),
+      user: self.user.map(|span| &src[span]),
+      host: &src[self.host],
+    }
+  }
+}
+
+#[derive(Clone, Debug)]
 pub struct Prefix<'src> {
   pub nick: Option<&'src str>,
   pub user: Option<&'src str>,
   pub host: &'src str,
 }
 
+#[doc(hidden)]
+#[derive(Clone, Copy)]
+pub struct Span {
+  start: u32,
+  end: u32,
+}
+
+impl Span {
+  #[doc(hidden)]
+  #[inline]
+  fn get<'src>(&self, src: &'src str) -> &'src str {
+    &src[*self]
+  }
+}
+
+impl From<std::ops::Range<usize>> for Span {
+  #[inline]
+  fn from(value: std::ops::Range<usize>) -> Self {
+    Span {
+      start: value.start as u32,
+      end: value.end as u32,
+    }
+  }
+}
+
+impl From<Span> for std::ops::Range<usize> {
+  #[inline]
+  fn from(value: Span) -> Self {
+    value.start as usize..value.end as usize
+  }
+}
+
+impl std::ops::Index<Span> for str {
+  type Output = <str as std::ops::Index<std::ops::Range<usize>>>::Output;
+
+  #[inline]
+  fn index(&self, index: Span) -> &Self::Output {
+    self.index(std::ops::Range::from(index))
+  }
+}
+
 /// `COMMAND <rest>`
 ///
 /// Returns `None` if command is unknown *and* empty
 #[inline(always)]
-fn parse_command(remainder: &str) -> Option<(Command<'static>, &str)> {
-  let (cmd, remainder) = match remainder.split_once(' ') {
-    Some(v) => v,
-    None => (remainder, &remainder[remainder.len()..]),
+fn parse_command(src: &str, pos: &mut usize) -> Option<RawCommand> {
+  let end = match src[*pos..].find(' ') {
+    Some(end) => *pos + end,
+    None => src.len(),
   };
 
-  use Command::*;
-  let cmd = match cmd {
-    "PING" => Ping,
-    "PONG" => Pong,
-    "JOIN" => Join,
-    "PART" => Part,
-    "PRIVMSG" => Privmsg,
-    "WHISPER" => Whisper,
-    "CLEARCHAT" => Clearchat,
-    "CLEARMSG" => Clearmsg,
-    "GLOBALUSERSTATE" => GlobalUserState,
-    "HOSTTARGET" => HostTarget,
-    "NOTICE" => Notice,
-    "RECONNECT" => Reconnect,
-    "ROOMSTATE" => RoomState,
-    "USERNOTICE" => UserNotice,
-    "USERSTATE" => UserState,
-    "CAP" => Capability,
-    "001" => RplWelcome,
-    "002" => RplYourHost,
-    "003" => RplCreated,
-    "004" => RplMyInfo,
-    "353" => RplNamReply,
-    "366" => RplEndOfNames,
-    "372" => RplMotd,
-    "375" => RplMotdStart,
-    "376" => RplEndOfMotd,
-    other if !other.is_empty() => Other(unsafe { leak(cmd) }),
+  use RawCommand as C;
+  let cmd = match &src[*pos..end] {
+    "PING" => C::Ping,
+    "PONG" => C::Pong,
+    "JOIN" => C::Join,
+    "PART" => C::Part,
+    "PRIVMSG" => C::Privmsg,
+    "WHISPER" => C::Whisper,
+    "CLEARCHAT" => C::Clearchat,
+    "CLEARMSG" => C::Clearmsg,
+    "GLOBALUSERSTATE" => C::GlobalUserState,
+    "HOSTTARGET" => C::HostTarget,
+    "NOTICE" => C::Notice,
+    "RECONNECT" => C::Reconnect,
+    "ROOMSTATE" => C::RoomState,
+    "USERNOTICE" => C::UserNotice,
+    "USERSTATE" => C::UserState,
+    "CAP" => C::Capability,
+    "001" => C::RplWelcome,
+    "002" => C::RplYourHost,
+    "003" => C::RplCreated,
+    "004" => C::RplMyInfo,
+    "353" => C::RplNamReply,
+    "366" => C::RplEndOfNames,
+    "372" => C::RplMotd,
+    "375" => C::RplMotdStart,
+    "376" => C::RplEndOfMotd,
+    other if !other.is_empty() => C::Other(Span::from(*pos..end)),
     _ => return None,
   };
 
-  Some((cmd, remainder))
+  *pos = end + 1;
+
+  Some(cmd)
 }
 
 /// #channel <rest>
 #[inline(always)]
-fn parse_channel(remainder: &str) -> (Option<&'static str>, &str) {
-  if remainder.starts_with('#') {
-    let (channel, remainder) = match remainder.split_once(' ') {
-      Some(v) => v,
-      None => (remainder, &remainder[remainder.len()..]),
-    };
-
-    // SAFETY: `channel` is a subslice of `base`.
-    (Some(unsafe { &*(channel as *const _) }), remainder)
-  } else {
-    (None, remainder)
+fn parse_channel(src: &str, pos: &mut usize) -> Option<Span> {
+  match src[*pos..].starts_with('#') {
+    true => {
+      let start = *pos;
+      match src[start..].find(' ') {
+        Some(end) => {
+          let end = start + end;
+          *pos = end + 1;
+          Some(Span::from(start..end))
+        }
+        None => {
+          let end = src.len();
+          *pos = end;
+          Some(Span::from(start..end))
+        }
+      }
+    }
+    false => None,
   }
 }
 
 #[inline(always)]
-fn parse_params(remainder: &str) -> Option<&'static str> {
-  if !remainder.is_empty() {
-    // SAFETY: `remainder` is a subslice of `base`.
-    Some(unsafe { &*(remainder as *const _) })
+fn parse_params(src: &str, pos: &usize) -> Option<Span> {
+  if !src[*pos..].is_empty() {
+    Some(Span::from(*pos..src.len()))
   } else {
     None
   }
@@ -655,29 +674,28 @@ mod tests {
     #[test]
     fn command() {
       let data = "PING <rest>";
+      let mut pos = 0;
 
-      let (command, remainder) = parse_command(data).unwrap();
-      assert_eq!(command, Command::Ping);
-      assert_eq!(remainder, "<rest>");
+      let command = parse_command(data, &mut pos).unwrap();
+      assert_eq!(command.get(data), Command::Ping);
+      assert_eq!(&data[pos..], "<rest>");
     }
 
     #[test]
     fn channel() {
       let data = "#channel <rest>";
+      let mut pos = 0;
 
-      let (channel, remainder) = parse_channel(data);
-      let channel = channel.unwrap();
-      assert_eq!(channel, "#channel");
-      assert_eq!(remainder, "<rest>");
+      let channel = parse_channel(data, &mut pos).unwrap();
+      assert_eq!(channel.get(data), "#channel");
+      assert_eq!(&data[pos..], "<rest>");
     }
 
     #[test]
     fn params() {
       let data = ":param_a :param_b";
-
-      let params = parse_params(data);
-      let params = params.unwrap();
-      assert_eq!(params, data)
+      let params = parse_params(data, &0).unwrap();
+      assert_eq!(params.get(data), data)
     }
 
     #[test]
@@ -688,7 +706,6 @@ mod tests {
       let mut a = a
         .tags()
         .unwrap()
-        .iter()
         .map(|(tag, value)| (tag.as_str(), unescape(value)))
         .collect::<Vec<_>>();
       a.sort_by_key(|(tag, _)| *tag);
@@ -704,13 +721,5 @@ mod tests {
 
       assert_eq!(a, b);
     }
-  }
-
-  #[allow(clippy::redundant_clone)]
-  #[test]
-  fn clone_message() {
-    let message = "@display-name=Dixtor334;emotes=;first-msg=0;flags=;id=0b4c70e4-9a47-4ce1-9c3e-8f78111cdc19;mod=0;reply-parent-display-name=minosura;reply-parent-msg-body=https://youtu.be/-ek4MFjz_eM?list=PL91C6439FD45DE2F3\\sannytfDinkDonk\\sstrimmer\\skorean\\sone;reply-parent-msg-id=7f811788-b897-4b4c-9f91-99fafe70eb7f;reply-parent-user-id=141993641;reply-parent-user-login=minosura;returning-chatter=0;room-id=56418014;subscriber=1;tmi-sent-ts=1686049636367;turbo=0;user-id=73714767;user-type= :dixtor334!dixtor334@dixtor334.tmi.twitch.tv PRIVMSG #anny :@minosura @anny";
-    let message = parse(message).unwrap();
-    let _ = message.clone();
   }
 }

@@ -9,7 +9,7 @@ use self::channel::Channel;
 use self::conn::TlsConfig;
 use self::read::{ReadError, ReadStream};
 use self::write::WriteStream;
-use crate::msg::{Command, Message};
+use crate::msg::Command;
 use futures_util::StreamExt;
 use rand::{thread_rng, Rng};
 use std::collections::HashMap;
@@ -249,13 +249,13 @@ pub enum ConnectionError {
   Timeout(tokio::time::error::Elapsed),
 
   /// Connection received invalid welcome message.
-  Welcome(Message),
+  Welcome(String),
 
   /// Failed to connect because of invalid credentials.
   Auth,
 
   /// Twitch sent a notice that we didn't expect during the handshake.
-  Notice(Message),
+  Notice(String),
 
   /// Failed to reconnect.
   Reconnect,

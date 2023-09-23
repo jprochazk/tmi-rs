@@ -1,3 +1,5 @@
+// NOTE: this code has a lot of bitrot, but it's left here as a proof of concept
+
 use core::arch::x86_64;
 use std::arch::x86_64::{
   _mm256_cmpeq_epi8, _mm256_loadu_si256, _mm256_movemask_epi8, _mm512_cmpeq_epi8_mask,

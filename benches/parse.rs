@@ -23,7 +23,7 @@ fn twitch(c: &mut Criterion) {
         |lines| {
           for line in lines {
             black_box(
-              twitch::Message::parse_with_whitelist(line, twitch::whitelist!(TmiSentTs, UserId))
+              twitch::Message::parse_with_whitelist(&line, twitch::whitelist!(TmiSentTs, UserId))
                 .expect("failed to parse"),
             );
           }
@@ -39,7 +39,7 @@ fn twitch(c: &mut Criterion) {
         || lines.clone(),
         |lines| {
           for line in lines {
-            black_box(twitch::Message::parse(line).expect("failed to parse"));
+            black_box(twitch::Message::parse(&line).expect("failed to parse"));
           }
         },
       );

@@ -9,12 +9,12 @@ macro_rules! __count {
 macro_rules! whitelist {
   [$($tag:ident),*] => (
     unsafe {
-      $crate::Whitelist::<{$crate::__count!($($tag)*)}, _>::new({
+      $crate::msg::Whitelist::<{$crate::__count!($($tag)*)}, _>::new({
         #[allow(unused_variables)]
         #[inline]
-        |map: &mut $crate::msg::Tags, tag: &str, value: &str| {
-          match tag.as_bytes() {
-            $($crate::msg::tags::$tag => {map.push(($crate::msg::Tag::$tag, value));})*
+        |src: &str, map: &mut $crate::msg::RawTags, tag: $crate::msg::Span, value: $crate::msg::Span| {
+          match src[tag].as_bytes() {
+            $($crate::msg::tags::$tag => {map.push($crate::msg::RawTagPair($crate::msg::RawTag::$tag, value));})*
             _ => {}
           };
         }

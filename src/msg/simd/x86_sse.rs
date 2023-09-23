@@ -1,4 +1,4 @@
-use crate::msg::{leak, ParsedTags, Prefix, Tags, Whitelist};
+use crate::msg::{RawPrefix, RawTags, Span, Whitelist};
 
 use core::arch::x86_64 as simd;
 use core::mem;
@@ -12,72 +12,76 @@ use std::ops::Add;
 /// Tags consist of semicolon-separated key-value pairs.
 /// The tag list is terminated by a ` ` character.
 #[inline(always)]
-pub fn parse_tags<'src, const IC: usize, F>(
-  remainder: &'src str,
+pub fn parse_tags<const IC: usize, F>(
+  src: &str,
+  pos: &mut usize,
   whitelist: &Whitelist<IC, F>,
-) -> (Option<ParsedTags<'static>>, &'src str)
+) -> Option<RawTags>
 where
-  F: for<'a> Fn(&'a mut Tags<'static>, &'static str, &'static str),
+  F: Fn(&str, &mut RawTags, Span, Span),
 {
-  if let Some(remainder) = remainder.strip_prefix('@') {
-    // pre-allocate space for the tags
-    // this uses a configurable default `IC`, which stands for `Initial Capacity`.
-    // the library supports "whitelisting" tags, in which case we know the total
-    // capacity we will ever need and can pre-allocate it.
-    // in case we don't have a whitelist, then this will allocate 16 slots.
-    let mut tags = Tags::with_capacity(IC);
+  if !src[*pos..].starts_with('@') {
+    return None;
+  }
 
-    let mut remainder = remainder;
-    while !remainder.is_empty() {
-      let Some(key_end) = find_equals(remainder) else {
-        // exit the loop if we don't find a key. this only happens if the input is malformed.
+  // pre-allocate space for the tags
+  // this uses a configurable default `IC`, which stands for `Initial Capacity`.
+  // the library supports "whitelisting" tags, in which case we know the total
+  // capacity we will ever need and can pre-allocate it.
+  // in case we don't have a whitelist, then this will allocate 16 slots.
+  let mut tags = RawTags::with_capacity(IC);
+
+  let mut key_start = *pos + 1;
+  while !src[key_start..].is_empty() {
+    let Some(mut key_end) = find_equals(&src[key_start..]) else {
+      // exit the loop if we don't find a key. this only happens if the input is malformed.
+      break;
+    };
+    key_end += key_start;
+
+    // `key_end` is inclusive, meaning `remainder[key_end] == '='`.
+    // value starts after the `=` character.
+    let value_start = key_end + 1;
+
+    // value ends at `;` or ` ` character.
+    match find_semi_or_space(&src[value_start..]) {
+      // if we found a semicolon, then insert the tag into the buffer,
+      // and attempt to find another tag.
+      Some(Found::Semi(value_end)) => {
+        let value_end = value_end + value_start;
+        let key = Span::from(key_start..key_end);
+        let value = Span::from(value_start..value_end);
+        whitelist.maybe_insert(src, &mut tags, key, value);
+        // advance to after the `;`
+        key_start = value_end + 1;
+        continue;
+      }
+      // if we found a space, then insert the tag into the buffer,
+      // and break out of the loop.
+      Some(Found::Space(value_end)) => {
+        let value_end = value_end + value_start;
+        let key = Span::from(key_start..key_end);
+        let value = Span::from(value_start..value_end);
+        whitelist.maybe_insert(src, &mut tags, key, value);
+        // advance to after the ` `
+        key_start = value_end + 1;
         break;
-      };
-      // `key_end` is inclusive, meaning `remainder[key_end] == '='`.
-      // value starts after the `=` character.
-      let value_start = key_end + 1;
-      // value ends at `;` or ` ` character.
-      let value_end = find_semi_or_space(unsafe { remainder.get_unchecked(value_start..) })
-        // we only search from `value_start`, so we offset the found position by it
-        .map(|v| value_start + v);
-
-      match value_end {
-        // if we found a semicolon, then insert the tag into the buffer,
-        // and attempt to find another tag.
-        Some(Found::Semi(value_end)) => {
-          let key = unsafe { leak(remainder.get_unchecked(..key_end)) };
-          let value = unsafe { leak(remainder.get_unchecked(value_start..value_end)) };
-          whitelist.maybe_insert(&mut tags, key, value);
-          // advance remainder to after the `;`
-          remainder = unsafe { remainder.get_unchecked(value_end + 1..) };
-          continue;
-        }
-        // if we found a space, then insert the tag into the buffer,
-        // and break out of the loop.
-        Some(Found::Space(value_end)) => {
-          let key = unsafe { leak(remainder.get_unchecked(..key_end)) };
-          let value = unsafe { leak(remainder.get_unchecked(value_start..value_end)) };
-          whitelist.maybe_insert(&mut tags, key, value);
-          // advance remainder to after the ` `
-          remainder = unsafe { remainder.get_unchecked(value_end + 1..) };
-          break;
-        }
-        // we've somehow found neither. this only happens if the input is malformed.
-        // we treat everything after the `=` as the value, and return an empty remainder.
-        None => {
-          let key = unsafe { leak(remainder.get_unchecked(..key_end)) };
-          let value = unsafe { leak(remainder.get_unchecked(value_start..)) };
-          whitelist.maybe_insert(&mut tags, key, value);
-          remainder = unsafe { remainder.get_unchecked(remainder.len()..) };
-          break;
-        }
+      }
+      // we've somehow found neither. this only happens if the input is malformed.
+      // we treat everything after the `=` as the value, and return an empty remainder.
+      None => {
+        let key = Span::from(key_start..key_end);
+        let value = Span::from(value_start..src.len());
+        whitelist.maybe_insert(src, &mut tags, key, value);
+        key_start = src.len();
+        break;
       }
     }
-
-    (Some(tags), remainder)
-  } else {
-    (None, remainder)
   }
+
+  *pos = key_start;
+
+  Some(tags)
 }
 
 /// This function splits `s` into 16-byte chunks, loads each chunk into a 128-bit vector,
@@ -247,84 +251,83 @@ fn find_semi_or_space(s: &str) -> Option<Found> {
 ///
 /// Twitch never sends the `nick@host` form, but we still handle it.
 #[inline(always)]
-pub fn parse_prefix(remainder: &str) -> (Option<Prefix<'static>>, &str) {
-  if let Some(remainder) = remainder.strip_prefix(':') {
-    let bytes: &[i8] = unsafe { mem::transmute(remainder.as_bytes()) };
-    const SPACE: __m128i = unsafe { mem::transmute([b' ' as i8; 16]) };
-    const AT: __m128i = unsafe { mem::transmute([b'@' as i8; 16]) };
-    const BANG: __m128i = unsafe { mem::transmute([b'!' as i8; 16]) };
+pub fn parse_prefix(src: &str, pos: &mut usize) -> Option<RawPrefix> {
+  const SPACE: __m128i = unsafe { mem::transmute([b' ' as i8; 16]) };
+  const AT: __m128i = unsafe { mem::transmute([b'@' as i8; 16]) };
+  const BANG: __m128i = unsafe { mem::transmute([b'!' as i8; 16]) };
 
-    let mut at = usize::MAX;
-    let mut bang = usize::MAX;
+  macro_rules! parse_chunk {
+    ($i:ident, $at:ident, $bang:ident, $data:ident) => {
+      let end_mask = unsafe { simd::_mm_movemask_epi8(simd::_mm_cmpeq_epi8($data, SPACE)) };
+      let at_mask = unsafe { simd::_mm_movemask_epi8(simd::_mm_cmpeq_epi8($data, AT)) };
+      let bang_mask = unsafe { simd::_mm_movemask_epi8(simd::_mm_cmpeq_epi8($data, BANG)) };
 
-    macro_rules! parse_chunk {
-      ($i:ident, $data:ident) => {
-        let end_mask = unsafe { simd::_mm_movemask_epi8(simd::_mm_cmpeq_epi8($data, SPACE)) };
-        let at_mask = unsafe { simd::_mm_movemask_epi8(simd::_mm_cmpeq_epi8($data, AT)) };
-        let bang_mask = unsafe { simd::_mm_movemask_epi8(simd::_mm_cmpeq_epi8($data, BANG)) };
-
-        if at_mask != 0 {
-          at = $i + at_mask.trailing_zeros() as usize
-        };
-        if bang_mask != 0 {
-          bang = $i + bang_mask.trailing_zeros() as usize
-        };
-
-        if end_mask != 0 {
-          let end = $i + end_mask.trailing_zeros() as usize;
-
-          let (prefix, remainder) = unsafe {
-            (
-              remainder.get_unchecked(..end),
-              remainder.get_unchecked(end + 1..),
-            )
-          };
-
-          let prefix = match (bang, at) {
-            (usize::MAX, usize::MAX) => Prefix {
-              nick: None,
-              user: None,
-              host: unsafe { leak(prefix) },
-            },
-            (usize::MAX, _) => Prefix {
-              nick: Some(unsafe { leak(prefix.get_unchecked(..at)) }),
-              user: None,
-              host: unsafe { leak(prefix.get_unchecked(at + 1..)) },
-            },
-            // nick!host -> invalid
-            (_, usize::MAX) => return (None, remainder),
-            (bang, at) => Prefix {
-              nick: Some(unsafe { leak(prefix.get_unchecked(..bang)) }),
-              user: Some(unsafe { leak(prefix.get_unchecked(bang + 1..at)) }),
-              host: unsafe { leak(prefix.get_unchecked(at + 1..)) },
-            },
-          };
-
-          return (Some(prefix), remainder);
-        }
+      if at_mask != 0 {
+        $at = $i + at_mask.trailing_zeros() as usize
       };
-    }
+      if bang_mask != 0 {
+        $bang = $i + bang_mask.trailing_zeros() as usize
+      };
 
-    let mut i = 0usize;
-    while i + 16 <= bytes.len() {
-      let data = unsafe { simd::_mm_loadu_si128(bytes.as_ptr().add(i) as *const _) };
+      if end_mask != 0 {
+        let end = $i + end_mask.trailing_zeros() as usize;
 
-      parse_chunk!(i, data);
+        let prefix = match ($bang, $at) {
+          (usize::MAX, usize::MAX) => RawPrefix {
+            nick: None,
+            user: None,
+            host: Span::from($i..end),
+          },
+          (usize::MAX, _) => RawPrefix {
+            nick: Some(Span::from($i..$at)),
+            user: None,
+            host: Span::from($at + 1..end),
+          },
+          // nick!host -> invalid
+          (_, usize::MAX) => return None,
+          (bang, at) => RawPrefix {
+            nick: Some(Span::from($i..bang)),
+            user: Some(Span::from(bang + 1..at)),
+            host: Span::from(at + 1..end),
+          },
+        };
 
-      i += 16;
-    }
-    if i < bytes.len() {
-      #[repr(align(16))]
-      struct Data([i8; 16]);
-      let mut buf = Data([0; 16]);
-      buf.0[..bytes.len() - i].copy_from_slice(&bytes[i..]);
-      let data = unsafe { simd::_mm_load_si128(buf.0.as_ptr() as *const _) };
+        *pos = end + 1;
 
-      parse_chunk!(i, data);
-    }
+        return Some(prefix);
+      }
+    };
   }
 
-  (None, remainder)
+  if !src[*pos..].starts_with(':') {
+    return None;
+  }
+
+  let start = *pos + 1;
+  let bytes: &[i8] = unsafe { mem::transmute(src.as_bytes()) };
+
+  let mut at = usize::MAX;
+  let mut bang = usize::MAX;
+
+  let mut i = start;
+  while i + 16 <= bytes.len() {
+    let data = unsafe { simd::_mm_loadu_si128(bytes.as_ptr().add(i) as *const _) };
+
+    parse_chunk!(i, at, bang, data);
+
+    i += 16;
+  }
+  if i < bytes.len() {
+    #[repr(align(16))]
+    struct Data([i8; 16]);
+    let mut buf = Data([0; 16]);
+    buf.0[..bytes.len() - i].copy_from_slice(&bytes[i..]);
+    let data = unsafe { simd::_mm_load_si128(buf.0.as_ptr() as *const _) };
+
+    parse_chunk!(i, at, bang, data);
+  }
+
+  None
 }
 
 #[cfg(test)]
@@ -366,16 +369,16 @@ mod tests {
     }
   }
 
+  macro_rules! make {
+    ($($key:ident: $value:expr),* $(,)?) => (
+      [
+        $(($crate::Tag::$key, $value)),*
+      ].into_iter().collect::<Vec<_>>()
+    );
+  }
+
   #[test]
   fn tags() {
-    macro_rules! make {
-      ($($key:ident: $value:expr),* $(,)?) => (
-        [
-          $(($crate::Tag::$key, $value)),*
-        ].into_iter().collect::<Tags>()
-      );
-    }
-
     let cases = [
       ("", (None, "")),
       ("mod=0;id=1000", (None, "mod=0;id=1000")),
@@ -387,25 +390,17 @@ mod tests {
       ),
     ];
 
-    for (i, (string, expected)) in cases.into_iter().enumerate() {
-      let result = parse_tags(string, &Whitelist::<16, _>(whitelist_insert_all));
-      if result.1 != expected.1 || result.0.as_deref() != expected.0.as_deref() {
-        eprintln!("[{i}] actual: {result:?}, expected: {expected:?}");
-        panic!()
-      }
+    for (src, (expected_tags, expected_remainder)) in cases.into_iter() {
+      let mut pos = 0;
+      let actual_tags = parse_tags(src, &mut pos, &Whitelist::<16, _>(whitelist_insert_all))
+        .map(|tags| tags.into_iter().map(|tag| tag.get(src)).collect());
+      assert_eq!(actual_tags, expected_tags);
+      assert_eq!(&src[pos..], expected_remainder);
     }
   }
 
   #[test]
   fn tags_whitelist() {
-    macro_rules! make {
-      ($($key:ident: $value:expr),* $(,)?) => (
-        [
-          $(($crate::Tag::$key, $value)),*
-        ].into_iter().collect::<Tags>()
-      );
-    }
-
     let cases = [
       ("", (None, "")),
       ("mod=0;id=1000", (None, "mod=0;id=1000")),
@@ -414,43 +409,44 @@ mod tests {
       ("@mod=0;id=1000 :asdf", (Some(make! {Mod: "0"}), ":asdf")),
     ];
 
-    for (i, (string, expected)) in cases.into_iter().enumerate() {
-      let result = parse_tags(string, &whitelist!(Mod));
-      if result.1 != expected.1 || result.0.as_deref() != expected.0.as_deref() {
-        eprintln!("[{i}] actual: {result:?}, expected: {expected:?}");
-        panic!()
-      }
+    for (src, (expected_tags, expected_remainder)) in cases.into_iter() {
+      let mut pos = 0;
+      let actual_tags = parse_tags(src, &mut pos, &whitelist!(Mod))
+        .map(|tags| tags.into_iter().map(|tag| tag.get(src)).collect());
+      assert_eq!(actual_tags, expected_tags);
+      assert_eq!(&src[pos..], expected_remainder)
     }
   }
 
   #[test]
   fn prefix() {
     let data = ":nick!user@host <rest>";
-
-    let (prefix, remainder) = parse_prefix(data);
-    assert_eq!(remainder, &data[16..]);
-    let prefix = prefix.unwrap();
-    assert_eq!(prefix.nick.unwrap(), "nick");
-    assert_eq!(prefix.user.unwrap(), "user");
-    assert_eq!(prefix.host, "host");
-    assert_eq!(remainder, "<rest>");
+    let mut pos = 0;
+    let prefix = parse_prefix(data, &mut pos).unwrap();
+    assert_eq!(prefix.nick.unwrap().get(data), "nick");
+    assert_eq!(prefix.user.unwrap().get(data), "user");
+    assert_eq!(prefix.host.get(data), "host");
+    assert_eq!(&data[pos..], "<rest>");
 
     let data = ":nick@host <rest>";
-    let (prefix, remainder) = parse_prefix(data);
-    assert_eq!(remainder, &data[11..]);
-    let prefix = prefix.unwrap();
-    assert_eq!(prefix.nick.unwrap(), "nick");
+    let mut pos = 0;
+    let prefix = parse_prefix(data, &mut pos).unwrap();
+    assert_eq!(prefix.nick.unwrap().get(data), "nick");
     assert!(prefix.user.is_none());
-    assert_eq!(prefix.host, "host");
-    assert_eq!(remainder, "<rest>");
+    assert_eq!(prefix.host.get(data), "host");
+    assert_eq!(&data[pos..], "<rest>");
 
     let data = ":host <rest>";
-    let (prefix, remainder) = parse_prefix(data);
-    assert_eq!(remainder, &data[6..]);
-    let prefix = prefix.unwrap();
+    let mut pos = 0;
+    let prefix = parse_prefix(data, &mut pos).unwrap();
     assert!(prefix.nick.is_none());
     assert!(prefix.user.is_none());
-    assert_eq!(prefix.host, "host");
-    assert_eq!(remainder, "<rest>");
+    assert_eq!(prefix.host.get(data), "host");
+    assert_eq!(&data[pos..], "<rest>");
+  }
+
+  #[test]
+  fn test_parse_data_0() {
+    crate::Message::parse(r"@badge-info=;badges=premium/1;color=#000000;display-name=Vicarun;emotes=;flags=;id=a0414f65-b471-46be-b6cc-f8d7cd0aa62c;login=vicarun;mod=0;msg-id=resub;msg-param-cumulative-months=20;msg-param-months=0;msg-param-multimonth-duration=1;msg-param-multimonth-tenure=0;msg-param-should-share-streak=0;msg-param-sub-plan-name=Channel\sSubscription\s(forsenlol);msg-param-sub-plan=Prime;msg-param-was-gifted=false;room-id=22484632;subscriber=1;system-msg=Vicarun\ssubscribed\swith\sPrime.\sThey've\ssubscribed\sfor\s20\smonths!;tmi-sent-ts=1685664553875;user-id=691811336;user-type= :tmi.twitch.tv USERNOTICE #forsen").unwrap();
   }
 }

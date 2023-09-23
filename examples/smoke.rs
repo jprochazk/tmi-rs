@@ -1,4 +1,4 @@
-use futures_util::{SinkExt, StreamExt};
+/* use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
@@ -42,7 +42,7 @@ async fn handle_message(ws: &mut WebSocket, message: Message) -> Result<()> {
     for line in message.lines() {
       println!("\n{}", line);
 
-      let a = twitch::Message::parse(line).unwrap();
+      let a = twitch::MessageParts::parse(line).unwrap();
       let b = twitch_irc::message::IRCMessage::parse(line).unwrap();
 
       assert_eq!(a.command().as_str(), b.command);
@@ -81,3 +81,6 @@ async fn handle_message(ws: &mut WebSocket, message: Message) -> Result<()> {
 
   Ok(())
 }
+ */
+
+fn main() {}

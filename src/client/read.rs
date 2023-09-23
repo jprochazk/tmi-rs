@@ -12,7 +12,8 @@ pub type ReadStream = Fuse<LinesStream<BufReader<ReadHalf<conn::Stream>>>>;
 impl Client {
   pub async fn message(&mut self) -> Result<Message, ReadError> {
     if let Some(message) = self.reader.next().await {
-      Ok(Message::parse(message?).map_err(ReadError::Parse)?)
+      let message = message?;
+      Ok(Message::parse(&message).ok_or_else(|| ReadError::Parse(message))?)
     } else {
       Err(ReadError::StreamClosed)
     }

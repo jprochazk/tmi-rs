@@ -1,102 +1,101 @@
-use super::{leak, ParsedTags, Prefix, Tags, Whitelist};
+use super::{RawPrefix, RawTags, Span, Whitelist};
 
 /// `@a=a;b=b;c= :<rest>`
 #[inline(always)]
-pub fn parse_tags<'src, const IC: usize, F>(
-  remainder: &'src str,
+pub fn parse_tags<const IC: usize, F>(
+  src: &str,
+  pos: &mut usize,
   whitelist: &Whitelist<IC, F>,
-) -> (Option<ParsedTags<'static>>, &'src str)
+) -> Option<RawTags>
 where
-  F: for<'a> Fn(&'a mut Tags<'static>, &'static str, &'static str),
+  F: Fn(&str, &mut RawTags, Span, Span),
 {
-  if let Some(remainder) = remainder.strip_prefix('@') {
-    let mut tags = Tags::with_capacity(IC);
-    let mut key = (0, 0);
-    let mut value = (0, 0);
-    let mut end = 0;
-
-    let bytes = remainder.as_bytes();
-    for i in 0..bytes.len() {
-      match unsafe { *bytes.get_unchecked(i) } {
-        b' ' if unsafe { *bytes.get_unchecked(i + 1) } == b':' => {
-          value.1 = i;
-          if key.1 - key.0 > 0 {
-            let tag = unsafe { leak(&remainder[key.0..key.1]) };
-            let value = unsafe { leak(&remainder[value.0..value.1]) };
-            whitelist.maybe_insert(&mut tags, tag, value);
-          }
-          end = i + 1;
-          break;
-        }
-        b'=' if value.1 <= key.1 => {
-          key.1 = i;
-          value.0 = i + 1;
-          value.1 = i + 1;
-        }
-        b';' => {
-          value.1 = i;
-
-          let tag = unsafe { leak(&remainder[key.0..key.1]) };
-          let value = unsafe { leak(&remainder[value.0..value.1]) };
-          whitelist.maybe_insert(&mut tags, tag, value);
-
-          key.0 = i + 1;
-          key.1 = i + 1;
-        }
-        _ => {}
-      }
-    }
-
-    (Some(tags), &remainder[end..])
-  } else {
-    (None, remainder)
+  if !src[*pos..].starts_with('@') {
+    return None;
   }
+
+  let start = *pos + 1;
+  let mut tags = RawTags::with_capacity(IC);
+  let mut key = Span::from(start..0);
+  let mut value = Span::from(0..0);
+  let mut end = 0;
+
+  let bytes = src.as_bytes();
+  for i in start..bytes.len() {
+    match unsafe { *bytes.get_unchecked(i) } {
+      b' ' if unsafe { *bytes.get_unchecked(i + 1) } == b':' => {
+        value.end = i as u32;
+        if key.end - key.start > 0 {
+          whitelist.maybe_insert(src, &mut tags, key, value);
+        }
+        end = i + 1;
+        break;
+      }
+      b'=' if value.end <= key.end => {
+        let i = i as u32;
+
+        key.end = i;
+        value.start = i + 1;
+        value.end = i + 1;
+      }
+      b';' => {
+        let i = i as u32;
+
+        value.end = i;
+        whitelist.maybe_insert(src, &mut tags, key, value);
+        key.start = i + 1;
+        key.end = i + 1;
+      }
+      _ => {}
+    }
+  }
+
+  *pos = end;
+
+  Some(tags)
 }
 
 /// `:nick!user@host <rest>`
 #[inline(always)]
-pub fn parse_prefix(remainder: &str) -> (Option<Prefix<'static>>, &str) {
-  if let Some(remainder) = remainder.strip_prefix(':') {
-    // :host <rest>
-    // :nick@host <rest>
-    // :nick!user@host <rest>
-    let bytes = remainder.as_bytes();
-
-    let mut host_start = None;
-    let mut nick = None;
-    let mut nick_end = None;
-    let mut user = None;
-    for i in 0..bytes.len() {
-      match unsafe { *bytes.get_unchecked(i) } {
-        b' ' => {
-          let host_range = match host_start {
-            Some(host_start) => host_start..i,
-            None => 0..i,
-          };
-          let host = unsafe { &*(&remainder[host_range] as *const _) };
-
-          return (Some(Prefix { nick, user, host }), &remainder[i + 1..]);
-        }
-        b'@' => {
-          host_start = Some(i + 1);
-          if let Some(nick_end) = nick_end {
-            user = Some(unsafe { &*(&remainder[nick_end + 1..i] as *const _) });
-          } else {
-            nick = Some(unsafe { &*(&remainder[..i] as *const _) });
-          }
-        }
-        b'!' => {
-          nick = Some(unsafe { &*(&remainder[..i] as *const _) });
-          nick_end = Some(i);
-        }
-        _ => {}
-      }
-    }
-
-    (None, remainder)
-  } else {
-    (None, remainder)
+pub fn parse_prefix(src: &str, pos: &mut usize) -> Option<RawPrefix> {
+  if !src[*pos..].starts_with(':') {
+    return None;
   }
+
+  // :host <rest>
+  // :nick@host <rest>
+  // :nick!user@host <rest>
+  let bytes = src.as_bytes();
+
+  let start = *pos + 1;
+  let mut host_start = start;
+  let mut nick = None;
+  let mut nick_end = None;
+  let mut user = None;
+  for i in start..bytes.len() {
+    match unsafe { *bytes.get_unchecked(i) } {
+      b' ' => {
+        let host = Span::from(host_start..i);
+        *pos = i + 1;
+        return Some(RawPrefix { nick, user, host });
+      }
+      b'@' => {
+        host_start = i + 1;
+        if let Some(nick_end) = nick_end {
+          user = Some(Span::from(nick_end + 1..i));
+        } else {
+          nick = Some(Span::from(start..i));
+        }
+      }
+      b'!' => {
+        nick = Some(Span::from(start..i));
+        nick_end = Some(i);
+      }
+      _ => {}
+    }
+  }
+
+  None
 }
 
 #[cfg(test)]
@@ -108,51 +107,63 @@ mod tests {
   #[test]
   fn tags() {
     let data = "@login=test;id=asdf :<rest>";
+    let mut pos = 0;
 
-    let (tags, remainder) = parse_tags(data, &Whitelist::<16, _>(whitelist_insert_all));
-    assert_eq!(remainder, &data[20..]);
-    let tags = tags.unwrap();
+    let tags = parse_tags(data, &mut pos, &Whitelist::<16, _>(whitelist_insert_all));
+    assert_eq!(pos, 20);
+    let tags = tags
+      .unwrap()
+      .into_iter()
+      .map(|tag| tag.get(data))
+      .collect::<Vec<_>>();
     assert_eq!(&tags[..], &[(Tag::Login, "test"), (Tag::Id, "asdf")])
   }
 
   #[test]
   fn whitelist_tags() {
     let data = "@login=test;id=asdf :<rest>";
+    let mut pos = 0;
 
-    let (tags, remainder) = parse_tags(data, &whitelist!(Login));
-    assert_eq!(remainder, &data[20..]);
-    let tags = tags.unwrap();
+    let tags = parse_tags(data, &mut pos, &whitelist!(Login));
+    assert_eq!(pos, 20);
+    let tags = tags
+      .unwrap()
+      .into_iter()
+      .map(|tag| tag.get(data))
+      .collect::<Vec<_>>();
     assert_eq!(&tags[..], &[(Tag::Login, "test")])
   }
 
   #[test]
   fn prefix() {
     let data = ":nick!user@host <rest>";
-
-    let (prefix, remainder) = parse_prefix(data);
-    assert_eq!(remainder, &data[16..]);
+    let mut pos = 0;
+    let prefix = parse_prefix(data, &mut pos);
+    assert_eq!(pos, 16);
     let prefix = prefix.unwrap();
-    assert_eq!(prefix.nick.unwrap(), "nick");
-    assert_eq!(prefix.user.unwrap(), "user");
-    assert_eq!(prefix.host, "host");
-    assert_eq!(remainder, "<rest>");
+    assert_eq!(prefix.nick.unwrap().get(data), "nick");
+    assert_eq!(prefix.user.unwrap().get(data), "user");
+    assert_eq!(prefix.host.get(data), "host");
+    assert_eq!(&data[pos..], "<rest>");
 
     let data = ":nick@host <rest>";
-    let (prefix, remainder) = parse_prefix(data);
-    assert_eq!(remainder, &data[11..]);
+    let mut pos = 0;
+    let prefix = parse_prefix(data, &mut pos);
+    assert_eq!(pos, 11);
     let prefix = prefix.unwrap();
-    assert_eq!(prefix.nick.unwrap(), "nick");
+    assert_eq!(prefix.nick.unwrap().get(data), "nick");
     assert!(prefix.user.is_none());
-    assert_eq!(prefix.host, "host");
-    assert_eq!(remainder, "<rest>");
+    assert_eq!(prefix.host.get(data), "host");
+    assert_eq!(&data[pos..], "<rest>");
 
     let data = ":host <rest>";
-    let (prefix, remainder) = parse_prefix(data);
-    assert_eq!(remainder, &data[6..]);
+    let mut pos = 0;
+    let prefix = parse_prefix(data, &mut pos);
+    assert_eq!(pos, 6);
     let prefix = prefix.unwrap();
     assert!(prefix.nick.is_none());
     assert!(prefix.user.is_none());
-    assert_eq!(prefix.host, "host");
-    assert_eq!(remainder, "<rest>");
+    assert_eq!(prefix.host.get(data), "host");
+    assert_eq!(&data[pos..], "<rest>");
   }
 }

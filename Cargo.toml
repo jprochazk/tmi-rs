@@ -51,11 +51,6 @@ lto = "fat"
 [profile.release]
 lto = "fat"
 
-[profile.release-debug]
-inherits = "release"
-debug = true
-
-
 [lib]
 bench = false
 
