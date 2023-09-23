@@ -2,7 +2,7 @@ use super::{RawPrefix, RawTags, Span, Whitelist};
 
 /// `@a=a;b=b;c= :<rest>`
 #[inline(always)]
-pub(crate) fn parse_tags<const IC: usize, F>(
+pub fn parse_tags<const IC: usize, F>(
   src: &str,
   pos: &mut usize,
   whitelist: &Whitelist<IC, F>,
@@ -57,7 +57,7 @@ where
 
 /// `:nick!user@host <rest>`
 #[inline(always)]
-pub(crate) fn parse_prefix(src: &str, pos: &mut usize) -> Option<RawPrefix> {
+pub fn parse_prefix(src: &str, pos: &mut usize) -> Option<RawPrefix> {
   if !src[*pos..].starts_with(':') {
     return None;
   }

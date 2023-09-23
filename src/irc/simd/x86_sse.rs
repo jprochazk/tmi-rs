@@ -12,7 +12,7 @@ use std::ops::Add;
 /// Tags consist of semicolon-separated key-value pairs.
 /// The tag list is terminated by a ` ` character.
 #[inline(always)]
-pub(crate) fn parse_tags<const IC: usize, F>(
+pub fn parse_tags<const IC: usize, F>(
   src: &str,
   pos: &mut usize,
   whitelist: &Whitelist<IC, F>,
@@ -251,7 +251,7 @@ fn find_semi_or_space(s: &str) -> Option<Found> {
 ///
 /// Twitch never sends the `nick@host` form, but we still handle it.
 #[inline(always)]
-pub(crate) fn parse_prefix(src: &str, pos: &mut usize) -> Option<RawPrefix> {
+pub fn parse_prefix(src: &str, pos: &mut usize) -> Option<RawPrefix> {
   const SPACE: __m128i = unsafe { mem::transmute([b' ' as i8; 16]) };
   const AT: __m128i = unsafe { mem::transmute([b'@' as i8; 16]) };
   const BANG: __m128i = unsafe { mem::transmute([b'!' as i8; 16]) };

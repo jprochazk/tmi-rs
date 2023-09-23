@@ -25,7 +25,7 @@ pub use crate::msg::scalar::parse_prefix;
 /// Tags consist of semicolon-separated key-value pairs.
 /// The tag list is terminated by a ` ` character.
 #[inline(always)]
-pub(crate) fn parse_tags<const IC: usize, F>(
+pub fn parse_tags<const IC: usize, F>(
   src: &str,
   pos: &mut usize,
   whitelist: &Whitelist<IC, F>,
