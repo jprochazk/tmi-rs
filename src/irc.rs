@@ -386,14 +386,12 @@ impl<const IC: usize, F> Whitelist<IC, F>
 where
   F: Fn(&str, &mut RawTags, Span, Span),
 {
-  /// # Safety
-  /// The callback `f` must guarantee not to leak any of its parameters.
-  ///
-  /// The easiest way to ensure safety is to use the `twitch::whitelist` macro.
-  pub unsafe fn new(f: F) -> Self {
+  #[doc(hidden)]
+  pub fn new(f: F) -> Self {
     Self(f)
   }
 
+  #[doc(hidden)]
   #[inline(always)]
   pub(crate) fn maybe_insert(&self, src: &str, map: &mut RawTags, tag: Span, value: Span) {
     (self.0)(src, map, tag, value)
