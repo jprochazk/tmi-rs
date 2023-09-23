@@ -1,8 +1,8 @@
 #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
-pub mod x86_sse;
+pub(crate) mod x86_sse;
 
 #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
-pub use x86_sse::*;
+pub(crate) use x86_sse::*;
 
 #[cfg(all(target_arch = "x86_64", not(target_feature = "sse2")))]
 const _: () = {
@@ -10,10 +10,10 @@ const _: () = {
 };
 
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-pub mod arm_neon;
+pub(crate) mod arm_neon;
 
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-pub use arm_neon::*;
+pub(crate) use arm_neon::*;
 
 #[cfg(all(target_arch = "aarch64", not(target_feature = "neon")))]
 const _: () = {
