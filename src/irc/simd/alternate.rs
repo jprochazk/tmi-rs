@@ -19,7 +19,7 @@ const fn fill(e: u8) -> Vector {
 pub use crate::msg::scalar::parse_prefix;
 
 #[inline(always)]
-pub fn parse_tags<'src, const IC: usize, F>(
+pub(crate) fn parse_tags<'src, const IC: usize, F>(
   remainder: &'src str,
   whitelist: &Whitelist<IC, F>,
 ) -> (Option<ParsedTags<'static>>, &'src str)
