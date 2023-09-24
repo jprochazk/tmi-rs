@@ -1,5 +1,5 @@
 use super::{conn, Client};
-use crate::common::{Channel, InvalidChannelName, JoinIter};
+use crate::common::{Channel, InvalidChannelName};
 use std::fmt::Display;
 use tokio::io;
 use tokio::io::{AsyncWriteExt, WriteHalf};
@@ -22,13 +22,30 @@ impl Client {
     Ok(())
   }
 
+  pub async fn join<'a, S>(&mut self, channel: S) -> Result<(), WriteError>
+  where
+    S: TryInto<Channel<'a>, Error = InvalidChannelName> + 'a,
+  {
+    use std::fmt::Write;
+
+    with_scratch!(self, |f| {
+      let channel = channel.try_into()?;
+      let _ = write!(f, "JOIN {channel}\r\n");
+
+      tracing::trace!(data = f, "sending message");
+      self.send(f.as_str()).await?;
+    });
+
+    Ok(())
+  }
+
   /// Send a `JOIN` command.
   ///
   /// ⚠ This call is not rate limited in any way.
   ///
   /// ⚠ Each channel in `channels` MUST be a valid channel name
   /// prefixed by `#`.
-  pub async fn join<'a, I, S>(&mut self, channels: I) -> Result<(), WriteError>
+  pub async fn join_all<'a, I, S>(&mut self, channels: I) -> Result<(), WriteError>
   where
     I: IntoIterator<Item = S>,
     S: TryInto<Channel<'a>, Error = InvalidChannelName> + 'a,
@@ -36,14 +53,18 @@ impl Client {
     use std::fmt::Write;
 
     with_scratch!(self, |f| {
-      let _ = write!(
-        f,
-        "JOIN {}\r\n",
-        channels
-          .into_iter()
-          .flat_map(|v| v.try_into().ok())
-          .join(',')
-      );
+      let _ = f.write_str("JOIN ");
+      let mut channels = channels.into_iter();
+      if let Some(channel) = channels.next() {
+        let channel = channel.try_into()?;
+        let _ = write!(f, "{channel}");
+      }
+      for channel in channels {
+        let channel = channel.try_into()?;
+        let _ = write!(f, ",{channel}");
+      }
+      let _ = f.write_str("\r\n");
+
       tracing::trace!(data = f, "sending message");
       self.send(f.as_str()).await?;
     });
@@ -122,6 +143,7 @@ impl Default for SameMessageBypass {
   }
 }
 
+/// An IRC message, terminated by `\r\n`.
 pub struct RawMessage<'a> {
   data: &'a str,
 }

@@ -1,4 +1,4 @@
-use super::{parse_badges, split_comma, Badge, SmallVec};
+use super::{parse_badges, split_comma, Badge};
 use crate::irc::{Command, IrcMessageRef, Tag};
 
 /// Sent upon joining a channel, or upon successfully sending a `PRIVMSG` message to a channel.
@@ -16,7 +16,7 @@ pub struct UserState<'src> {
   pub user_name: &'src str,
 
   /// List of channel-specific badges.
-  pub badges: SmallVec<Badge<'src>, 2>,
+  pub badges: Vec<Badge<'src>>,
 
   /// Emote sets which are available in this channel.
   pub emote_sets: Vec<&'src str>,

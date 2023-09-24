@@ -1,4 +1,4 @@
-use super::{parse_badges, parse_emotes, Badge, Emote, SmallVec, User};
+use super::{parse_badges, parse_emotes, Badge, Emote, User};
 use crate::irc::{Command, IrcMessageRef, Tag};
 
 /// A direct message between users.
@@ -14,7 +14,7 @@ pub struct Whisper<'src> {
   pub text: &'src str,
 
   /// List of badges visible in the whisper window.
-  pub badges: SmallVec<Badge<'src>, 2>,
+  pub badges: Vec<Badge<'src>>,
 
   /// The emote ranges present in this message.
   pub emotes: Vec<Emote<'src>>,

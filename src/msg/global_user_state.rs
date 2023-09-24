@@ -1,4 +1,4 @@
-use super::{parse_badges, split_comma, Badge, SmallVec};
+use super::{parse_badges, split_comma, Badge};
 use crate::irc::{Command, IrcMessageRef, Tag};
 
 /// This command is sent once upon successful login to TMI.
@@ -14,7 +14,7 @@ pub struct GlobalUserState<'src> {
   pub name: &'src str,
 
   /// List of global badges.
-  pub badges: SmallVec<Badge<'src>, 2>,
+  pub badges: Vec<Badge<'src>>,
 
   /// Emote sets which are available globally.
   pub emote_sets: Vec<&'src str>,

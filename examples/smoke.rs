@@ -12,7 +12,7 @@ async fn main() -> Result<()> {
 
   let mut client = Client::connect(Default::default()).await?;
 
-  client.join(["#moscowwbish"]).await?;
+  client.join_all(["#riotgames"]).await?;
 
   loop {
     select! {
@@ -29,8 +29,6 @@ async fn main() -> Result<()> {
 }
 
 async fn handle_message(client: &mut Client, message: IrcMessage) -> Result<()> {
-  println!("\n{}", message.raw());
-
   let a = message.as_ref();
   let b = twitch_irc::message::IRCMessage::parse(message.raw()).unwrap();
 
@@ -52,12 +50,19 @@ async fn handle_message(client: &mut Client, message: IrcMessage) -> Result<()> 
     }
     print!("}} ");
   }
-  print!(
-    "{} {} {}",
-    a.command(),
-    a.channel().unwrap_or("<no channel>"),
-    a.params().unwrap_or("")
-  );
+
+  if let Some(prefix) = a.prefix() {
+    print!("{prefix} ");
+  }
+  print!("{} ", a.command());
+  if let Some(channel) = a.channel() {
+    print!("{channel} ");
+  }
+  if let Some(params) = a.params() {
+    print!("{params} ");
+  }
+  println!();
+
   if a.command() == Command::Ping {
     client.send("PONG\r\n").await?;
   }

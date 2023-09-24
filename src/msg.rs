@@ -1,11 +1,11 @@
-// TODO: collect large amount of messages and get median number of badges
-//       to have statistically significant value for use as the inline
-//       slots in `SmallVec`
 // TODO: `serde` derives under feature
 // TODO: replace all `ok()?` with `and_then`
+// TODO: support `msg-id=announcement` in `UserNotice`
+//       @emotes=;login=pajbot;vip=0;tmi-sent-ts=1695554663565;flags=;mod=1;subscriber=1;id=bb1bec25-8f26-4ba3-a084-a6a2ca332f00;badge-info=subscriber/93;system-msg=;user-id=82008718;user-type=mod;room-id=11148817;badges=moderator/1,subscriber/3072;msg-param-color=PRIMARY;msg-id=announcement;color=#2E8B57;display-name=pajbot :tmi.twitch.tv USERNOTICE #pajlada :󠀀$ping xd
 
 use crate::irc::{IrcMessage, IrcMessageRef};
 use crate::Span;
+use smallvec::SmallVec;
 
 impl IrcMessage {
   pub fn cast<'src, T: FromIrc<'src>>(&'src self) -> Option<T> {
@@ -64,8 +64,6 @@ impl<'src> FromIrc<'src> for Message<'src> {
     Some(message)
   }
 }
-
-type SmallVec<T, const N: usize> = smallvec::SmallVec<[T; N]>;
 
 /// A chat badge.
 #[derive(Clone, Debug)]
@@ -202,15 +200,15 @@ fn split_comma(s: &str) -> impl Iterator<Item = &str> + '_ {
   s.split(',')
 }
 
-fn parse_badges<'src>(badges: &'src str, badge_info: &'src str) -> SmallVec<Badge<'src>, 2> {
+fn parse_badges<'src>(badges: &'src str, badge_info: &'src str) -> Vec<Badge<'src>> {
   if badges.is_empty() {
-    return SmallVec::new();
+    return Vec::new();
   }
 
   let badge_info = badge_info
     .split(',')
     .flat_map(|info| info.split_once('/'))
-    .collect::<SmallVec<_, 16>>();
+    .collect::<SmallVec<[_; 32]>>();
 
   badges
     .split(',')

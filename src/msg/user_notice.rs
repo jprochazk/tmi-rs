@@ -1,4 +1,4 @@
-use super::{parse_badges, parse_emotes, parse_timestamp, Badge, Emote, SmallVec, User};
+use super::{parse_badges, parse_emotes, parse_timestamp, Badge, Emote, User};
 use crate::{Command, IrcMessageRef, Tag};
 use chrono::{DateTime, Utc};
 
@@ -34,7 +34,7 @@ pub struct UserNotice<'src> {
   pub event_id: &'src str,
 
   /// List of channel badges enabled by the user in the [channel][`UserNotice::channel`].
-  pub badges: SmallVec<Badge<'src>, 2>,
+  pub badges: Vec<Badge<'src>>,
 
   /// The emote ranges present in this message.
   pub emotes: Vec<Emote<'src>>,

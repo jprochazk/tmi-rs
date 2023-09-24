@@ -1,6 +1,4 @@
-use super::{
-  parse_badges, parse_emotes, parse_message_text, parse_timestamp, Badge, Emote, SmallVec, User,
-};
+use super::{parse_badges, parse_emotes, parse_message_text, parse_timestamp, Badge, Emote, User};
 use crate::irc::{Command, IrcMessageRef, Tag};
 use chrono::{DateTime, Utc};
 
@@ -25,7 +23,7 @@ pub struct Privmsg<'src> {
   pub is_action: bool,
 
   /// List of channel badges enabled by the user in the [channel][`Privmsg::channel`].
-  pub badges: SmallVec<Badge<'src>, 2>,
+  pub badges: Vec<Badge<'src>>,
 
   /// The user's selected name color.
   ///

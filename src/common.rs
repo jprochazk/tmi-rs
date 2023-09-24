@@ -40,7 +40,7 @@ impl std::fmt::Display for InvalidChannelName {
 impl std::error::Error for InvalidChannelName {}
 
 #[doc(hidden)]
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Span {
   pub start: u32,
   pub end: u32,

@@ -716,7 +716,7 @@ impl<'src> Display for Tag<'src> {
 }
 
 #[doc(hidden)]
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct RawPrefix {
   nick: Option<Span>,
   user: Option<Span>,
@@ -733,11 +733,22 @@ impl RawPrefix {
   }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Prefix<'src> {
   pub nick: Option<&'src str>,
   pub user: Option<&'src str>,
   pub host: &'src str,
+}
+
+impl<'src> std::fmt::Display for Prefix<'src> {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match (self.nick, self.user, self.host) {
+      (Some(nick), Some(user), host) => write!(f, "{nick}!{user}@{host}"),
+      (Some(nick), None, host) => write!(f, "{nick}@{host}"),
+      (None, None, host) => write!(f, "{host}"),
+      _ => Ok(()),
+    }
+  }
 }
 
 /// `COMMAND <rest>`
@@ -859,6 +870,22 @@ mod tests {
       assert_eq!(msg.command(), Command::Notice);
       assert_eq!(msg.text(), Some("Improperly formatted auth"));
       assert_eq!(msg.params(), Some("* :Improperly formatted auth"));
+    }
+
+    #[test]
+    fn regression_parse_prefix() {
+      let data = ":justinfan57624!justinfan57624@justinfan57624.tmi.twitch.tv JOIN #riotgames";
+
+      let msg = IrcMessageRef::parse(data).unwrap();
+      eprintln!("{:?}", msg.parts.prefix);
+      assert_eq!(
+        msg.prefix(),
+        Some(Prefix {
+          nick: Some("justinfan57624"),
+          user: Some("justinfan57624"),
+          host: "justinfan57624.tmi.twitch.tv"
+        })
+      );
     }
 
     #[test]

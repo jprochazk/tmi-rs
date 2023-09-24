@@ -257,7 +257,7 @@ pub fn parse_prefix(src: &str, pos: &mut usize) -> Option<RawPrefix> {
   const BANG: __m128i = unsafe { mem::transmute([b'!' as i8; 16]) };
 
   macro_rules! parse_chunk {
-    ($i:ident, $at:ident, $bang:ident, $data:ident) => {
+    ($i:ident, $at:ident, $bang:ident, $start:ident, $data:ident) => {
       let end_mask = unsafe { simd::_mm_movemask_epi8(simd::_mm_cmpeq_epi8($data, SPACE)) };
       let at_mask = unsafe { simd::_mm_movemask_epi8(simd::_mm_cmpeq_epi8($data, AT)) };
       let bang_mask = unsafe { simd::_mm_movemask_epi8(simd::_mm_cmpeq_epi8($data, BANG)) };
@@ -276,17 +276,17 @@ pub fn parse_prefix(src: &str, pos: &mut usize) -> Option<RawPrefix> {
           (usize::MAX, usize::MAX) => RawPrefix {
             nick: None,
             user: None,
-            host: Span::from($i..end),
+            host: Span::from($start..end),
           },
           (usize::MAX, _) => RawPrefix {
-            nick: Some(Span::from($i..$at)),
+            nick: Some(Span::from($start..$at)),
             user: None,
             host: Span::from($at + 1..end),
           },
           // nick!host -> invalid
           (_, usize::MAX) => return None,
           (bang, at) => RawPrefix {
-            nick: Some(Span::from($i..bang)),
+            nick: Some(Span::from($start..bang)),
             user: Some(Span::from(bang + 1..at)),
             host: Span::from(at + 1..end),
           },
@@ -313,7 +313,7 @@ pub fn parse_prefix(src: &str, pos: &mut usize) -> Option<RawPrefix> {
   while i + 16 <= bytes.len() {
     let data = unsafe { simd::_mm_loadu_si128(bytes.as_ptr().add(i) as *const _) };
 
-    parse_chunk!(i, at, bang, data);
+    parse_chunk!(i, at, bang, start, data);
 
     i += 16;
   }
@@ -324,7 +324,7 @@ pub fn parse_prefix(src: &str, pos: &mut usize) -> Option<RawPrefix> {
     buf.0[..bytes.len() - i].copy_from_slice(&bytes[i..]);
     let data = unsafe { simd::_mm_load_si128(buf.0.as_ptr() as *const _) };
 
-    parse_chunk!(i, at, bang, data);
+    parse_chunk!(i, at, bang, start, data);
   }
 
   None
