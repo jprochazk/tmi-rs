@@ -1,10 +1,10 @@
 [Blazingly fast](#performance) 🚀 Rust 🦀 library for interacting with [twitch.tv](https://twitch.tv)'s chat interface.
 
-```
+```text,ignore
 $ cargo add tmi
 ```
 
-```rust,no_run
+```rust,ignore
 let mut client = tmi::Client::connect().await?;
 client.join("#moscowwbish").await?;
 
