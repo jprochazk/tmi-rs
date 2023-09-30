@@ -6,7 +6,7 @@ description = "twitch.tv messaging interface"
 repository = "https://github.com/jprochazk/tmi-rs"
 edition = "2021"
 license = "MIT"
-exclude = ["**/*.snap", "/benches", "/examples", "/.vscode", "/.github"]
+exclude = ["**/*.snap", "/.vscode", "/.github"]
 
 [features]
 default = ["simd", "client", "message-types"]
