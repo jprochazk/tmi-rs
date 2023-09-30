@@ -48,10 +48,11 @@ impl<'src> super::FromIrc<'src> for GlobalUserState<'src> {
     Some(GlobalUserState {
       id: message.tag(Tag::UserId)?,
       name: message.tag(Tag::DisplayName)?.into(),
-      badges: parse_badges(
-        message.tag(Tag::Badges).unwrap_or_default(),
-        message.tag(Tag::BadgeInfo).unwrap_or_default(),
-      ),
+      badges: message
+        .tag(Tag::Badges)
+        .zip(message.tag(Tag::BadgeInfo))
+        .map(|(badges, badge_info)| parse_badges(badges, badge_info))
+        .unwrap_or_default(),
       emote_sets: message
         .tag(Tag::EmoteSets)
         .map(split_comma)

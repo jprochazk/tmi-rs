@@ -50,7 +50,11 @@ impl<'src> super::FromIrc<'src> for UserState<'src> {
     Some(UserState {
       channel: message.channel()?,
       user_name: message.tag(Tag::DisplayName)?,
-      badges: parse_badges(message.tag(Tag::Badges)?, message.tag(Tag::BadgeInfo)?),
+      badges: message
+        .tag(Tag::Badges)
+        .zip(message.tag(Tag::BadgeInfo))
+        .map(|(badges, badge_info)| parse_badges(badges, badge_info))
+        .unwrap_or_default(),
       emote_sets: message
         .tag(Tag::EmoteSets)
         .map(split_comma)
@@ -66,17 +70,18 @@ impl<'src> From<UserState<'src>> for super::Message<'src> {
     super::Message::UserState(msg)
   }
 }
-/*
+
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::msg::*;
-  use pretty_assertions::assert_eq;
 
   #[test]
-  fn parse_globaluserstate_new_user() {
-    assert_irc_snapshot!("@badge-info=;badges=;color=;display-name=randers811;emote-sets=0;user-id=553170741;user-type= :tmi.twitch.tv GLOBALUSERSTATE");
+  fn parse_userstate() {
+    assert_irc_snapshot!(UserState, "@badge-info=;badges=;color=#FF0000;display-name=TESTUSER;emote-sets=0;mod=0;subscriber=0;user-type= :tmi.twitch.tv USERSTATE #randers");
+  }
 
+  #[test]
+  fn parse_userstate_uuid_emote_set_id() {
+    assert_irc_snapshot!(UserState, "@badge-info=;badges=moderator/1;color=#8A2BE2;display-name=TESTUSER;emote-sets=0,75c09c7b-332a-43ec-8be8-1d4571706155;mod=1;subscriber=0;user-type=mod :tmi.twitch.tv USERSTATE #randers");
   }
 }
- */

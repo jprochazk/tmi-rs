@@ -60,7 +60,11 @@ impl<'src> super::FromIrc<'src> for Whisper<'src> {
       },
       text,
       color: message.tag(Tag::Color).filter(is_not_empty),
-      badges: parse_badges(message.tag(Tag::Badges)?, message.tag(Tag::BadgeInfo)?),
+      badges: message
+        .tag(Tag::Badges)
+        .zip(message.tag(Tag::BadgeInfo))
+        .map(|(badges, badge_info)| parse_badges(badges, badge_info))
+        .unwrap_or_default(),
       emotes: message.tag(Tag::Emotes).unwrap_or_default(),
     })
   }
@@ -71,17 +75,13 @@ impl<'src> From<Whisper<'src>> for super::Message<'src> {
     super::Message::Whisper(msg)
   }
 }
-/*
+
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::msg::*;
-  use pretty_assertions::assert_eq;
 
   #[test]
-  fn parse_globaluserstate_new_user() {
-    assert_irc_snapshot!("@badge-info=;badges=;color=;display-name=randers811;emote-sets=0;user-id=553170741;user-type= :tmi.twitch.tv GLOBALUSERSTATE");
-
+  fn parse_whipser() {
+    assert_irc_snapshot!(Whisper, "@badges=;color=#19E6E6;display-name=randers;emotes=25:22-26;message-id=1;thread-id=40286300_553170741;turbo=0;user-id=40286300;user-type= :randers!randers@randers.tmi.twitch.tv WHISPER randers811 :hello, this is a test Kappa");
   }
 }
- */

@@ -535,7 +535,11 @@ impl<'src> super::FromIrc<'src> for UserNotice<'src> {
         .map(Unescaped::new),
       event,
       event_id,
-      badges: parse_badges(message.tag(Tag::Badges)?, message.tag(Tag::BadgeInfo)?),
+      badges: message
+        .tag(Tag::Badges)
+        .zip(message.tag(Tag::BadgeInfo))
+        .map(|(badges, badge_info)| parse_badges(badges, badge_info))
+        .unwrap_or_default(),
       emotes: message.tag(Tag::Emotes).unwrap_or_default(),
       color: message.tag(Tag::Color).filter(is_not_empty),
       message_id: message.tag(Tag::Id)?,

@@ -1,0 +1,20 @@
+---
+source: src/msg/user_state.rs
+expression: "f(\"@badge-info=;badges=moderator/1;color=#8A2BE2;display-name=TESTUSER;emote-sets=0,75c09c7b-332a-43ec-8be8-1d4571706155;mod=1;subscriber=0;user-type=mod :tmi.twitch.tv USERSTATE #randers\")"
+---
+UserState {
+    channel: Channel(
+        "#randers",
+    ),
+    user_name: "TESTUSER",
+    badges: [
+        Moderator,
+    ],
+    emote_sets: [
+        "0",
+        "75c09c7b-332a-43ec-8be8-1d4571706155",
+    ],
+    color: Some(
+        "#8A2BE2",
+    ),
+}

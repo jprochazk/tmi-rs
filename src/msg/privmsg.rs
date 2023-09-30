@@ -129,7 +129,11 @@ impl<'src> super::FromIrc<'src> for Privmsg<'src> {
       reply_to,
       text,
       is_action,
-      badges: parse_badges(message.tag(Tag::Badges)?, message.tag(Tag::BadgeInfo)?),
+      badges: message
+        .tag(Tag::Badges)
+        .zip(message.tag(Tag::BadgeInfo))
+        .map(|(badges, badge_info)| parse_badges(badges, badge_info))
+        .unwrap_or_default(),
       color: message.tag(Tag::Color).filter(is_not_empty),
       bits: message.tag(Tag::Bits).and_then(|bits| bits.parse().ok()),
       emotes: message.tag(Tag::Emotes).unwrap_or_default(),
