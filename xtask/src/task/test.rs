@@ -17,11 +17,5 @@ impl Test {
 }
 
 fn tests() -> Command {
-  cargo("insta").with_args([
-    "test",
-    "--package=twitch",
-    "--all-features",
-    "--lib",
-    "--review",
-  ])
+  cargo("insta").with_args(["test", "--all-features", "--lib", "--review"])
 }

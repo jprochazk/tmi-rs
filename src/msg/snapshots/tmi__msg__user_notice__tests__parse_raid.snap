@@ -1,0 +1,48 @@
+---
+source: src/msg/user_notice.rs
+expression: "f(\"@badge-info=;badges=sub-gifter/50;color=;display-name=AdamAtReflectStudios;emotes=;flags=;id=e21409b1-d25d-4a1a-b5cf-ef27d8b7030e;login=adamatreflectstudios;mod=0;msg-id=subgift;msg-param-gift-months=1;msg-param-months=2;msg-param-origin-id=da\\\\s39\\\\sa3\\\\see\\\\s5e\\\\s6b\\\\s4b\\\\s0d\\\\s32\\\\s55\\\\sbf\\\\sef\\\\s95\\\\s60\\\\s18\\\\s90\\\\saf\\\\sd8\\\\s07\\\\s09;msg-param-recipient-display-name=qatarking24xd;msg-param-recipient-id=236653628;msg-param-recipient-user-name=qatarking24xd;msg-param-sender-count=0;msg-param-sub-plan-name=Channel\\\\sSubscription\\\\s(xqcow);msg-param-sub-plan=1000;room-id=71092938;subscriber=0;system-msg=AdamAtReflectStudios\\\\sgifted\\\\sa\\\\sTier\\\\s1\\\\ssub\\\\sto\\\\sqatarking24xd!;tmi-sent-ts=1594583782376;user-id=211711554;user-type= :tmi.twitch.tv USERNOTICE #xqcow\")"
+---
+UserNotice {
+    channel: Channel(
+        "#xqcow",
+    ),
+    channel_id: "71092938",
+    sender: Some(
+        User {
+            id: "211711554",
+            login: "adamatreflectstudios",
+            name: "AdamAtReflectStudios",
+        },
+    ),
+    text: None,
+    system_message: Some(
+        "AdamAtReflectStudios gifted a Tier 1 sub to qatarking24xd!",
+    ),
+    event: SubGift(
+        SubGift {
+            cumulative_months: 2,
+            recipient: User {
+                id: "236653628",
+                login: "qatarking24xd",
+                name: "qatarking24xd",
+            },
+            sub_plan: "1000",
+            sub_plan_name: "Channel Subscription (xqcow)",
+            num_gifted_months: 1,
+        },
+    ),
+    event_id: "subgift",
+    badges: [
+        Other(
+            BadgeData {
+                name: "sub-gifter",
+                version: "50",
+                extra: None,
+            },
+        ),
+    ],
+    emotes: "",
+    color: None,
+    message_id: "e21409b1-d25d-4a1a-b5cf-ef27d8b7030e",
+    timestamp: 2020-07-12T19:56:22.376Z,
+}

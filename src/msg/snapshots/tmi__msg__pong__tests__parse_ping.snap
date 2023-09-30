@@ -1,0 +1,7 @@
+---
+source: src/msg/pong.rs
+expression: "f(\":tmi.twitch.tv PONG\")"
+---
+Pong {
+    nonce: None,
+}

@@ -1,0 +1,42 @@
+---
+source: src/msg/user_notice.rs
+expression: "f(\"@badge-info=;badges=sub-gifter/50;color=;display-name=AdamAtReflectStudios;emotes=;flags=;id=049e6371-7023-4fca-8605-7dec60e72e12;login=adamatreflectstudios;mod=0;msg-id=submysterygift;msg-param-mass-gift-count=20;msg-param-origin-id=1f\\\\sbe\\\\sbb\\\\s4a\\\\s81\\\\s9a\\\\s65\\\\sd1\\\\s4b\\\\s77\\\\sf5\\\\s23\\\\s16\\\\s4a\\\\sd3\\\\s13\\\\s09\\\\se7\\\\sbe\\\\s55;msg-param-sender-count=100;msg-param-sub-plan=1000;room-id=71092938;subscriber=0;system-msg=AdamAtReflectStudios\\\\sis\\\\sgifting\\\\s20\\\\sTier\\\\s1\\\\sSubs\\\\sto\\\\sxQcOW's\\\\scommunity!\\\\sThey've\\\\sgifted\\\\sa\\\\stotal\\\\sof\\\\s100\\\\sin\\\\sthe\\\\schannel!;tmi-sent-ts=1594583777669;user-id=211711554;user-type= :tmi.twitch.tv USERNOTICE #xqcow\")"
+---
+UserNotice {
+    channel: Channel(
+        "#xqcow",
+    ),
+    channel_id: "71092938",
+    sender: Some(
+        User {
+            id: "211711554",
+            login: "adamatreflectstudios",
+            name: "AdamAtReflectStudios",
+        },
+    ),
+    text: None,
+    system_message: Some(
+        "AdamAtReflectStudios is gifting 20 Tier 1 Subs to xQcOW's community! They've gifted a total of 100 in the channel!",
+    ),
+    event: SubMysteryGift(
+        SubMysteryGift {
+            count: 20,
+            sender_total_gifts: 100,
+            sub_plan: "1000",
+        },
+    ),
+    event_id: "submysterygift",
+    badges: [
+        Other(
+            BadgeData {
+                name: "sub-gifter",
+                version: "50",
+                extra: None,
+            },
+        ),
+    ],
+    emotes: "",
+    color: None,
+    message_id: "049e6371-7023-4fca-8605-7dec60e72e12",
+    timestamp: 2020-07-12T19:56:17.669Z,
+}
