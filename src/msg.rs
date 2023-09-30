@@ -1,10 +1,11 @@
 // TODO: `serde` derives under feature
-// TODO: replace all `ok()?` with `and_then`
-// TODO: support `msg-id=announcement` in `UserNotice`
-//       @emotes=;login=pajbot;vip=0;tmi-sent-ts=1695554663565;flags=;mod=1;subscriber=1;id=bb1bec25-8f26-4ba3-a084-a6a2ca332f00;badge-info=subscriber/93;system-msg=;user-id=82008718;user-type=mod;room-id=11148817;badges=moderator/1,subscriber/3072;msg-param-color=PRIMARY;msg-id=announcement;color=#2E8B57;display-name=pajbot :tmi.twitch.tv USERNOTICE #pajlada :󠀀$ping xd
+// TODO: unescape more things?
 
+#[macro_use]
+mod macros;
+
+use crate::common::unescaped::Unescaped;
 use crate::irc::{IrcMessage, IrcMessageRef};
-use crate::Span;
 use smallvec::SmallVec;
 
 impl IrcMessage {
@@ -23,6 +24,9 @@ pub trait FromIrc<'src>: Sized {
   fn from_irc(message: IrcMessageRef<'src>) -> Option<Self>;
 }
 
+/// A fully parsed Twitch chat message.
+///
+/// Note that this one
 #[derive(Clone, Debug)]
 pub enum Message<'src> {
   ClearChat(ClearChat<'src>),
@@ -39,6 +43,12 @@ pub enum Message<'src> {
   UserNotice(UserNotice<'src>),
   UserState(UserState<'src>),
   Whisper(Whisper<'src>),
+}
+
+impl<'src> Message<'src> {
+  pub fn parse(src: &'src str) -> Option<Self> {
+    IrcMessageRef::parse(src).and_then(Message::from_irc)
+  }
 }
 
 impl<'src> FromIrc<'src> for Message<'src> {
@@ -66,17 +76,20 @@ impl<'src> FromIrc<'src> for Message<'src> {
 }
 
 /// A chat badge.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Badge<'src> {
   Staff,
   Turbo,
   Broadcaster,
   Moderator,
-  Subscriber {
-    version: &'src str,
-    months: &'src str,
-  },
+  Subscriber(Subscriber<'src>),
   Other(BadgeData<'src>),
+}
+
+impl<'src> Badge<'src> {
+  pub fn as_badge_data(&self) -> BadgeData<'src> {
+    BadgeData::from(self.clone())
+  }
 }
 
 impl<'src> From<Badge<'src>> for BadgeData<'src> {
@@ -102,7 +115,9 @@ impl<'src> From<Badge<'src>> for BadgeData<'src> {
         version: "1",
         extra: None,
       },
-      Badge::Subscriber { version, months } => BadgeData {
+      Badge::Subscriber(Subscriber {
+        version, months, ..
+      }) => BadgeData {
         name: "subscriber",
         version,
         extra: Some(months),
@@ -119,62 +134,89 @@ impl<'src> From<BadgeData<'src>> for Badge<'src> {
       "turbo" => Self::Turbo,
       "broadcaster" => Self::Broadcaster,
       "moderator" => Self::Moderator,
-      "subscriber" => Self::Subscriber {
+      "subscriber" => Self::Subscriber(Subscriber {
         version: value.version,
-        months: value.extra.unwrap_or("0"),
-      },
+        months: value.extra.unwrap_or("1"),
+        months_n: value.extra.and_then(|v| v.parse().ok()).unwrap_or(1),
+      }),
       _ => Self::Other(value),
     }
   }
 }
 
-#[derive(Clone, Debug)]
-pub struct BadgeData<'src> {
-  /// Name of the badge, e.g. `subscriber`.
-  pub name: &'src str,
-
-  /// Version of the badge,
-  pub version: &'src str,
-
-  /// Extra badge info, such as the exact number of
-  /// subscribed months for `subscriber`.
-  pub extra: Option<&'src str>,
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Subscriber<'src> {
+  version: &'src str,
+  months: &'src str,
+  months_n: u64,
 }
 
-#[derive(Clone, Debug)]
-pub struct User<'src> {
-  /// Id of the user.
-  pub id: &'src str,
+generate_getters! {
+  <'src> for Subscriber<'src> as self {
+    /// Version of the badge.
+    ///
+    /// This comes from the `badges` tag.
+    version -> &str,
 
-  /// Login of the user.
-  pub login: &'src str,
-
-  /// Display name.
-  ///
-  /// This is the name which appears in chat, and may contain arbitrary unicode characters.
-  /// This is in contrast to [`User::login`] which is always only ASCII.
-  pub name: &'src str,
-}
-
-#[derive(Clone, Debug)]
-pub struct Emote<'src> {
-  pub id: &'src str,
-  ranges: &'src str,
-}
-
-impl<'src> Emote<'src> {
-  pub fn ranges(&self) -> impl Iterator<Item = Span> + '_ {
-    self
-      .ranges
-      .split(',')
-      .flat_map(|range| range.split_once('-'))
-      .flat_map(|(start, end)| {
-        Some(Span {
-          start: start.parse().ok()?,
-          end: end.parse().ok()?,
-        })
-      })
+    /// Number of months subscribed.
+    ///
+    /// This comes from the `badge_info` tag.
+    months -> u64 = self.months_n,
   }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BadgeData<'src> {
+  name: &'src str,
+  version: &'src str,
+  extra: Option<&'src str>,
+}
+
+generate_getters! {
+  <'src> for BadgeData<'src> as self {
+    /// Name of the badge, e.g. `subscriber`.
+    ///
+    /// This comes from the `badges` tag.
+    name -> &str,
+
+    /// Version of the badge.
+    ///
+    /// This comes from the `badges` tag.
+    version -> &str,
+
+    /// Extra badge info, such as the exact number of
+    /// subscribed months for `subscriber`.
+    ///
+    /// This comes from the `badge_info` tag.
+    extra -> Option<&str>,
+  }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct User<'src> {
+  id: &'src str,
+  login: &'src str,
+  name: Unescaped<'src>,
+}
+
+generate_getters! {
+  <'src> for User<'src> as self {
+    /// Id of the user.
+    id -> &str,
+
+    /// Login of the user.
+    login -> &str,
+
+    /// Display name.
+    ///
+    /// This is the name which appears in chat, and may contain arbitrary unicode characters.
+    /// This is in contrast to [`User::login`] which is always only ASCII.
+    name -> &str = self.name.get(),
+  }
+}
+
+fn is_not_empty<T: AsRef<str>>(s: &T) -> bool {
+  !s.as_ref().is_empty()
 }
 
 fn parse_timestamp(s: &str) -> Option<chrono::DateTime<chrono::Utc>> {
@@ -186,12 +228,12 @@ fn parse_duration(s: &str) -> Option<chrono::Duration> {
   Some(chrono::Duration::seconds(s.parse().ok()?))
 }
 
-fn parse_message_text(s: &str) -> (&str, bool) {
-  let Some(s) = s.strip_prefix("\u{0001}ACTION ") else {
-    return (s, false);
+fn parse_message_text(input: &str) -> (&str, bool) {
+  let Some(s) = input.strip_prefix("\u{0001}ACTION ") else {
+    return (input, false);
   };
   let Some(s) = s.strip_suffix('\u{0001}') else {
-    return (s, false);
+    return (input, false);
   };
   (s, true)
 }
@@ -213,40 +255,17 @@ fn parse_badges<'src>(badges: &'src str, badge_info: &'src str) -> Vec<Badge<'sr
   badges
     .split(',')
     .flat_map(|badge| badge.split_once('/'))
-    .map(|(name, version)| match name {
-      "staff" => Badge::Staff,
-      "turbo" => Badge::Turbo,
-      "broadcaster" => Badge::Broadcaster,
-      "moderator" => Badge::Moderator,
-      "subscriber" => Badge::Subscriber {
-        version,
-        months: badge_info
-          .iter()
-          .find(|(name, _)| *name == "subscriber")
-          .map(|(_, value)| *value)
-          .unwrap_or("0"),
-      },
-      name => Badge::Other(BadgeData {
+    .map(|(name, version)| {
+      BadgeData {
         name,
         version,
         extra: badge_info
           .iter()
-          .find(|(name, _)| *name == "subscriber")
+          .find(|(needle, _)| *needle == name)
           .map(|(_, value)| *value),
-      }),
+      }
+      .into()
     })
-    .collect()
-}
-
-fn parse_emotes(emotes: &str) -> Vec<Emote<'_>> {
-  if emotes.is_empty() {
-    return Vec::new();
-  }
-
-  emotes
-    .split('/')
-    .flat_map(|emote| emote.split_once(':'))
-    .map(|(id, ranges)| Emote { id, ranges })
     .collect()
 }
 

@@ -1,0 +1,35 @@
+---
+source: src/msg/privmsg.rs
+expression: "f(\"@badge-info=subscriber/22;badges=moderator/1,subscriber/12;color=#19E6E6;display-name=randers;emotes=;flags=;id=d831d848-b7c7-4559-ae3a-2cb88f4dbfed;mod=1;room-id=11148817;subscriber=1;tmi-sent-ts=1594555275886;turbo=0;user-id=40286300;user-type=mod :randers!randers@randers.tmi.twitch.tv PRIVMSG #pajlada :\u0001ACTION -tags\u0001\")"
+---
+Privmsg {
+    channel: Channel(
+        "#pajlada",
+    ),
+    channel_id: "11148817",
+    message_id: "d831d848-b7c7-4559-ae3a-2cb88f4dbfed",
+    sender: User {
+        id: "40286300",
+        login: "randers",
+        name: "randers",
+    },
+    reply_to: None,
+    text: "-tags",
+    is_action: true,
+    badges: [
+        Moderator,
+        Subscriber(
+            Subscriber {
+                version: "12",
+                months: "22",
+                months_n: 22,
+            },
+        ),
+    ],
+    color: Some(
+        "#19E6E6",
+    ),
+    bits: None,
+    emotes: "",
+    timestamp: 2020-07-12T12:01:15.886Z,
+}

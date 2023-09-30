@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 
 /// Channel name known to be prefixed by `#`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Channel<'src>(&'src str);
 
 impl<'src> Channel<'src> {
@@ -10,9 +11,13 @@ impl<'src> Channel<'src> {
 
   pub fn parse(s: &'src str) -> Result<Self, InvalidChannelName> {
     match s.starts_with('#') {
-      true => Ok(Channel(s)),
+      true => Ok(Self(s)),
       false => Err(InvalidChannelName),
     }
+  }
+
+  pub(crate) fn from_unchecked(s: &'src str) -> Self {
+    Self(s)
   }
 }
 
@@ -39,8 +44,7 @@ impl std::fmt::Display for InvalidChannelName {
 }
 impl std::error::Error for InvalidChannelName {}
 
-#[doc(hidden)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Span {
   pub start: u32,
   pub end: u32,
@@ -120,3 +124,6 @@ where
     Join(RefCell::new(Some(self)), sep)
   }
 }
+
+#[doc(hidden)]
+pub mod unescaped;

@@ -1,13 +1,21 @@
+use crate::common::Channel;
 use crate::irc::{Command, IrcMessageRef};
 
 /// Sent when a user leaves a channel.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Part<'src> {
-  /// Parted channel name.
-  pub channel: &'src str,
+  channel: Channel<'src>,
+  user: &'src str,
+}
 
-  /// Login of the user.
-  pub user: &'src str,
+generate_getters! {
+  <'src> for Part<'src> as self {
+    /// Parted channel name.
+    channel -> Channel<'_>,
+
+    /// Login of the user.
+    user -> &str,
+  }
 }
 
 impl<'src> super::FromIrc<'src> for Part<'src> {
@@ -26,5 +34,18 @@ impl<'src> super::FromIrc<'src> for Part<'src> {
 impl<'src> From<Part<'src>> for super::Message<'src> {
   fn from(msg: Part<'src>) -> Self {
     super::Message::Part(msg)
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn parse_join() {
+    assert_irc_snapshot!(
+      Part,
+      ":randers811!randers811@randers811.tmi.twitch.tv PART #pajlada"
+    );
   }
 }

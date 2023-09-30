@@ -1,0 +1,15 @@
+---
+source: src/msg/clear_msg.rs
+expression: "f(\"@login=alazymeme;room-id=;target-msg-id=3c92014f-340a-4dc3-a9c9-e5cf182f4a84;tmi-sent-ts=1594561955611 :tmi.twitch.tv CLEARMSG #pajlada :\\u{0001}ACTION lole\\u{0001}\")"
+---
+ClearMsg {
+    channel: Channel(
+        "#pajlada",
+    ),
+    channel_id: "",
+    sender: "alazymeme",
+    message_id: "3c92014f-340a-4dc3-a9c9-e5cf182f4a84",
+    text: "lole",
+    is_action: true,
+    timestamp: 2020-07-12T13:52:35.611Z,
+}

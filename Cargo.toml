@@ -53,16 +53,17 @@ tracing = { version = "0.1.37", optional = true }
 
 # `serde` feature
 serde = { version = "1.0", optional = true, features = ["derive"] }
+beef = "0.5.2"
 
 [dev-dependencies]
 twitch-irc = "5.0.0"
 mimalloc = { version = "0.1.37", default-features = false }
 
 criterion = "0.5.1"
-pretty_assertions = "1.0.0"
 
 tokio = { version = "1.28.2", features = ["full"] }
 tracing-subscriber = "0.3.17"
+insta = "1.33.0"
 
 [profile.bench]
 lto = "fat"
@@ -76,3 +77,5 @@ bench = false
 [[bench]]
 name = "parse"
 harness = false
+
+[workspace]

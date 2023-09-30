@@ -1,13 +1,21 @@
+use crate::common::Channel;
 use crate::irc::{Command, IrcMessageRef};
 
 /// Sent when a user joins a channel.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Join<'src> {
-  /// Joined channel name.
-  pub channel: &'src str,
+  channel: Channel<'src>,
+  user: &'src str,
+}
 
-  /// Login of the user.
-  pub user: &'src str,
+generate_getters! {
+  <'src> for Join<'src> as self {
+    /// Joined channel name.
+    channel -> Channel<'_>,
+
+    /// Login of the user.
+    user -> &str,
+  }
 }
 
 impl<'src> super::FromIrc<'src> for Join<'src> {
@@ -26,5 +34,18 @@ impl<'src> super::FromIrc<'src> for Join<'src> {
 impl<'src> From<Join<'src>> for super::Message<'src> {
   fn from(msg: Join<'src>) -> Self {
     super::Message::Join(msg)
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn parse_join() {
+    assert_irc_snapshot!(
+      Join,
+      ":randers811!randers811@randers811.tmi.twitch.tv JOIN #pajlada"
+    );
   }
 }

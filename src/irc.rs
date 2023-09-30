@@ -14,6 +14,7 @@ use simd::{parse_prefix, parse_tags};
 #[cfg(not(feature = "simd"))]
 use scalar::{parse_prefix, parse_tags};
 
+use crate::common::Channel;
 use crate::common::Span;
 use std::fmt::{Debug, Display};
 
@@ -127,8 +128,12 @@ impl<'src> IrcMessageRef<'src> {
     self.parts.command.get(self.src)
   }
 
-  pub fn channel(&self) -> Option<&'src str> {
-    self.parts.channel.map(|span| &self.src[span])
+  pub fn channel(&self) -> Option<Channel<'src>> {
+    self
+      .parts
+      .channel
+      .map(|span| &self.src[span])
+      .map(Channel::from_unchecked)
   }
 
   pub fn params(&self) -> Option<&'src str> {
@@ -684,6 +689,7 @@ tags_def! {
   b"msg-param-ritual-name"; "msg-param-ritual-name" = MsgParamRitualName,
   b"msg-param-threshold"; "msg-param-threshold" = MsgParamThreshold,
   b"msg-param-gift-months"; "msg-param-gift-months" = MsgParamGiftMonths,
+  b"msg-param-color"; "msg-param-color" = MsgParamColor,
   b"login"; "login" = Login,
   b"bits"; "bits" = Bits,
   b"system-msg"; "system-msg" = SystemMsg,
@@ -756,9 +762,12 @@ impl<'src> std::fmt::Display for Prefix<'src> {
 /// Returns `None` if command is unknown *and* empty
 #[inline(always)]
 fn parse_command(src: &str, pos: &mut usize) -> Option<RawCommand> {
-  let end = match src[*pos..].find(' ') {
-    Some(end) => *pos + end,
-    None => src.len(),
+  let (end, next_pos) = match src[*pos..].find(' ') {
+    Some(end) => {
+      let end = *pos + end;
+      (end, end + 1)
+    }
+    None => (src.len(), src.len()),
   };
 
   use RawCommand as C;
@@ -791,7 +800,7 @@ fn parse_command(src: &str, pos: &mut usize) -> Option<RawCommand> {
     _ => return None,
   };
 
-  *pos = end + 1;
+  *pos = next_pos;
 
   Some(cmd)
 }

@@ -1,0 +1,9 @@
+---
+source: src/msg/notice.rs
+expression: "f(\":tmi.twitch.tv NOTICE * :Improperly formatted auth\")"
+---
+Notice {
+    channel: None,
+    text: "Improperly formatted auth",
+    id: None,
+}
