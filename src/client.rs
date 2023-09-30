@@ -1,5 +1,6 @@
 macro_rules! with_scratch {
   ($client:ident, |$scratch:ident| $body:block) => {{
+    use ::std::fmt::Write;
     let mut scratch = std::mem::take(&mut $client.scratch);
     let $scratch = &mut scratch;
     let result = { $body };
@@ -122,8 +123,8 @@ impl Client {
     }
   }
 
-  pub fn connect(config: Config) -> impl Future<Output = Result<Client, ConnectionError>> {
-    Self::connect_with_timeout(config, DEFAULT_TIMEOUT)
+  pub fn connect() -> impl Future<Output = Result<Client, ConnectionError>> {
+    Self::connect_with_timeout(Config::default(), DEFAULT_TIMEOUT)
   }
 
   pub async fn connect_with_timeout(
@@ -146,7 +147,11 @@ impl Client {
     Ok(chat)
   }
 
-  pub async fn reconnect(&mut self, timeout: Duration) -> Result<(), ConnectionError> {
+  pub fn reconnect(&mut self) -> impl Future<Output = Result<(), ConnectionError>> + '_ {
+    self.reconnect_with_timeout(DEFAULT_TIMEOUT)
+  }
+
+  pub async fn reconnect_with_timeout(&mut self, timeout: Duration) -> Result<(), ConnectionError> {
     trace!("reconnecting");
 
     let mut tries = 10;

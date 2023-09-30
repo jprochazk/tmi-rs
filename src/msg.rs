@@ -43,11 +43,29 @@ pub enum Message<'src> {
   UserNotice(UserNotice<'src>),
   UserState(UserState<'src>),
   Whisper(Whisper<'src>),
+  Other(IrcMessageRef<'src>),
 }
 
 impl<'src> Message<'src> {
   pub fn parse(src: &'src str) -> Option<Self> {
     IrcMessageRef::parse(src).and_then(Message::from_irc)
+  }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct MessageParseError;
+impl std::fmt::Display for MessageParseError {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.write_str("failed to parse message")
+  }
+}
+impl std::error::Error for MessageParseError {}
+
+impl<'src> TryFrom<IrcMessageRef<'src>> for Message<'src> {
+  type Error = MessageParseError;
+
+  fn try_from(value: IrcMessageRef<'src>) -> Result<Self, Self::Error> {
+    Message::from_irc(value).ok_or(MessageParseError)
   }
 }
 
@@ -69,7 +87,7 @@ impl<'src> FromIrc<'src> for Message<'src> {
       C::UserNotice => UserNotice::from_irc(message)?.into(),
       C::UserState => UserState::from_irc(message)?.into(),
       C::Whisper => Whisper::from_irc(message)?.into(),
-      _ => return None,
+      _ => Message::Other(message),
     };
     Some(message)
   }

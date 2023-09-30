@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 #[cfg(feature = "client")]
 #[macro_use]
 extern crate tracing;
@@ -13,6 +15,8 @@ macro_rules! assert_send {
 
 #[cfg(feature = "client")]
 pub mod client;
+#[cfg(feature = "client")]
+pub use client::Client;
 
 #[cfg(feature = "message-types")]
 pub mod msg;
@@ -23,8 +27,3 @@ pub mod irc;
 pub use irc::*;
 
 pub mod common;
-pub use common::Span;
-
-pub mod prelude {
-  pub use crate::irc::{unescape, Command, IrcMessage, IrcMessageRef, Prefix, Tag, Whitelist};
-}

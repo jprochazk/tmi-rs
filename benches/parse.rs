@@ -1,6 +1,6 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use mimalloc::MiMalloc;
-use twitch::IrcMessageRef;
+use tmi::IrcMessageRef;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;

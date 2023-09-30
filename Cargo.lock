@@ -1211,6 +1211,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "tmi"
+version = "0.0.1"
+dependencies = [
+ "beef",
+ "chrono",
+ "criterion",
+ "futures-util",
+ "insta",
+ "mimalloc",
+ "rand",
+ "rustls-native-certs",
+ "serde",
+ "smallvec",
+ "tokio",
+ "tokio-rustls",
+ "tokio-stream",
+ "tracing",
+ "tracing-subscriber",
+ "twitch-irc",
+]
+
+[[package]]
 name = "tokio"
 version = "1.29.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1342,28 +1364,6 @@ dependencies = [
  "thread_local",
  "tracing-core",
  "tracing-log",
-]
-
-[[package]]
-name = "twitch"
-version = "0.3.0"
-dependencies = [
- "beef",
- "chrono",
- "criterion",
- "futures-util",
- "insta",
- "mimalloc",
- "rand",
- "rustls-native-certs",
- "serde",
- "smallvec",
- "tokio",
- "tokio-rustls",
- "tokio-stream",
- "tracing",
- "tracing-subscriber",
- "twitch-irc",
 ]
 
 [[package]]

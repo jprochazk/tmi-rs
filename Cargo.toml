@@ -1,6 +1,6 @@
 [package]
-name = "twitch"
-version = "0.3.0"
+name = "tmi"
+version = "0.0.1"
 authors = ["jprochazk <honza.spacir@gmail.com>"]
 edition = "2021"
 license = "MIT"

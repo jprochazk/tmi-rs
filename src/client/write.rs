@@ -1,4 +1,5 @@
 use super::{conn, Client};
+use crate::common::JoinIter;
 use crate::common::{Channel, InvalidChannelName};
 use std::fmt::Display;
 use tokio::io;
@@ -6,13 +7,67 @@ use tokio::io::{AsyncWriteExt, WriteHalf};
 
 pub type WriteStream = WriteHalf<conn::Stream>;
 
+pub struct Privmsg<'c, 'a> {
+  client: &'c mut Client,
+  channel: Channel<'a>,
+  text: &'a str,
+  reply_parent_msg_id: Option<&'a str>,
+  client_nonce: Option<&'a str>,
+}
+
+struct Tag<'a> {
+  key: &'a str,
+  value: &'a str,
+}
+
+impl<'a> std::fmt::Display for Tag<'a> {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    let Self { key, value } = self;
+    // TODO: handle escaping
+    write!(f, "{key}={value}")
+  }
+}
+
+impl<'c, 'a> Privmsg<'c, 'a> {
+  pub async fn send(self) -> Result<(), WriteError> {
+    let Self {
+      client,
+      channel,
+      text,
+      reply_parent_msg_id,
+      client_nonce,
+    } = self;
+
+    with_scratch!(client, |f| {
+      let has_tags = reply_parent_msg_id.is_some() || client_nonce.is_some();
+      if has_tags {
+        let reply_parent_msg_id = reply_parent_msg_id.map(|value| Tag {
+          key: "reply-parent-msg-id",
+          value,
+        });
+        let client_nonce = client_nonce.map(|value| Tag {
+          key: "client-nonce",
+          value,
+        });
+        let tags = reply_parent_msg_id
+          .iter()
+          .chain(client_nonce.iter())
+          .join(';');
+        let _ = write!(f, "@{tags} ");
+      }
+      let _ = write!(f, "PRIVMSG {channel} :{text}\r\n");
+      client.send_raw(f.as_str()).await
+    })
+  }
+}
+
 impl Client {
   /// Send a raw string through the TCP socket.
   ///
   /// ⚠ This call is not rate limited in any way.
   ///
   /// ⚠ The string MUST be terminated by `\r\n`.
-  pub async fn send<'a, S>(&mut self, s: S) -> Result<(), WriteError>
+  pub async fn send_raw<'a, S>(&mut self, s: S) -> Result<(), WriteError>
   where
     S: TryInto<RawMessage<'a>, Error = InvalidMessage> + 'a,
   {
@@ -22,21 +77,58 @@ impl Client {
     Ok(())
   }
 
+  /// Create a `privmsg` from a `channel` and `text`.
+  ///
+  /// The message may be sent using [`Privmsg::send`].
+  ///
+  /// You can specify additional properties using the builder methods on [`Privmsg`]:
+  /// - [`Privmsg::reply_to`] to specify a `reply-parent-msg-id` tag, which makes this privmsg a reply to another message.
+  /// - [`Privmsg::client_nonce`] to identify the message in the `Notice` which Twitch may send as a response to this message.
+  pub fn privmsg<'this, 'a, C, S>(
+    &'this mut self,
+    channel: C,
+    text: &'a S,
+  ) -> Result<Privmsg<'this, 'a>, WriteError>
+  where
+    C: TryInto<Channel<'a>, Error = InvalidChannelName>,
+    S: ?Sized + AsRef<str>,
+  {
+    Ok(Privmsg {
+      client: self,
+      channel: channel.try_into()?,
+      text: text.as_ref(),
+      reply_parent_msg_id: None,
+      client_nonce: None,
+    })
+  }
+
+  pub async fn ping(&mut self, nonce: &str) -> Result<(), WriteError> {
+    with_scratch!(self, |f| {
+      let _ = write!(f, "PING :{nonce}\r\n");
+      self.send_raw(f.as_str()).await
+    })
+  }
+
+  pub async fn pong(&mut self, ping: &crate::Ping<'_>) -> Result<(), WriteError> {
+    with_scratch!(self, |f| {
+      if let Some(nonce) = ping.nonce() {
+        let _ = write!(f, "PONG :{nonce}\r\n");
+      } else {
+        let _ = write!(f, "PONG\r\n");
+      }
+      self.send_raw(f.as_str()).await
+    })
+  }
+
   pub async fn join<'a, S>(&mut self, channel: S) -> Result<(), WriteError>
   where
     S: TryInto<Channel<'a>, Error = InvalidChannelName> + 'a,
   {
-    use std::fmt::Write;
-
     with_scratch!(self, |f| {
       let channel = channel.try_into()?;
       let _ = write!(f, "JOIN {channel}\r\n");
-
-      tracing::trace!(data = f, "sending message");
-      self.send(f.as_str()).await?;
-    });
-
-    Ok(())
+      self.send_raw(f.as_str()).await
+    })
   }
 
   /// Send a `JOIN` command.
@@ -50,8 +142,6 @@ impl Client {
     I: IntoIterator<Item = S>,
     S: TryInto<Channel<'a>, Error = InvalidChannelName> + 'a,
   {
-    use std::fmt::Write;
-
     with_scratch!(self, |f| {
       let _ = f.write_str("JOIN ");
       let mut channels = channels.into_iter();
@@ -64,12 +154,8 @@ impl Client {
         let _ = write!(f, ",{channel}");
       }
       let _ = f.write_str("\r\n");
-
-      tracing::trace!(data = f, "sending message");
-      self.send(f.as_str()).await?;
-    });
-
-    Ok(())
+      self.send_raw(f.as_str()).await
+    })
   }
 }
 
