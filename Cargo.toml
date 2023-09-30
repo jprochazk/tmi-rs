@@ -2,8 +2,11 @@
 name = "tmi"
 version = "0.0.1"
 authors = ["jprochazk <honza.spacir@gmail.com>"]
+description = "twitch.tv messaging interface"
+repository = "https://github.com/jprochazk/tmi-rs"
 edition = "2021"
 license = "MIT"
+exclude = ["**/*.snap", "/benches", "/examples", "/.vscode", "/.github"]
 
 [features]
 default = ["simd", "client", "message-types"]
