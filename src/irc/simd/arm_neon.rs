@@ -7,7 +7,7 @@
 //!
 //! Archived link: https://web.archive.org/web/20230603011837/https://community.arm.com/arm-community-blogs/b/infrastructure-solutions-blog/posts/porting-x86-vector-bitmask-optimizations-to-arm-neon
 
-use crate::msg::{RawTags, Span, Whitelist};
+use crate::irc::{RawTags, Span, Whitelist};
 
 use core::arch::aarch64 as simd;
 use core::mem;
@@ -16,7 +16,7 @@ use std::ops::Add;
 
 /// We don't have a SIMD implementation of `parse_prefix` in NEON,
 /// because it was not faster. Instead just re-export the scalar impl.
-pub use crate::msg::scalar::parse_prefix;
+pub use crate::irc::scalar::parse_prefix;
 
 /// Parse IRC message tags:
 ///
@@ -255,7 +255,7 @@ impl Mask {
 
 #[cfg(test)]
 mod tests {
-  use crate::msg::whitelist_insert_all;
+  use crate::irc::whitelist_insert_all;
 
   use super::*;
 
@@ -375,6 +375,6 @@ mod tests {
 
   #[test]
   fn test_parse_data_0() {
-    crate::Message::parse(r"@badge-info=;badges=premium/1;color=#000000;display-name=Vicarun;emotes=;flags=;id=a0414f65-b471-46be-b6cc-f8d7cd0aa62c;login=vicarun;mod=0;msg-id=resub;msg-param-cumulative-months=20;msg-param-months=0;msg-param-multimonth-duration=1;msg-param-multimonth-tenure=0;msg-param-should-share-streak=0;msg-param-sub-plan-name=Channel\sSubscription\s(forsenlol);msg-param-sub-plan=Prime;msg-param-was-gifted=false;room-id=22484632;subscriber=1;system-msg=Vicarun\ssubscribed\swith\sPrime.\sThey've\ssubscribed\sfor\s20\smonths!;tmi-sent-ts=1685664553875;user-id=691811336;user-type= :tmi.twitch.tv USERNOTICE #forsen").unwrap();
+    crate::IrcMessage::parse(r"@badge-info=;badges=premium/1;color=#000000;display-name=Vicarun;emotes=;flags=;id=a0414f65-b471-46be-b6cc-f8d7cd0aa62c;login=vicarun;mod=0;msg-id=resub;msg-param-cumulative-months=20;msg-param-months=0;msg-param-multimonth-duration=1;msg-param-multimonth-tenure=0;msg-param-should-share-streak=0;msg-param-sub-plan-name=Channel\sSubscription\s(forsenlol);msg-param-sub-plan=Prime;msg-param-was-gifted=false;room-id=22484632;subscriber=1;system-msg=Vicarun\ssubscribed\swith\sPrime.\sThey've\ssubscribed\sfor\s20\smonths!;tmi-sent-ts=1685664553875;user-id=691811336;user-type= :tmi.twitch.tv USERNOTICE #forsen").unwrap();
   }
 }
