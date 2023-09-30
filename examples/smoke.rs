@@ -1,35 +1,26 @@
-use futures_util::{SinkExt, StreamExt};
-use tokio::net::TcpStream;
-use tokio_tungstenite::tungstenite::Message;
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
-use twitch::Command;
+use tokio::select;
+use tokio::signal::ctrl_c;
+use twitch::client::Client;
+use twitch::{Command, IrcMessage};
 
 type Result<T, E = Box<dyn std::error::Error + Send + Sync + 'static>> =
   ::core::result::Result<T, E>;
 
-type WebSocket = WebSocketStream<MaybeTlsStream<TcpStream>>;
-
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
-  let (mut ws, _) = tokio_tungstenite::connect_async("ws://irc-ws.chat.twitch.tv:80").await?;
+  tracing_subscriber::fmt::init();
 
-  ws.send(Message::Text(
-    "CAP REQ :twitch.tv/commands twitch.tv/tags".into(),
-  ))
-  .await?;
-  ws.send(Message::Text("PASS just_a_lil_guy".into())).await?;
-  ws.send(Message::Text("NICK justinfan83124".into())).await?;
-  ws.send(Message::Text("JOIN #anny,#nymn,#forsen,#ironmouse".into()))
-    .await?;
+  let mut client = Client::connect(Default::default()).await?;
+
+  client.join_all(["#moscowwbish"]).await?;
 
   loop {
-    tokio::select! {
-      _ = tokio::signal::ctrl_c() => {
+    select! {
+      _ = ctrl_c() => {
         break;
       }
-      Some(message) = ws.next() => {
-        let message = message?;
-        handle_message(&mut ws, message).await?;
+      message = client.message() => {
+        handle_message(&mut client, message?).await?;
       }
     }
   }
@@ -37,46 +28,45 @@ async fn main() -> Result<()> {
   Ok(())
 }
 
-async fn handle_message(ws: &mut WebSocket, message: Message) -> Result<()> {
-  if let Message::Text(message) = message {
-    for line in message.lines() {
-      println!("\n{}", line);
+async fn handle_message(client: &mut Client, message: IrcMessage) -> Result<()> {
+  println!("{:?}", message.raw());
 
-      let a = twitch::Message::parse(line).unwrap();
-      let b = twitch_irc::message::IRCMessage::parse(line).unwrap();
+  let a = message.as_ref();
+  /* let b = twitch_irc::message::IRCMessage::parse(message.raw()).unwrap();
 
-      assert_eq!(a.command().as_str(), b.command);
-      assert_eq!(
-        a.tags().is_some() && !a.tags().unwrap().is_empty(),
-        !b.tags.0.is_empty()
-      );
+  let tags = a.tags().collect::<Vec<_>>();
 
-      if let Some(tags) = a.tags() {
-        assert_eq!(tags.len(), b.tags.0.len());
-        print!("tags{{");
-        for (tag, value) in tags {
-          match b.tags.0.get(tag.as_str()).unwrap() {
-            Some(other) => assert_eq!(&twitch::unescape(value), other),
-            None => assert!(value.is_empty()),
-          }
+  assert_eq!(a.command().as_str(), b.command);
+  assert_eq!(tags.is_empty(), b.tags.0.is_empty());
 
-          print!("{}={};", tag.as_str(), twitch::unescape(value));
-        }
-        print!("}} ");
+  if !tags.is_empty() {
+    assert_eq!(tags.len(), b.tags.0.len());
+    print!("tags{{");
+    for (tag, value) in tags {
+      match b.tags.0.get(tag.as_str()).unwrap() {
+        Some(other) => assert_eq!(&twitch::unescape(value), other),
+        None => assert!(value.is_empty()),
       }
-      print!(
-        "{} {} {}",
-        a.command(),
-        a.channel().unwrap_or("<no channel>"),
-        a.params().unwrap_or("")
-      );
 
-      println!();
-
-      if a.command() == &Command::Ping {
-        ws.send(Message::Text("PONG".into())).await?;
-      }
+      print!("{}={};", tag.as_str(), twitch::unescape(value));
     }
+    print!("}} ");
+  }
+
+  if let Some(prefix) = a.prefix() {
+    print!("{prefix} ");
+  }
+  print!("{} ", a.command());
+  if let Some(channel) = a.channel() {
+    print!("{channel} ");
+  }
+  if let Some(params) = a.params() {
+    print!("{params} ");
+  }
+  println!(); */
+
+  if a.command() == Command::Ping {
+    client.send("PONG\r\n").await?;
   }
 
   Ok(())

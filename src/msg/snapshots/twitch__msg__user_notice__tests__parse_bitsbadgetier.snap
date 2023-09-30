@@ -1,0 +1,30 @@
+---
+source: src/msg/user_notice.rs
+expression: "f(\"@badge-info=;badges=sub-gifter/50;color=;display-name=AdamAtReflectStudios;emotes=;flags=;id=7f1336e4-f84a-4510-809d-e57bf50af0cc;login=adamatreflectstudios;mod=0;msg-id=rewardgift;msg-param-domain=pride_megacommerce_2020;msg-param-selected-count=100;msg-param-total-reward-count=100;msg-param-trigger-amount=20;msg-param-trigger-type=SUBGIFT;room-id=71092938;subscriber=0;system-msg=AdamAtReflectStudios's\\\\sGift\\\\sshared\\\\srewards\\\\sto\\\\s100\\\\sothers\\\\sin\\\\sChat!;tmi-sent-ts=1594583778756;user-id=211711554;user-type= :tmi.twitch.tv USERNOTICE #xqcow\")"
+---
+UserNotice {
+    channel: Channel(
+        "#xqcow",
+    ),
+    channel_id: "71092938",
+    sender: None,
+    text: None,
+    system_message: Some(
+        "AdamAtReflectStudios's Gift shared rewards to 100 others in Chat!",
+    ),
+    event: __non_exhaustive,
+    event_id: "rewardgift",
+    badges: [
+        Other(
+            BadgeData {
+                name: "sub-gifter",
+                version: "50",
+                extra: None,
+            },
+        ),
+    ],
+    emotes: "",
+    color: None,
+    message_id: "7f1336e4-f84a-4510-809d-e57bf50af0cc",
+    timestamp: 2020-07-12T19:56:18.756Z,
+}

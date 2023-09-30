@@ -1,0 +1,9 @@
+---
+source: src/msg/ping.rs
+expression: "f(\":tmi.twitch.tv PING :nonce\")"
+---
+Ping {
+    nonce: Some(
+        "nonce",
+    ),
+}

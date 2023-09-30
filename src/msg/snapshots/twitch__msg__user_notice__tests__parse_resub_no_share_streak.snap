@@ -1,0 +1,46 @@
+---
+source: src/msg/user_notice.rs
+expression: "f(\"@badge-info=;badges=premium/1;color=#8A2BE2;display-name=rene_rs;emotes=;flags=;id=ca1f02fb-77ec-487d-a9b3-bc4bfef2fe8b;login=rene_rs;mod=0;msg-id=resub;msg-param-cumulative-months=11;msg-param-months=0;msg-param-should-share-streak=0;msg-param-sub-plan-name=Channel\\\\sSubscription\\\\s(xqcow);msg-param-sub-plan=Prime;room-id=71092938;subscriber=0;system-msg=rene_rs\\\\ssubscribed\\\\swith\\\\sTwitch\\\\sPrime.\\\\sThey've\\\\ssubscribed\\\\sfor\\\\s11\\\\smonths!;tmi-sent-ts=1590628650446;user-id=171356987;user-type= :tmi.twitch.tv USERNOTICE #xqcow\")"
+---
+UserNotice {
+    channel: Channel(
+        "#xqcow",
+    ),
+    channel_id: "71092938",
+    sender: Some(
+        User {
+            id: "171356987",
+            login: "rene_rs",
+            name: "rene_rs",
+        },
+    ),
+    text: None,
+    system_message: Some(
+        "rene_rs subscribed with Twitch Prime. They've subscribed for 11 months!",
+    ),
+    event: SubOrResub(
+        SubOrResub {
+            is_resub: true,
+            cumulative_months: 11,
+            streak_months: None,
+            sub_plan: "Prime",
+            sub_plan_name: "Channel Subscription (xqcow)",
+        },
+    ),
+    event_id: "resub",
+    badges: [
+        Other(
+            BadgeData {
+                name: "premium",
+                version: "1",
+                extra: None,
+            },
+        ),
+    ],
+    emotes: "",
+    color: Some(
+        "#8A2BE2",
+    ),
+    message_id: "ca1f02fb-77ec-487d-a9b3-bc4bfef2fe8b",
+    timestamp: 2020-05-28T01:17:30.446Z,
+}

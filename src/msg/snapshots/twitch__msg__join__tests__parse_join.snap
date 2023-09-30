@@ -1,0 +1,10 @@
+---
+source: src/msg/join.rs
+expression: "f(\":randers811!randers811@randers811.tmi.twitch.tv JOIN #pajlada\")"
+---
+Join {
+    channel: Channel(
+        "#pajlada",
+    ),
+    user: "randers811",
+}

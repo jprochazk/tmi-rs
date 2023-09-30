@@ -7,7 +7,7 @@
 //!
 //! Archived link: https://web.archive.org/web/20230603011837/https://community.arm.com/arm-community-blogs/b/infrastructure-solutions-blog/posts/porting-x86-vector-bitmask-optimizations-to-arm-neon
 
-use crate::{leak, ParsedTags, Tags, Whitelist};
+use crate::irc::{RawTags, Span, Whitelist};
 
 use core::arch::aarch64 as simd;
 use core::mem;
@@ -16,7 +16,7 @@ use std::ops::Add;
 
 /// We don't have a SIMD implementation of `parse_prefix` in NEON,
 /// because it was not faster. Instead just re-export the scalar impl.
-pub use crate::scalar::parse_prefix;
+pub use crate::irc::scalar::parse_prefix;
 
 /// Parse IRC message tags:
 ///
@@ -25,58 +25,64 @@ pub use crate::scalar::parse_prefix;
 /// Tags consist of semicolon-separated key-value pairs.
 /// The tag list is terminated by a ` ` character.
 #[inline(always)]
-pub fn parse_tags<'src, const IC: usize, F>(
-  remainder: &'src str,
+pub fn parse_tags<const IC: usize, F>(
+  src: &str,
+  pos: &mut usize,
   whitelist: &Whitelist<IC, F>,
-) -> (Option<ParsedTags<'static>>, &'src str)
+) -> RawTags
 where
-  F: for<'a> Fn(&'a mut Tags<'static>, &'static str, &'static str),
+  F: Fn(&str, &mut RawTags, Span, Span),
 {
   // This code is identical to the `x86_sse` version.
   // It should not be duplicated, but seeing as there are only two SIMD implementations,
   // I believe it is simpler to just copy the implementation, at least for now.
+  if !src[*pos..].starts_with('@') {
+    return RawTags::new();
+  }
 
-  if let Some(remainder) = remainder.strip_prefix('@') {
-    let mut tags = Tags::with_capacity(IC);
+  let mut tags = RawTags::with_capacity(IC);
 
-    let mut remainder = remainder;
-    while !remainder.is_empty() {
-      let Some(key_end) = find_equals(remainder) else {
+  let mut key_start = *pos + 1;
+  while !src[key_start..].is_empty() {
+    let Some(mut key_end) = find_equals(&src[key_start..]) else {
+      break;
+    };
+    key_end += key_start;
+
+    let value_start = key_end + 1;
+
+    match find_semi_or_space(&src[value_start..]) {
+      Some(Found::Semi(value_end)) => {
+        let value_end = value_end + value_start;
+        let key = Span::from(key_start..key_end);
+        let value = Span::from(value_start..value_end);
+        whitelist.maybe_insert(src, &mut tags, key, value);
+        // advance to after the `;`
+        key_start = value_end + 1;
+        continue;
+      }
+      Some(Found::Space(value_end)) => {
+        let value_end = value_end + value_start;
+        let key = Span::from(key_start..key_end);
+        let value = Span::from(value_start..value_end);
+        whitelist.maybe_insert(src, &mut tags, key, value);
+        // advance to after the ` `
+        key_start = value_end + 1;
         break;
-      };
-      let value_start = key_end + 1;
-      let value_end = find_semi_or_space(unsafe { remainder.get_unchecked(value_start..) })
-        .map(|v| value_start + v);
-
-      match value_end {
-        Some(Found::Semi(value_end)) => {
-          let key = unsafe { leak(remainder.get_unchecked(..key_end)) };
-          let value = unsafe { leak(remainder.get_unchecked(value_start..value_end)) };
-          whitelist.maybe_insert(&mut tags, key, value);
-          remainder = unsafe { remainder.get_unchecked(value_end + 1..) };
-          continue;
-        }
-        Some(Found::Space(value_end)) => {
-          let key = unsafe { leak(remainder.get_unchecked(..key_end)) };
-          let value = unsafe { leak(remainder.get_unchecked(value_start..value_end)) };
-          whitelist.maybe_insert(&mut tags, key, value);
-          remainder = unsafe { remainder.get_unchecked(value_end + 1..) };
-          break;
-        }
-        None => {
-          let key = unsafe { leak(remainder.get_unchecked(..key_end)) };
-          let value = unsafe { leak(remainder.get_unchecked(value_start..)) };
-          whitelist.maybe_insert(&mut tags, key, value);
-          remainder = unsafe { remainder.get_unchecked(remainder.len()..) };
-          break;
-        }
+      }
+      None => {
+        let key = Span::from(key_start..key_end);
+        let value = Span::from(value_start..src.len());
+        whitelist.maybe_insert(src, &mut tags, key, value);
+        key_start = src.len();
+        break;
       }
     }
-
-    (Some(tags), remainder)
-  } else {
-    (None, remainder)
   }
+
+  *pos = key_start;
+
+  tags
 }
 
 #[inline(always)]
@@ -249,7 +255,7 @@ impl Mask {
 
 #[cfg(test)]
 mod tests {
-  use crate::whitelist_insert_all;
+  use crate::irc::whitelist_insert_all;
 
   use super::*;
 
@@ -286,60 +292,89 @@ mod tests {
     }
   }
 
+  macro_rules! make {
+    ($($key:ident: $value:expr),* $(,)?) => (
+      [
+        $(($crate::Tag::$key, $value)),*
+      ].into_iter().collect::<Vec<_>>()
+    );
+  }
+
   #[test]
   fn tags() {
-    macro_rules! make {
-      ($($key:ident: $value:expr),* $(,)?) => (
-        [
-          $(($crate::Tag::$key, $value)),*
-        ].into_iter().collect::<Tags>()
-      );
-    }
-
     let cases = [
-      ("", (None, "")),
-      ("mod=0;id=1000", (None, "mod=0;id=1000")),
-      ("@mod=0;id=1000", (Some(make! {Mod: "0", Id: "1000",}), "")),
-      ("@mod=0;id=1000 ", (Some(make! {Mod: "0", Id: "1000",}), "")),
+      ("", (vec![], "")),
+      ("mod=0;id=1000", (vec![], "mod=0;id=1000")),
+      ("@mod=0;id=1000", (make! {Mod: "0", Id: "1000",}, "")),
+      ("@mod=0;id=1000 ", (make! {Mod: "0", Id: "1000",}, "")),
       (
         "@mod=0;id=1000 :asdf",
-        (Some(make! {Mod: "0", Id: "1000",}), ":asdf"),
+        (make! {Mod: "0", Id: "1000",}, ":asdf"),
       ),
     ];
 
-    for (i, (string, expected)) in cases.into_iter().enumerate() {
-      let result = parse_tags(string, &Whitelist::<16, _>(whitelist_insert_all));
-      if result.1 != expected.1 || result.0.as_deref() != expected.0.as_deref() {
-        eprintln!("[{i}] actual: {result:?}, expected: {expected:?}");
-        panic!()
-      }
+    for (src, (expected_tags, expected_remainder)) in cases.into_iter() {
+      let mut pos = 0;
+      let actual_tags: Vec<_> =
+        parse_tags(src, &mut pos, &Whitelist::<16, _>(whitelist_insert_all))
+          .into_iter()
+          .map(|tag| tag.get(src))
+          .collect();
+      assert_eq!(actual_tags, expected_tags);
+      assert_eq!(&src[pos..], expected_remainder);
     }
   }
 
   #[test]
   fn tags_whitelist() {
-    macro_rules! make {
-      ($($key:ident: $value:expr),* $(,)?) => (
-        [
-          $(($crate::Tag::$key, $value)),*
-        ].into_iter().collect::<Tags>()
-      );
-    }
-
     let cases = [
-      ("", (None, "")),
-      ("mod=0;id=1000", (None, "mod=0;id=1000")),
-      ("@mod=0;id=1000", (Some(make! {Mod: "0"}), "")),
-      ("@mod=0;id=1000 ", (Some(make! {Mod: "0"}), "")),
-      ("@mod=0;id=1000 :asdf", (Some(make! {Mod: "0"}), ":asdf")),
+      ("", (vec![], "")),
+      ("mod=0;id=1000", (vec![], "mod=0;id=1000")),
+      ("@mod=0;id=1000", (make! {Mod: "0"}, "")),
+      ("@mod=0;id=1000 ", (make! {Mod: "0"}, "")),
+      ("@mod=0;id=1000 :asdf", (make! {Mod: "0"}, ":asdf")),
     ];
 
-    for (i, (string, expected)) in cases.into_iter().enumerate() {
-      let result = parse_tags(string, &whitelist!(Mod));
-      if result.1 != expected.1 || result.0.as_deref() != expected.0.as_deref() {
-        eprintln!("[{i}] actual: {result:?}, expected: {expected:?}");
-        panic!()
-      }
+    for (src, (expected_tags, expected_remainder)) in cases.into_iter() {
+      let mut pos = 0;
+      let actual_tags: Vec<_> = parse_tags(src, &mut pos, &whitelist!(Mod))
+        .into_iter()
+        .map(|tag| tag.get(src))
+        .collect();
+      assert_eq!(actual_tags, expected_tags);
+      assert_eq!(&src[pos..], expected_remainder)
     }
+  }
+
+  #[test]
+  fn prefix() {
+    let data = ":nick!user@host <rest>";
+    let mut pos = 0;
+    let prefix = parse_prefix(data, &mut pos).unwrap();
+    assert_eq!(prefix.nick.unwrap().get(data), "nick");
+    assert_eq!(prefix.user.unwrap().get(data), "user");
+    assert_eq!(prefix.host.get(data), "host");
+    assert_eq!(&data[pos..], "<rest>");
+
+    let data = ":nick@host <rest>";
+    let mut pos = 0;
+    let prefix = parse_prefix(data, &mut pos).unwrap();
+    assert_eq!(prefix.nick.unwrap().get(data), "nick");
+    assert!(prefix.user.is_none());
+    assert_eq!(prefix.host.get(data), "host");
+    assert_eq!(&data[pos..], "<rest>");
+
+    let data = ":host <rest>";
+    let mut pos = 0;
+    let prefix = parse_prefix(data, &mut pos).unwrap();
+    assert!(prefix.nick.is_none());
+    assert!(prefix.user.is_none());
+    assert_eq!(prefix.host.get(data), "host");
+    assert_eq!(&data[pos..], "<rest>");
+  }
+
+  #[test]
+  fn test_parse_data_0() {
+    crate::IrcMessage::parse(r"@badge-info=;badges=premium/1;color=#000000;display-name=Vicarun;emotes=;flags=;id=a0414f65-b471-46be-b6cc-f8d7cd0aa62c;login=vicarun;mod=0;msg-id=resub;msg-param-cumulative-months=20;msg-param-months=0;msg-param-multimonth-duration=1;msg-param-multimonth-tenure=0;msg-param-should-share-streak=0;msg-param-sub-plan-name=Channel\sSubscription\s(forsenlol);msg-param-sub-plan=Prime;msg-param-was-gifted=false;room-id=22484632;subscriber=1;system-msg=Vicarun\ssubscribed\swith\sPrime.\sThey've\ssubscribed\sfor\s20\smonths!;tmi-sent-ts=1685664553875;user-id=691811336;user-type= :tmi.twitch.tv USERNOTICE #forsen").unwrap();
   }
 }

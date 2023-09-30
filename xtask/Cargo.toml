@@ -1,0 +1,15 @@
+[package]
+name = "xtask"
+version = "0.1.0"
+edition = "2021"
+repository = "https://github.com/jprochazk/twitch-rs"
+license = "MIT OR Apache-2.0"
+description = "xtask for twitch-rs"
+readme = "../README.md"
+publish = false
+
+[dependencies]
+anyhow = { version = "1.0.72", features = ["backtrace"] }
+argp = "0.3"
+
+[workspace]

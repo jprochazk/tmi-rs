@@ -1,0 +1,17 @@
+---
+source: src/msg/clear_chat.rs
+expression: "f(\"@room-id=11148817;target-user-id=70948394;tmi-sent-ts=1594561360331 :tmi.twitch.tv CLEARCHAT #pajlada :weeb123\")"
+---
+ClearChat {
+    channel: Channel(
+        "#pajlada",
+    ),
+    channel_id: "11148817",
+    action: Ban(
+        Ban {
+            user: "weeb123",
+            id: "70948394",
+        },
+    ),
+    timestamp: 2020-07-12T13:42:40.331Z,
+}
