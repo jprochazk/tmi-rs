@@ -900,24 +900,7 @@ mod tests {
     #[test]
     fn regression_equals_in_tag_value() {
       let data = "@display-name=Dixtor334;emotes=;first-msg=0;flags=;id=0b4c70e4-9a47-4ce1-9c3e-8f78111cdc19;mod=0;reply-parent-display-name=minosura;reply-parent-msg-body=https://youtu.be/-ek4MFjz_eM?list=PL91C6439FD45DE2F3\\sannytfDinkDonk\\sstrimmer\\skorean\\sone;reply-parent-msg-id=7f811788-b897-4b4c-9f91-99fafe70eb7f;reply-parent-user-id=141993641;reply-parent-user-login=minosura;returning-chatter=0;room-id=56418014;subscriber=1;tmi-sent-ts=1686049636367;turbo=0;user-id=73714767;user-type= :dixtor334!dixtor334@dixtor334.tmi.twitch.tv PRIVMSG #anny :@minosura @anny";
-
-      let a = IrcMessageRef::parse(data).unwrap();
-      let mut a = a
-        .tags()
-        .map(|(tag, value)| (tag.as_str(), unescape(value)))
-        .collect::<Vec<_>>();
-      a.sort_by_key(|(tag, _)| *tag);
-
-      let b = twitch_irc::message::IRCMessage::parse(data).unwrap();
-      let mut b = b
-        .tags
-        .0
-        .iter()
-        .map(|(tag, value)| (tag.as_str(), String::from(value.as_deref().unwrap_or(""))))
-        .collect::<Vec<_>>();
-      b.sort_by_key(|(tag, _)| *tag);
-
-      assert_eq!(a, b);
+      assert_eq!("https://youtu.be/-ek4MFjz_eM?list=PL91C6439FD45DE2F3\\sannytfDinkDonk\\sstrimmer\\skorean\\sone", IrcMessageRef::parse(data).unwrap().tag(Tag::ReplyParentMsgBody).unwrap());
     }
   }
 }

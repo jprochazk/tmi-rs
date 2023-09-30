@@ -59,7 +59,6 @@ serde = { version = "1.0", optional = true, features = ["derive"] }
 beef = "0.5.2"
 
 [dev-dependencies]
-twitch-irc = "5.0.0"
 mimalloc = { version = "0.1.37", default-features = false }
 
 criterion = "0.5.1"
