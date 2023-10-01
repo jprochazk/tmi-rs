@@ -14,7 +14,7 @@ pub struct Part<'src> {
 generate_getters! {
   <'src> for Part<'src> as self {
     /// Parted channel name.
-    channel -> Channel<'_>,
+    channel -> &Channel<'_> = &self.channel,
 
     /// Login of the user.
     user -> &str,

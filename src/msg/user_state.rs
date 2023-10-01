@@ -27,7 +27,7 @@ pub struct UserState<'src> {
 generate_getters! {
   <'src> for UserState<'src> as self {
     /// Name of the channel in which this state applies to.
-    channel -> Channel<'_>,
+    channel -> &Channel<'_> = &self.channel,
 
     /// Display name of the user.
     user_name -> &str,

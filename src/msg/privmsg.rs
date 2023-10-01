@@ -28,7 +28,7 @@ pub struct Privmsg<'src> {
 generate_getters! {
   <'src> for Privmsg<'src> as self {
     /// Channel in which this message was sent.
-    channel -> Channel<'_>,
+    channel -> &Channel<'_> = &self.channel,
 
     /// ID of the channel in which this message was sent.
     channel_id -> &str,

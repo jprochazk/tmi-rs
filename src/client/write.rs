@@ -29,6 +29,16 @@ impl<'a> std::fmt::Display for Tag<'a> {
 }
 
 impl<'c, 'a> Privmsg<'c, 'a> {
+  pub fn reply_to(mut self, reply_parent_msg_id: &'a str) -> Self {
+    self.reply_parent_msg_id = Some(reply_parent_msg_id);
+    self
+  }
+
+  pub fn client_nonce(mut self, value: &'a str) -> Self {
+    self.client_nonce = Some(value);
+    self
+  }
+
   pub async fn send(self) -> Result<(), SendError> {
     let Self {
       client,
@@ -86,16 +96,16 @@ impl Client {
   /// - `client_nonce`: to identify the message in the `Notice` which Twitch may send as a response to this message.
   pub fn privmsg<'this, 'a, C, S>(
     &'this mut self,
-    channel: C,
+    channel: &'a C,
     text: &'a S,
   ) -> Result<Privmsg<'this, 'a>, SendError>
   where
-    C: TryInto<Channel<'a>, Error = InvalidChannelName>,
+    C: ?Sized + AsRef<str>,
     S: ?Sized + AsRef<str>,
   {
     Ok(Privmsg {
       client: self,
-      channel: channel.try_into()?,
+      channel: Channel::parse(channel.as_ref())?,
       text: text.as_ref(),
       reply_parent_msg_id: None,
       client_nonce: None,
@@ -127,12 +137,9 @@ impl Client {
   /// ⚠ This call is not rate limited in any way.
   ///
   /// ⚠ `channel` MUST be a valid channel name prefixed by `#`.
-  pub async fn join<'a, S>(&mut self, channel: S) -> Result<(), SendError>
-  where
-    S: TryInto<Channel<'a>, Error = InvalidChannelName> + 'a,
-  {
+  pub async fn join(&mut self, channel: &impl AsRef<str>) -> Result<(), SendError> {
     with_scratch!(self, |f| {
-      let channel = channel.try_into()?;
+      let channel = Channel::parse(channel.as_ref())?;
       let _ = write!(f, "JOIN {channel}\r\n");
       self.send_raw(f.as_str()).await
     })
@@ -146,18 +153,18 @@ impl Client {
   /// prefixed by `#`.
   pub async fn join_all<'a, I, S>(&mut self, channels: I) -> Result<(), SendError>
   where
-    I: IntoIterator<Item = S>,
-    S: TryInto<Channel<'a>, Error = InvalidChannelName> + 'a,
+    I: IntoIterator<Item = &'a S>,
+    S: ?Sized + AsRef<str> + 'a,
   {
     with_scratch!(self, |f| {
       let _ = f.write_str("JOIN ");
       let mut channels = channels.into_iter();
       if let Some(channel) = channels.next() {
-        let channel = channel.try_into()?;
+        let channel = Channel::parse(channel.as_ref())?;
         let _ = write!(f, "{channel}");
       }
       for channel in channels {
-        let channel = channel.try_into()?;
+        let channel = Channel::parse(channel.as_ref())?;
         let _ = write!(f, ",{channel}");
       }
       let _ = f.write_str("\r\n");

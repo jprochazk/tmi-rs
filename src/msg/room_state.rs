@@ -20,7 +20,7 @@ pub struct RoomState<'src> {
 generate_getters! {
   <'src> for RoomState<'src> as self {
     /// Login of the channel this state was applied to.
-    channel -> Channel<'_>,
+    channel -> &Channel<'_> = &self.channel,
 
     /// ID of the channel this state was applied to.
     channel_id -> &str,

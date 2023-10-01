@@ -14,7 +14,7 @@ pub struct Join<'src> {
 generate_getters! {
   <'src> for Join<'src> as self {
     /// Joined channel name.
-    channel -> Channel<'_>,
+    channel -> &Channel<'_> = &self.channel,
 
     /// Login of the user.
     user -> &str,

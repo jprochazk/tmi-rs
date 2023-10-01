@@ -32,13 +32,15 @@
 #[macro_use]
 mod macros;
 
-mod conn;
-mod read;
-mod util;
-mod write;
+pub mod conn;
+pub mod read;
+pub mod util;
+pub mod write;
 
 use self::conn::TlsConfig;
+use self::conn::{OpenStreamError, TlsConfigError};
 use self::read::ReadStream;
+use self::read::RecvError;
 use self::write::WriteStream;
 use crate::irc::Command;
 use crate::IrcMessage;
@@ -54,10 +56,6 @@ use tokio_rustls::rustls::ServerName;
 use tokio_stream::wrappers::LinesStream;
 use util::Timeout;
 
-pub use self::conn::{OpenStreamError, TlsConfigError};
-pub use self::read::RecvError;
-pub use self::write::{SameMessageBypass, SendError};
-
 /// Credentials used to authenticate to Twitch IRC.
 ///
 /// The [`Default`] impl uses [`Credentials::anon`].
@@ -71,6 +69,8 @@ pub struct Credentials {
 }
 
 impl Credentials {
+  const ANON_RANGE: std::ops::Range<u32> = 10000..99999;
+
   /// Instantiate credentials from a `nick` and `pass`.
   ///
   /// This does nothing except make it a little more convenient
@@ -93,8 +93,18 @@ impl Credentials {
   pub fn anon() -> Self {
     Self {
       pass: "just_a_lil_guy".into(),
-      nick: format!("justinfan{}", thread_rng().gen_range(10000u32..99999u32)),
+      nick: format!("justinfan{}", thread_rng().gen_range(Self::ANON_RANGE)),
     }
+  }
+
+  pub fn is_anon(&self) -> bool {
+    let Some(digits) = self.nick.strip_prefix("justinfan") else {
+      return false;
+    };
+    let Some(digits) = digits.parse::<u32>().ok() else {
+      return false;
+    };
+    Self::ANON_RANGE.contains(&digits)
   }
 }
 
@@ -204,7 +214,7 @@ pub struct Client {
 
   scratch: String,
   tls: TlsConfig,
-  credentials: Credentials,
+  config: Config,
 }
 
 impl Client {
@@ -236,7 +246,7 @@ impl Client {
       writer,
       scratch: String::with_capacity(1024),
       tls,
-      credentials: config.credentials,
+      config,
     };
     chat.handshake().timeout(timeout).await??;
     Ok(chat)
@@ -298,13 +308,12 @@ impl Client {
   async fn handshake(&mut self) -> Result<(), ConnectError> {
     trace!("performing handshake");
 
+    let credentials = &self.config.credentials;
     const CAP: &str = "twitch.tv/commands twitch.tv/tags twitch.tv/membership";
-    trace!("CAP REQ {CAP}; NICK {}; PASS ***", self.credentials.nick);
-
+    trace!("CAP REQ {CAP:?}; NICK {:?}; PASS ***", credentials.nick);
     write!(&mut self.scratch, "CAP REQ :{CAP}\r\n").unwrap();
-    write!(&mut self.scratch, "NICK {}\r\n", self.credentials.nick).unwrap();
-    write!(&mut self.scratch, "PASS {}\r\n", self.credentials.pass).unwrap();
-
+    write!(&mut self.scratch, "PASS {}\r\n", credentials.pass).unwrap();
+    write!(&mut self.scratch, "NICK {}\r\n", credentials.nick).unwrap();
     self.writer.write_all(self.scratch.as_bytes()).await?;
     self.writer.flush().await?;
     self.scratch.clear();
@@ -355,6 +364,18 @@ impl Client {
     }
 
     Ok(())
+  }
+}
+
+impl Client {
+  #[inline]
+  pub fn config(&self) -> &Config {
+    &self.config
+  }
+
+  #[inline]
+  pub fn credentials(&self) -> &Credentials {
+    &self.config.credentials
   }
 }
 

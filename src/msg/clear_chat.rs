@@ -17,7 +17,7 @@ pub struct ClearChat<'src> {
 generate_getters! {
   <'src> for ClearChat<'src> as self {
     /// Name of the affected channel.
-    channel -> Channel<'_>,
+    channel -> &Channel<'_> = &self.channel,
 
     /// ID of the affected channel.
     channel_id -> &str,

@@ -20,7 +20,7 @@ pub struct ClearMsg<'src> {
 generate_getters! {
   <'src> for ClearMsg<'src> as self {
     /// Login of the channel in which the message was deleted.
-    channel -> Channel<'_>,
+    channel -> &Channel<'_> = &self.channel,
 
     /// ID of the channel in which the message was deleted.
     channel_id -> &str,

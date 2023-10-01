@@ -28,7 +28,7 @@ pub struct UserNotice<'src> {
 generate_getters! {
   <'src> for UserNotice<'src> as self {
     /// Name of the channel which received this user notice.
-    channel -> Channel<'_>,
+    channel -> &Channel<'_> = &self.channel,
 
     /// ID of the channel which received this user notice.
     channel_id -> &str,

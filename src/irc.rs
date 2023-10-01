@@ -51,21 +51,6 @@ struct IrcMessageParts {
 
 impl<'src> IrcMessageRef<'src> {
   /// Parse a single Twitch IRC message.
-  ///
-  /// If the message can't be parsed, the string is returned in the result as `Err`.
-  ///
-  /// Twitch often sends multiple messages in a batch separated by `\r\n`.
-  /// Before parsing messages, you should always split them by `\r\n` first:
-  ///
-  /// ```rust,ignore
-  /// if let Some(data) = ws.next().await {
-  ///     if let Message::Text(data) = data? {
-  ///         for message in data.lines().flat_map(twitch::Message::parse) {
-  ///             handle(message)
-  ///         }
-  ///     }
-  /// }
-  /// ```
   pub fn parse(src: &'src str) -> Option<Self> {
     Self::parse_inner(src, Whitelist::<16, _>(whitelist_insert_all))
   }
@@ -73,25 +58,10 @@ impl<'src> IrcMessageRef<'src> {
   /// Parse a single Twitch IRC message with a tag whitelist.
   ///
   /// ```rust,ignore
-  /// twitch::parse_with_whitelist(
+  /// IrcMessageRef::parse_with_whitelist(
   ///     ":forsen!forsen@forsen.tmi.twitch.tv PRIVMSG #pajlada :AlienPls",
-  ///     twitch::whitelist!(DisplayName, Id, TmiSentTs, UserId),
+  ///     tmi::whitelist!(DisplayName, Id, TmiSentTs, UserId),
   /// )
-  /// ```
-  ///
-  /// If the message can't be parsed, the string is returned in the result as `Err`.
-  ///
-  /// Twitch often sends multiple messages in a batch separated by `\r\n`.
-  /// Before parsing messages, you should always split them by `\r\n` first:
-  ///
-  /// ```rust,ignore
-  /// if let Some(data) = ws.next().await {
-  ///     if let Message::Text(data) = data? {
-  ///         for message in data.lines().flat_map(twitch::Message::parse) {
-  ///             handle(message)
-  ///         }
-  ///     }
-  /// }
   /// ```
   pub fn parse_with_whitelist<const IC: usize, F>(
     src: &'src str,
@@ -227,21 +197,6 @@ pub struct IrcMessage {
 
 impl IrcMessage {
   /// Parse a single Twitch IRC message.
-  ///
-  /// If the message can't be parsed, the string is returned in the result as `Err`.
-  ///
-  /// Twitch often sends multiple messages in a batch separated by `\r\n`.
-  /// Before parsing messages, you should always split them by `\r\n` first:
-  ///
-  /// ```rust,ignore
-  /// if let Some(data) = ws.next().await {
-  ///     if let Message::Text(data) = data? {
-  ///         for message in data.lines().flat_map(twitch::OwnedMessage::parse) {
-  ///             handle(message)
-  ///         }
-  ///     }
-  /// }
-  /// ```
   pub fn parse(src: impl ToString) -> Option<Self> {
     let src = src.to_string();
     let parts = IrcMessageRef::parse_inner(&src, Whitelist::<16, _>(whitelist_insert_all))?.parts;
@@ -251,25 +206,10 @@ impl IrcMessage {
   /// Parse a single Twitch IRC message with a tag whitelist.
   ///
   /// ```rust,ignore
-  /// twitch::parse_with_whitelist(
+  /// IrcMessage::parse_with_whitelist(
   ///     ":forsen!forsen@forsen.tmi.twitch.tv PRIVMSG #pajlada :AlienPls",
-  ///     twitch::whitelist!(DisplayName, Id, TmiSentTs, UserId),
+  ///     tmi::whitelist!(DisplayName, Id, TmiSentTs, UserId),
   /// )
-  /// ```
-  ///
-  /// If the message can't be parsed, the string is returned in the result as `Err`.
-  ///
-  /// Twitch often sends multiple messages in a batch separated by `\r\n`.
-  /// Before parsing messages, you should always split them by `\r\n` first:
-  ///
-  /// ```rust,ignore
-  /// if let Some(data) = ws.next().await {
-  ///     if let Message::Text(data) = data? {
-  ///         for message in data.lines().flat_map(twitch::OwnedMessage::parse) {
-  ///             handle(message)
-  ///         }
-  ///     }
-  /// }
   /// ```
   pub fn parse_with_whitelist<const IC: usize, F>(
     src: impl ToString,
@@ -355,7 +295,7 @@ impl IrcMessage {
 
 impl Debug for IrcMessage {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    f.debug_struct("OwnedMessage")
+    f.debug_struct("IrcMessage")
       .field("tags", &DebugIter::new(self.tags()))
       .field("prefix", &self.prefix())
       .field("command", &self.command())
@@ -385,7 +325,7 @@ where
     for item in self.0.borrow_mut().deref_mut() {
       list.entry(&item);
     }
-    Ok(())
+    list.finish()
   }
 }
 
