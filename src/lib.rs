@@ -1,7 +1,4 @@
 #![doc = include_str!("../README.md")]
-#![deny(missing_docs)]
-#![deny(rustdoc::missing_crate_level_docs)]
-#![deny(rustdoc::missing_doc_code_examples)]
 
 #[cfg(feature = "client")]
 #[macro_use]

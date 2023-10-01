@@ -38,7 +38,7 @@ generate_getters! {
     ///
     /// Not available if the sender is anonymous.
     ///
-    /// For example, an anonymous gift sub would be sent as a [`UserNoticeEvent::SubGift`], but unlike many
+    /// For example, an anonymous gift sub would be sent as a [`Event::SubGift`], but unlike many
     /// other events, there is no `AnonSubGift` variant of this one, so the [`UserNotice::sender`] field will
     /// be set to [`None`].
     sender -> Option<&User<'src>> = self.sender.as_ref(),
@@ -54,7 +54,7 @@ generate_getters! {
 
     /// ID of the event.
     ///
-    /// This may be used in case it is not available as a variant of the [`UserNoticeEvent`] enum.
+    /// This may be used in case it is not available as a variant of the [`Event`] enum.
     event_id -> &str,
 
     /// List of channel badges enabled by the user in the [channel][`UserNotice::channel`].
@@ -363,7 +363,7 @@ generate_getters! {
   }
 }
 
-/// Used in [`UserNoticeEvent::GiftPaidUpgrade`] and [`UserNoticeEvent::AnonGiftPaidUpgrade`].
+/// Used in [`Event::GiftPaidUpgrade`] and [`Event::AnonGiftPaidUpgrade`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SubGiftPromo<'src> {
   total_gifts: u64,

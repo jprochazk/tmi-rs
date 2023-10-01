@@ -38,7 +38,6 @@ pub trait FromIrc<'src>: Sized + private::Sealed {
 ///
 /// Note that this one
 #[derive(Clone, Debug)]
-#[allow(missing_docs)]
 pub enum Message<'src> {
   ClearChat(ClearChat<'src>),
   ClearMsg(ClearMsg<'src>),

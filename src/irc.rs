@@ -649,7 +649,6 @@ macro_rules! tags_def {
   ) => {
     /// A parsed tag value.
     #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
-    #[allow(missing_docs)]
     pub enum $tag<'src> {
       $(
         $(#[$meta])*

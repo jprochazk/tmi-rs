@@ -79,11 +79,11 @@ impl Client {
 
   /// Create a `privmsg` from a `channel` and `text`.
   ///
-  /// The message may be sent using [`Privmsg::send`].
+  /// The message may be sent using the `send` method.
   ///
-  /// You can specify additional properties using the builder methods on [`Privmsg`]:
-  /// - [`Privmsg::reply_to`] to specify a `reply-parent-msg-id` tag, which makes this privmsg a reply to another message.
-  /// - [`Privmsg::client_nonce`] to identify the message in the `Notice` which Twitch may send as a response to this message.
+  /// You can specify additional properties using the builder methods:
+  /// - `reply_to`: to specify a `reply-parent-msg-id` tag, which makes this privmsg a reply to another message.
+  /// - `client_nonce`: to identify the message in the `Notice` which Twitch may send as a response to this message.
   pub fn privmsg<'this, 'a, C, S>(
     &'this mut self,
     channel: C,

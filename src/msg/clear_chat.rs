@@ -22,7 +22,7 @@ generate_getters! {
     /// ID of the affected channel.
     channel_id -> &str,
 
-    /// The specific kind of [`ClearChatAction`] that this command represents.
+    /// The specific kind of [`Action`] that this command represents.
     action -> Action<'_>,
 
     /// Time at which the [`ClearChat`] was executed on Twitch servers.
