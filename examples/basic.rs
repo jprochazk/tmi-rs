@@ -17,7 +17,7 @@ async fn main() -> Result<()> {
         break;
       }
       msg = client.recv() => {
-        match msg?.as_ref().as_typed()? {
+        match msg?.as_typed()? {
           tmi::Message::Privmsg(msg) => println!("{}: {}", msg.sender().name(), msg.text()),
           tmi::Message::Reconnect => client.reconnect().await?,
           tmi::Message::Ping(ping) => client.pong(&ping).await?,

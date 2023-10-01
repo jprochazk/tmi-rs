@@ -10,7 +10,7 @@ client.join("#moscowwbish").await?;
 
 loop {
   let msg = client.recv().await?;
-  match tmi::Message::try_from(msg.as_ref())? {
+  match msg.as_typed()? {
     tmi::Message::Privmsg(msg) => println!("{}: {}", msg.sender().name(), msg.text()),
     tmi::Message::Reconnect => client.reconnect().await?,
     tmi::Message::Ping(ping) => client.pong(&ping).await?,
