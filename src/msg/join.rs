@@ -1,3 +1,5 @@
+//! Sent when a user joins a channel.
+
 use crate::common::Channel;
 use crate::irc::{Command, IrcMessageRef};
 

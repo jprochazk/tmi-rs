@@ -1,3 +1,5 @@
+//! A user notice is sent when some [`Event`] occurs.
+
 use super::is_not_empty;
 use super::{parse_badges, parse_timestamp, Badge, User};
 use crate::common::unescaped::Unescaped;
@@ -7,6 +9,7 @@ use chrono::{DateTime, Utc};
 
 // TODO: rewardgift, primepaidupgrade, extendsub, standardpayforward, communitypayforward
 
+/// A user notice is sent when some [`Event`] occurs.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UserNotice<'src> {
   channel: Channel<'src>,

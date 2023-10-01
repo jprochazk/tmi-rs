@@ -1,3 +1,16 @@
+//! ## IRCv3 Message parser
+//!
+//! The entrypoint to this module is [`IrcMessage`].
+//!
+//! ```rust,no_run
+//! let msg = IrcMessage::parse("...");
+//! ```
+//!
+//! ⚠ This parser is _not_ compliant with the IRCv3 spec!
+//! It assumes that it will only ever parse messages sent by Twitch,
+//! which means it handles Twitch-specific quirks, but it also means
+//! that it's unlikely to work for IRC messages sent by other servers.
+
 #![allow(dead_code)]
 
 #[macro_use]
@@ -18,6 +31,9 @@ use crate::common::Channel;
 use crate::common::Span;
 use std::fmt::{Debug, Display};
 
+/// A base IRC message.
+///
+/// This variant references the original string instead of owning it.
 #[derive(Clone)]
 pub struct IrcMessageRef<'src> {
   src: &'src str,
@@ -112,22 +128,27 @@ impl<'src> IrcMessageRef<'src> {
     })
   }
 
+  /// Get the string from which this message was parsed.
   pub fn raw(&self) -> &'src str {
     self.src
   }
 
+  /// Get an iterator over the message [`Tag`]s.
   pub fn tags(&self) -> impl Iterator<Item = (Tag<'src>, &'src str)> + '_ {
     self.parts.tags.iter().map(|pair| pair.get(self.src))
   }
 
+  /// Get the message [`Prefix`].
   pub fn prefix(&self) -> Option<Prefix<'src>> {
     self.parts.prefix.map(|prefix| prefix.get(self.src))
   }
 
+  /// Get the message [`Command`].
   pub fn command(&self) -> Command<'src> {
     self.parts.command.get(self.src)
   }
 
+  /// Get the channel name this message was sent to.
   pub fn channel(&self) -> Option<Channel<'src>> {
     self
       .parts
@@ -136,6 +157,9 @@ impl<'src> IrcMessageRef<'src> {
       .map(Channel::from_unchecked)
   }
 
+  /// Get the raw message params.
+  ///
+  /// You have to call `split_whitespace` on it yourself.
   pub fn params(&self) -> Option<&'src str> {
     self.parts.params.map(|span| &self.src[span])
   }
@@ -193,6 +217,9 @@ impl<'src> Debug for IrcMessageRef<'src> {
   }
 }
 
+/// A base IRC message.
+///
+/// This variants owns the input message.
 pub struct IrcMessage {
   src: String,
   parts: IrcMessageParts,
@@ -215,9 +242,10 @@ impl IrcMessage {
   ///     }
   /// }
   /// ```
-  pub fn parse(src: &str) -> Option<Self> {
-    IrcMessageRef::parse_inner(src, Whitelist::<16, _>(whitelist_insert_all))
-      .map(IrcMessageRef::into_owned)
+  pub fn parse(src: impl ToString) -> Option<Self> {
+    let src = src.to_string();
+    let parts = IrcMessageRef::parse_inner(&src, Whitelist::<16, _>(whitelist_insert_all))?.parts;
+    Some(IrcMessage { src, parts })
   }
 
   /// Parse a single Twitch IRC message with a tag whitelist.
@@ -244,40 +272,67 @@ impl IrcMessage {
   /// }
   /// ```
   pub fn parse_with_whitelist<const IC: usize, F>(
-    src: &str,
+    src: impl ToString,
     whitelist: Whitelist<IC, F>,
   ) -> Option<Self>
   where
     F: Fn(&str, &mut RawTags, Span, Span),
   {
-    IrcMessageRef::parse_inner(src, whitelist).map(IrcMessageRef::into_owned)
+    let src = src.to_string();
+    let parts = IrcMessageRef::parse_inner(&src, whitelist)?.parts;
+    Some(IrcMessage { src, parts })
   }
 
+  /// Get the string from which this message was parsed.
   pub fn raw(&self) -> &str {
     &self.src
   }
 
+  /// Get an iterator over the message [`Tag`]s.
   pub fn tags(&self) -> impl Iterator<Item = (Tag<'_>, &'_ str)> + '_ {
     self.parts.tags.iter().map(|pair| pair.get(&self.src))
   }
 
+  /// Get the message [`Prefix`].
   pub fn prefix(&self) -> Option<Prefix<'_>> {
     self.parts.prefix.map(|prefix| prefix.get(&self.src))
   }
 
+  /// Get the message [`Command`].
   pub fn command(&self) -> Command<'_> {
     self.parts.command.get(&self.src)
   }
 
+  /// Get the channel name this message was sent to.
   pub fn channel(&self) -> Option<&str> {
     self.parts.channel.map(|span| &self.src.as_str()[span])
   }
 
+  /// Get the raw message params.
+  ///
+  /// You have to call `split_whitespace` on it yourself.
   pub fn params(&self) -> Option<&str> {
     self.parts.params.map(|span| &self.src.as_str()[span])
   }
 
-  pub fn tag(&self, tag: Tag<'_>) -> Option<&str> {
+  /// Retrieve the value of `tag`.
+  ///
+  /// `tag` can provided as:
+  /// - A variant of the [`Tag`] enum
+  /// - The stringified kebab-case tag name
+  /// - [`Tag::Unknown`] with the stringified kebab-case tag name
+  ///
+  /// ⚠ [`Tag::Unknown`] has a different meaning from a specific
+  /// [`Tag`] variant, or the kebab-case tag name, it will _not_
+  /// match the others!
+  ///
+  /// ```rust,ignore
+  /// assert!(message.tag(Tag::MsgId) == message.tag("msg-id"));
+  /// assert!(message.tag(Tag::MsgId) != Tag::Unknown("msg-id"));
+  /// assert!(message.tag("msg-id") != Tag::Unknown("msg-id"));
+  /// ```
+  pub fn tag<'a>(&self, tag: impl Into<Tag<'a>>) -> Option<&str> {
+    let tag = tag.into();
     self
       .parts
       .tags
@@ -335,6 +390,7 @@ where
 }
 
 impl<'src> IrcMessageRef<'src> {
+  /// Turn the [`IrcMessageRef`] into its owned variant, [`IrcMessage`].
   pub fn into_owned(self) -> IrcMessage {
     IrcMessage {
       src: self.src.into(),
@@ -344,6 +400,7 @@ impl<'src> IrcMessageRef<'src> {
 }
 
 impl IrcMessage {
+  /// Turn the [`IrcMessage`] into its borrowed variant, [`IrcMessageRef`].
   pub fn as_ref(&self) -> IrcMessageRef<'_> {
     IrcMessageRef {
       src: &self.src,
@@ -352,6 +409,9 @@ impl IrcMessage {
   }
 }
 
+/// Unescape a `value` according to the escaped characters that Twitch IRC supports.
+///
+/// Note that this is _not_ the same as IRCv3! Twitch doesn't follow the spec here.
 pub fn unescape(value: &str) -> String {
   let mut out = String::with_capacity(value.len());
   let mut escape = false;
@@ -385,6 +445,7 @@ pub fn unescape(value: &str) -> String {
   out
 }
 
+/// A tag whitelist. Only the allowed tags will be parsed and stored.
 pub struct Whitelist<const IC: usize, F>(F);
 
 impl<const IC: usize, F> Whitelist<IC, F>
@@ -475,7 +536,7 @@ impl RawCommand {
       RawCommand::RplYourHost => Command::RplYourHost,
       RawCommand::RplCreated => Command::RplCreated,
       RawCommand::RplMyInfo => Command::RplMyInfo,
-      RawCommand::RplNamReply => Command::RplNamReply,
+      RawCommand::RplNamReply => Command::RplNames,
       RawCommand::RplEndOfNames => Command::RplEndOfNames,
       RawCommand::RplMotd => Command::RplMotd,
       RawCommand::RplMotdStart => Command::RplMotdStart,
@@ -485,22 +546,24 @@ impl RawCommand {
   }
 }
 
+/// A Twitch IRC command.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Command<'src> {
+  /// Ping the peer
   Ping,
+  /// The peer's response to a [`Command::Ping`]
   Pong,
-  /// Join channel
+  /// Join a channel
   Join,
-  /// Leave channel
+  /// Leave a channel
   Part,
-  /// Twitch Private Message
+  /// Send a message to a channel
   Privmsg,
-  // Twitch extensions
-  /// Send message to a single user
+  /// Send a private message to a user
   Whisper,
-  /// Purge a user's messages
+  /// Purge a user's messages in a channel
   ClearChat,
-  /// Single message removal
+  /// Remove a single message
   ClearMsg,
   /// Sent upon successful authentication (PASS/NICK command)
   GlobalUserState,
@@ -517,14 +580,23 @@ pub enum Command<'src> {
   /// Requesting an IRC capability
   Capability,
   // Numeric commands
+  /// `001`
   RplWelcome,
+  /// `002`
   RplYourHost,
+  /// `003`
   RplCreated,
+  /// `004`
   RplMyInfo,
-  RplNamReply,
+  /// `353`
+  RplNames,
+  /// `366`
   RplEndOfNames,
+  /// `372`
   RplMotd,
+  /// `375`
   RplMotdStart,
+  /// `376`
   RplEndOfMotd,
   /// Unknown command
   Other(&'src str),
@@ -537,6 +609,7 @@ impl<'src> Display for Command<'src> {
 }
 
 impl<'src> Command<'src> {
+  /// Get the string value of the [`Command`].
   pub fn as_str(&self) -> &'src str {
     use Command::*;
     match self {
@@ -559,7 +632,7 @@ impl<'src> Command<'src> {
       RplYourHost => "002",
       RplCreated => "003",
       RplMyInfo => "004",
-      RplNamReply => "353",
+      RplNames => "353",
       RplEndOfNames => "366",
       RplMotd => "372",
       RplMotdStart => "375",
@@ -574,7 +647,9 @@ macro_rules! tags_def {
     $tag:ident, $raw_tag:ident, $tag_mod:ident;
     $($(#[$meta:meta])* $bytes:literal; $key:literal = $name:ident),*
   ) => {
+    /// A parsed tag value.
     #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+    #[allow(missing_docs)]
     pub enum $tag<'src> {
       $(
         $(#[$meta])*
@@ -584,6 +659,7 @@ macro_rules! tags_def {
     }
 
     impl<'src> $tag<'src> {
+      #[doc = concat!("Get the string value of the [`", stringify!($tag), "`].")]
       pub fn as_str(&self) -> &'src str {
         match self {
           $(Self::$name => $key,)*
@@ -591,6 +667,7 @@ macro_rules! tags_def {
         }
       }
 
+      #[doc = concat!("Parse a [`", stringify!($tag), "`] from a string.")]
       #[inline(never)]
       pub fn parse(src: &'src str) -> Self {
         match src.as_bytes() {
@@ -739,10 +816,19 @@ impl RawPrefix {
   }
 }
 
+// TODO: have prefix only be two variants: `User` and `Host`
+/// A message prefix.
+///
+/// ```text,ignore
+/// :nick!user@host
+/// ```
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Prefix<'src> {
+  /// The `nick` part of the prefix.
   pub nick: Option<&'src str>,
+  /// The `user` part of the prefix.
   pub user: Option<&'src str>,
+  /// The `host` part of the prefix.
   pub host: &'src str,
 }
 

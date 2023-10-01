@@ -1,3 +1,12 @@
+//! Sent regularly by TMI to ensure clients are still live.
+//! You must respond to TMI pings with a [`Pong`][Pong].
+//!
+//! TMI will also respond with a pong if you send it a ping,
+//! combined with the [`Ping::nonce`], this can be useful
+//! to measure round-trip latency.
+//!
+//! [Pong]: crate::msg::pong::Pong
+
 use crate::irc::{Command, IrcMessageRef};
 
 /// Sent regularly by TMI to ensure clients are still live.

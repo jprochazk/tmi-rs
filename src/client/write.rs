@@ -29,7 +29,7 @@ impl<'a> std::fmt::Display for Tag<'a> {
 }
 
 impl<'c, 'a> Privmsg<'c, 'a> {
-  pub async fn send(self) -> Result<(), WriteError> {
+  pub async fn send(self) -> Result<(), SendError> {
     let Self {
       client,
       channel,
@@ -67,12 +67,12 @@ impl Client {
   /// ⚠ This call is not rate limited in any way.
   ///
   /// ⚠ The string MUST be terminated by `\r\n`.
-  pub async fn send_raw<'a, S>(&mut self, s: S) -> Result<(), WriteError>
+  pub async fn send_raw<'a, S>(&mut self, s: S) -> Result<(), SendError>
   where
     S: TryInto<RawMessage<'a>, Error = InvalidMessage> + 'a,
   {
     let RawMessage { data } = s.try_into()?;
-    tracing::trace!(data, "sending message");
+    trace!(data, "sending message");
     self.writer.write_all(data.as_bytes()).await?;
     Ok(())
   }
@@ -88,7 +88,7 @@ impl Client {
     &'this mut self,
     channel: C,
     text: &'a S,
-  ) -> Result<Privmsg<'this, 'a>, WriteError>
+  ) -> Result<Privmsg<'this, 'a>, SendError>
   where
     C: TryInto<Channel<'a>, Error = InvalidChannelName>,
     S: ?Sized + AsRef<str>,
@@ -102,14 +102,16 @@ impl Client {
     })
   }
 
-  pub async fn ping(&mut self, nonce: &str) -> Result<(), WriteError> {
+  /// Send a `PING` command with an optional `nonce` argument.
+  pub async fn ping(&mut self, nonce: &str) -> Result<(), SendError> {
     with_scratch!(self, |f| {
       let _ = write!(f, "PING :{nonce}\r\n");
       self.send_raw(f.as_str()).await
     })
   }
 
-  pub async fn pong(&mut self, ping: &crate::Ping<'_>) -> Result<(), WriteError> {
+  /// Send a `PONG` command in response to a `PING`.
+  pub async fn pong(&mut self, ping: &crate::Ping<'_>) -> Result<(), SendError> {
     with_scratch!(self, |f| {
       if let Some(nonce) = ping.nonce() {
         let _ = write!(f, "PONG :{nonce}\r\n");
@@ -120,7 +122,12 @@ impl Client {
     })
   }
 
-  pub async fn join<'a, S>(&mut self, channel: S) -> Result<(), WriteError>
+  /// Send a `JOIN` command.
+  ///
+  /// ⚠ This call is not rate limited in any way.
+  ///
+  /// ⚠ `channel` MUST be a valid channel name prefixed by `#`.
+  pub async fn join<'a, S>(&mut self, channel: S) -> Result<(), SendError>
   where
     S: TryInto<Channel<'a>, Error = InvalidChannelName> + 'a,
   {
@@ -137,7 +144,7 @@ impl Client {
   ///
   /// ⚠ Each channel in `channels` MUST be a valid channel name
   /// prefixed by `#`.
-  pub async fn join_all<'a, I, S>(&mut self, channels: I) -> Result<(), WriteError>
+  pub async fn join_all<'a, I, S>(&mut self, channels: I) -> Result<(), SendError>
   where
     I: IntoIterator<Item = S>,
     S: TryInto<Channel<'a>, Error = InvalidChannelName> + 'a,
@@ -159,42 +166,50 @@ impl Client {
   }
 }
 
+/// Failed to send a message.
 #[derive(Debug)]
-pub enum WriteError {
+pub enum SendError {
+  /// The underlying I/O operation failed.
   Io(io::Error),
+
+  /// The stream was closed.
   StreamClosed,
+
+  /// Attempted to send an invalid message.
   InvalidMessage(InvalidMessage),
+
+  /// Attempted to send a message to a channel with an invalid name.
   InvalidChannelName(InvalidChannelName),
 }
 
-impl From<io::Error> for WriteError {
+impl From<io::Error> for SendError {
   fn from(value: io::Error) -> Self {
     Self::Io(value)
   }
 }
 
-impl From<InvalidMessage> for WriteError {
+impl From<InvalidMessage> for SendError {
   fn from(value: InvalidMessage) -> Self {
     Self::InvalidMessage(value)
   }
 }
 
-impl From<InvalidChannelName> for WriteError {
+impl From<InvalidChannelName> for SendError {
   fn from(value: InvalidChannelName) -> Self {
     Self::InvalidChannelName(value)
   }
 }
 
-impl Display for WriteError {
+impl Display for SendError {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
-      WriteError::Io(e) => write!(f, "failed to write message: {e}"),
-      WriteError::StreamClosed => write!(f, "failed to write message: stream closed"),
-      WriteError::InvalidMessage(inner) => write!(
+      SendError::Io(e) => write!(f, "failed to write message: {e}"),
+      SendError::StreamClosed => write!(f, "failed to write message: stream closed"),
+      SendError::InvalidMessage(inner) => write!(
         f,
         "failed to write message: message was incorrectly formatted, {inner}"
       ),
-      WriteError::InvalidChannelName(inner) => write!(
+      SendError::InvalidChannelName(inner) => write!(
         f,
         "failed to write message: message was incorrectly formatted, {inner}"
       ),
@@ -202,14 +217,18 @@ impl Display for WriteError {
   }
 }
 
-impl std::error::Error for WriteError {}
+impl std::error::Error for SendError {}
 
+/// Bypass the same-message slow mode requirement.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SameMessageBypass {
   append: bool,
 }
 
 impl SameMessageBypass {
+  /// Get the current value.
+  ///
+  /// This is meant to be appended to the end of the message, before the `\r\n`.
   pub fn get(&mut self) -> &'static str {
     let out = match self.append {
       false => "",

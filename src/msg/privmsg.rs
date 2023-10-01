@@ -1,3 +1,5 @@
+//! Represents a basic Twitch chat message sent by some user to a specific channel.
+
 use super::is_not_empty;
 use super::{parse_badges, parse_message_text, parse_timestamp, Badge, User};
 use crate::common::unescaped::Unescaped;
@@ -5,6 +7,7 @@ use crate::common::Channel;
 use crate::irc::{Command, IrcMessageRef, Tag};
 use chrono::{DateTime, Utc};
 
+/// Represents a basic Twitch chat message sent by some user to a specific channel.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Privmsg<'src> {
   channel: Channel<'src>,
@@ -71,13 +74,7 @@ generate_getters! {
   }
 }
 
-/* #[derive(Clone, Debug, PartialEq, Eq)]
-struct ReplyInfo<'src> {
-  message_id: &'src str,
-  sender: User<'src>,
-  text: Unescaped<'src>,
-} */
-
+/// Information about the reply parent message.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Reply<'src> {
   message_id: &'src str,

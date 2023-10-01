@@ -1,3 +1,11 @@
+//! Sent by TMI as a response to a [`Ping`][Ping].
+//!
+//! If the [`Ping`][Ping] contained a [`Ping::nonce`][nonce],
+//! the same nonce will be set to [`Pong::nonce`].
+//!
+//! [Ping]: crate::msg::ping::Ping
+//! [nonce]: crate::msg::ping::Ping::nonce
+
 use crate::irc::{Command, IrcMessageRef};
 
 /// Sent by TMI as a response to a [`Ping`][Ping].

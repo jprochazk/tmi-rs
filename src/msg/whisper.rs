@@ -1,3 +1,5 @@
+//! A direct message between users.
+
 use super::is_not_empty;
 use super::{parse_badges, Badge, User};
 use crate::irc::{Command, IrcMessageRef, Tag};

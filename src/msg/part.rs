@@ -1,3 +1,5 @@
+//! Sent when a user leaves a channel.
+
 use crate::common::Channel;
 use crate::irc::{Command, IrcMessageRef};
 

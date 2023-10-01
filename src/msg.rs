@@ -1,5 +1,11 @@
+//! ## Twitch message types
+//!
+//! The entrypoint to this module is [`Message`].
+//!
+//! To convert an incoming [`IrcMessage`] into a [`Message`],
+//! use [`IrcMessage::as_typed`].
+
 // TODO: `serde` derives under feature
-// TODO: unescape more things?
 
 #[macro_use]
 mod macros;
@@ -9,18 +15,22 @@ use crate::irc::{IrcMessage, IrcMessageRef};
 use smallvec::SmallVec;
 
 impl IrcMessage {
-  pub fn cast<'src, T: FromIrc<'src>>(&'src self) -> Option<T> {
-    T::from_irc(self.as_ref())
+  /// Parses the base [`IrcMessage`] into a Twitch-specific [`Message`].
+  pub fn as_typed(&self) -> Option<Message<'_>> {
+    Message::from_irc(self.as_ref())
   }
 }
 
 impl<'src> IrcMessageRef<'src> {
-  pub fn cast<T: FromIrc<'src>>(self) -> Option<T> {
-    T::from_irc(self)
+  /// Parses the base [`IrcMessage`] into a Twitch-specific [`Message`].
+  pub fn as_typed(self) -> Option<Message<'src>> {
+    Message::from_irc(self)
   }
 }
 
-pub trait FromIrc<'src>: Sized {
+/// Implemented for types which may be parsed from a base [`IrcMessage`].
+pub trait FromIrc<'src>: Sized + private::Sealed {
+  /// Attempt to parse `Self` from an [`IrcMessage`].
   fn from_irc(message: IrcMessageRef<'src>) -> Option<Self>;
 }
 
@@ -28,6 +38,7 @@ pub trait FromIrc<'src>: Sized {
 ///
 /// Note that this one
 #[derive(Clone, Debug)]
+#[allow(missing_docs)]
 pub enum Message<'src> {
   ClearChat(ClearChat<'src>),
   ClearMsg(ClearMsg<'src>),
@@ -47,11 +58,15 @@ pub enum Message<'src> {
 }
 
 impl<'src> Message<'src> {
+  /// Attempt to parse a message from a string.
+  ///
+  /// This is shorthand for [`IrcMessageRef::parse`] followed by [`Message::from_irc`].
   pub fn parse(src: &'src str) -> Option<Self> {
     IrcMessageRef::parse(src).and_then(Message::from_irc)
   }
 }
 
+/// Failed to parse a message.
 #[derive(Clone, Copy, Debug)]
 pub struct MessageParseError;
 impl std::fmt::Display for MessageParseError {
@@ -96,15 +111,22 @@ impl<'src> FromIrc<'src> for Message<'src> {
 /// A chat badge.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Badge<'src> {
+  /// `staff/1`
   Staff,
+  /// `turbo/1`
   Turbo,
+  /// `broadcaster/1`
   Broadcaster,
+  /// `moderator/1`
   Moderator,
+  /// `subscriber/{variant}` from `badges` + `subscriber/{months}` from `badge_info`.
   Subscriber(Subscriber<'src>),
+  /// Some other badge.
   Other(BadgeData<'src>),
 }
 
 impl<'src> Badge<'src> {
+  /// Get the base [`BadgeData`].
   pub fn as_badge_data(&self) -> BadgeData<'src> {
     BadgeData::from(self.clone())
   }
@@ -162,6 +184,7 @@ impl<'src> From<BadgeData<'src>> for Badge<'src> {
   }
 }
 
+/// A subscriber badge.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Subscriber<'src> {
   version: &'src str,
@@ -183,6 +206,7 @@ generate_getters! {
   }
 }
 
+/// Basic info about a badge.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BadgeData<'src> {
   name: &'src str,
@@ -210,6 +234,7 @@ generate_getters! {
   }
 }
 
+/// Basic information about a user.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct User<'src> {
   id: &'src str,
@@ -317,3 +342,21 @@ pub mod user_state;
 pub use user_state::*;
 pub mod whisper;
 pub use whisper::*;
+
+mod private {
+  pub trait Sealed {}
+}
+impl private::Sealed for ClearChat<'_> {}
+impl private::Sealed for ClearMsg<'_> {}
+impl private::Sealed for GlobalUserState<'_> {}
+impl private::Sealed for Join<'_> {}
+impl private::Sealed for Notice<'_> {}
+impl private::Sealed for Part<'_> {}
+impl private::Sealed for Ping<'_> {}
+impl private::Sealed for Pong<'_> {}
+impl private::Sealed for Privmsg<'_> {}
+impl private::Sealed for RoomState<'_> {}
+impl private::Sealed for UserNotice<'_> {}
+impl private::Sealed for UserState<'_> {}
+impl private::Sealed for Whisper<'_> {}
+impl private::Sealed for Message<'_> {}

@@ -10,28 +10,36 @@ use tokio_stream::StreamExt;
 pub type ReadStream = Fuse<LinesStream<BufReader<ReadHalf<conn::Stream>>>>;
 
 impl Client {
-  pub async fn message(&mut self) -> Result<IrcMessage, ReadError> {
+  /// Read a single [`IrcMessage`] from the underlying stream.
+  pub async fn recv(&mut self) -> Result<IrcMessage, RecvError> {
     if let Some(message) = self.reader.next().await {
       let message = message?;
-      Ok(IrcMessage::parse(&message).ok_or_else(|| ReadError::Parse(message))?)
+      Ok(IrcMessage::parse(&message).ok_or_else(|| RecvError::Parse(message))?)
     } else {
-      Err(ReadError::StreamClosed)
+      Err(RecvError::StreamClosed)
     }
   }
 }
 
+/// Failed to receive a message.
 #[derive(Debug)]
-pub enum ReadError {
+pub enum RecvError {
+  /// The underlying I/O operation failed.
   Io(io::Error),
+
+  /// Failed to parse the message.
   Parse(String),
+
+  /// The stream was closed.
   StreamClosed,
 }
 
-impl ReadError {
+impl RecvError {
+  /// Returns `true` if this `recv` failed due to a disconnect of some kind.
   pub fn is_disconnect(&self) -> bool {
     match self {
-      ReadError::StreamClosed => true,
-      ReadError::Io(e)
+      RecvError::StreamClosed => true,
+      RecvError::Io(e)
         if matches!(
           e.kind(),
           io::ErrorKind::UnexpectedEof | io::ErrorKind::ConnectionAborted | io::ErrorKind::TimedOut
@@ -44,20 +52,20 @@ impl ReadError {
   }
 }
 
-impl From<io::Error> for ReadError {
+impl From<io::Error> for RecvError {
   fn from(value: io::Error) -> Self {
     Self::Io(value)
   }
 }
 
-impl Display for ReadError {
+impl Display for RecvError {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
-      ReadError::Io(e) => write!(f, "failed to read message: {e}"),
-      ReadError::Parse(s) => write!(f, "failed to read message: invalid message `{s}`"),
-      ReadError::StreamClosed => write!(f, "failed to read message: stream closed"),
+      RecvError::Io(e) => write!(f, "failed to read message: {e}"),
+      RecvError::Parse(s) => write!(f, "failed to read message: invalid message `{s}`"),
+      RecvError::StreamClosed => write!(f, "failed to read message: stream closed"),
     }
   }
 }
 
-impl std::error::Error for ReadError {}
+impl std::error::Error for RecvError {}

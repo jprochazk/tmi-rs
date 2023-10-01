@@ -1,3 +1,6 @@
+//! Sent by Twitch for various reasons to notify the client about something,
+//! usually in response to invalid actions.
+
 use crate::common::Channel;
 use crate::irc::{Command, IrcMessageRef, Tag};
 

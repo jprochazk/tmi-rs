@@ -9,7 +9,7 @@ let mut client = tmi::Client::connect().await?;
 client.join("#moscowwbish").await?;
 
 loop {
-  let msg = client.message().await?;
+  let msg = client.recv().await?;
   match tmi::Message::try_from(msg.as_ref())? {
     tmi::Message::Privmsg(msg) => println!("{}: {}", msg.sender().name(), msg.text()),
     tmi::Message::Reconnect => client.reconnect().await?,
@@ -21,7 +21,7 @@ loop {
 
 ## Performance
 
-Calling the library blazingly fast is done in jest, but it is true that `twitch-rs` is very fast. `twitch-rs` is part of the [twitch-irc-benchmarks](https://github.com/jprochazk/twitch-irc-benchmarks), where it is currently the fastest implementation by a significant margin (roughly 2.5x faster than the second best implementation). The reason for this is that the IRC message parser is handwritten using SIMD instructions for x86 and ARM. For every other architecture, there is a scalar fallback. The SIMD implementation is quite portable, as on x86 it relies only on SSE2, which is available in every x86 CPU created in the last two decades, and on ARM it relies on Neon, which is also well supported.
+Calling the library blazingly fast is done in jest, but it is true that `tmi-rs` is very fast. `tmi-rs` is part of the [twitch-irc-benchmarks](https://github.com/jprochazk/twitch-irc-benchmarks), where it is currently the fastest implementation by a significant margin (roughly 2.5x faster than the second best implementation). The reason for this is that the IRC message parser is handwritten using SIMD instructions for x86 and ARM. For every other architecture, there is a scalar fallback. The SIMD implementation is quite portable, as on x86 it relies only on SSE2, which is available in every x86 CPU created in the last two decades, and on ARM it relies on Neon, which is also well supported.
 
 ## Acknowledgements
 

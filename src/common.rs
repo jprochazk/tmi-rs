@@ -1,14 +1,22 @@
+//! Random types and utilties used by the library.
+
+use std::borrow::Borrow;
 use std::cell::RefCell;
+use std::ops::Deref;
 
 /// Channel name known to be prefixed by `#`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Channel<'src>(&'src str);
 
 impl<'src> Channel<'src> {
+  /// Get the string value of the channel name.
   pub fn as_str(&self) -> &'src str {
     self.0
   }
 
+  /// Parse a string into a channel name.
+  ///
+  /// The channel name must begin with a `#` character.
   pub fn parse(s: &'src str) -> Result<Self, InvalidChannelName> {
     match s.starts_with('#') {
       true => Ok(Self(s)),
@@ -18,6 +26,26 @@ impl<'src> Channel<'src> {
 
   pub(crate) fn from_unchecked(s: &'src str) -> Self {
     Self(s)
+  }
+}
+
+impl<'src> Deref for Channel<'src> {
+  type Target = str;
+
+  fn deref(&self) -> &Self::Target {
+    self.0
+  }
+}
+
+impl<'src> AsRef<str> for Channel<'src> {
+  fn as_ref(&self) -> &str {
+    self.0
+  }
+}
+
+impl<'src> Borrow<str> for Channel<'src> {
+  fn borrow(&self) -> &str {
+    self.0
   }
 }
 
@@ -35,6 +63,7 @@ impl<'src> TryFrom<&'src str> for Channel<'src> {
   }
 }
 
+/// Failed to parse a channel name.
 #[derive(Debug)]
 pub struct InvalidChannelName;
 impl std::fmt::Display for InvalidChannelName {
@@ -44,9 +73,14 @@ impl std::fmt::Display for InvalidChannelName {
 }
 impl std::error::Error for InvalidChannelName {}
 
+/// This type is like a [`Range`][std::ops::Range],
+/// only smaller, and also implements `Copy`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Span {
+  /// The start index, inclusive.
   pub start: u32,
+
+  /// The end index, exclusive.
   pub end: u32,
 }
 
@@ -85,6 +119,7 @@ impl std::ops::Index<Span> for str {
   }
 }
 
+#[doc(hidden)]
 pub struct Join<I, S>(RefCell<Option<I>>, S);
 
 impl<I, S> std::fmt::Display for Join<I, S>
@@ -112,6 +147,7 @@ where
   }
 }
 
+#[doc(hidden)]
 pub trait JoinIter: Sized {
   fn join<Sep>(self, sep: Sep) -> Join<Self, Sep>;
 }

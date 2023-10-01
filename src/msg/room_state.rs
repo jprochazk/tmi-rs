@@ -1,3 +1,5 @@
+//! A partial update to the settings of some channel.
+
 use crate::common::Channel;
 use crate::irc::{Command, IrcMessageRef, Tag};
 use chrono::Duration;
@@ -57,6 +59,7 @@ generate_getters! {
   }
 }
 
+/// Followers-only mode configuration.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FollowersOnly {
   /// Followers-only mode is disabled.

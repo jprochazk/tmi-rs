@@ -23,8 +23,10 @@ pub async fn open(config: TlsConfig) -> Result<Stream, OpenStreamError> {
   )
 }
 
+/// Failed to open a TLS stream.
 #[derive(Debug)]
 pub enum OpenStreamError {
+  /// The underlying I/O operation failed.
   Io(io::Error),
 }
 
@@ -77,9 +79,12 @@ impl TlsConfig {
   }
 }
 
+/// Failed to load the TLS config.
 #[derive(Debug)]
 pub enum TlsConfigError {
+  /// The underlying I/O operation failed.
   Io(io::Error),
+  /// Failed to load certificates.
   Tls(rustls::Error),
 }
 

@@ -1,3 +1,5 @@
+//! Sent when a single message is deleted.
+
 use super::{parse_message_text, parse_timestamp};
 use crate::common::Channel;
 use crate::irc::{Command, IrcMessageRef, Tag};

@@ -1,9 +1,11 @@
+//! This command is sent once upon successful login to Twitch IRC.
+
 use super::is_not_empty;
 use super::{parse_badges, split_comma, Badge};
 use crate::common::unescaped::Unescaped;
 use crate::irc::{Command, IrcMessageRef, Tag};
 
-/// This command is sent once upon successful login to TMI.
+/// This command is sent once upon successful login to Twitch IRC.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GlobalUserState<'src> {
   id: &'src str,

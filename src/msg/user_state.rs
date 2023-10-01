@@ -1,3 +1,10 @@
+//! Sent upon joining a channel, or upon successfully sending a `PRIVMSG` message to a channel.
+//!
+//! This is like [`GlobalUserState`][crate::msg::global_user_state::GlobalUserState], but
+//! carries channel-specific information.
+//!
+//! For example, [`UserState::badges`] may be different from [`GlobalUserState::badges`][crate::msg::global_user_state::GlobalUserState::badges].
+
 use super::is_not_empty;
 use super::{parse_badges, split_comma, Badge};
 use crate::common::Channel;

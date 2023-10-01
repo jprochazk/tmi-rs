@@ -1,3 +1,5 @@
+//! Sent when the chat is cleared of a batch of messages.
+
 use super::{parse_duration, parse_timestamp};
 use crate::common::Channel;
 use crate::irc::{Command, IrcMessageRef, Tag};
@@ -29,6 +31,9 @@ generate_getters! {
 }
 
 impl<'src> ClearChat<'src> {
+  /// Get the target of this [`ClearChat`] command.
+  ///
+  /// This returns the user which was timed out or banned.
   #[inline]
   pub fn target(&self) -> Option<&str> {
     use Action as C;
@@ -39,15 +44,16 @@ impl<'src> ClearChat<'src> {
   }
 }
 
+/// Represents the specific way in which the chat was cleared.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Action<'src> {
   /// The entire chat was cleared.
   Clear,
 
-  /// A single user was banned.
+  /// A single user was banned, clearing only their messages.
   Ban(Ban<'src>),
 
-  /// A single user was timed out.
+  /// A single user was timed out, clearing only their messages.
   TimeOut(TimeOut<'src>),
 }
 

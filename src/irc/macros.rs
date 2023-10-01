@@ -5,6 +5,11 @@ macro_rules! __count {
   ($x:tt $($xs:tt)*) => (1usize + $crate::__count!($($xs)*));
 }
 
+/// Constructs a whitelist from a list of tags names.
+///
+/// The tag names are the PascalCase variants of the [`Tag`][Tag] enum.
+///
+/// [Tag]: crate::irc::Tag
 #[macro_export]
 macro_rules! whitelist {
   [$($tag:ident),*] => (
