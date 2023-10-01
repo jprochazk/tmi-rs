@@ -1,6 +1,6 @@
 [package]
 name = "tmi"
-version = "0.0.2"
+version = "0.1.0"
 authors = ["jprochazk <honza.spacir@gmail.com>"]
 description = "twitch.tv messaging interface"
 repository = "https://github.com/jprochazk/tmi-rs"
