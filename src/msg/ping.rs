@@ -7,6 +7,7 @@
 //!
 //! [Pong]: crate::msg::pong::Pong
 
+use super::MessageParseError;
 use crate::irc::{Command, IrcMessageRef};
 
 /// Sent regularly by TMI to ensure clients are still live.
@@ -29,8 +30,8 @@ generate_getters! {
   }
 }
 
-impl<'src> super::FromIrc<'src> for Ping<'src> {
-  fn from_irc(message: IrcMessageRef<'src>) -> Option<Self> {
+impl<'src> Ping<'src> {
+  fn parse(message: IrcMessageRef<'src>) -> Option<Self> {
     if message.command() != Command::Ping {
       return None;
     }
@@ -38,6 +39,13 @@ impl<'src> super::FromIrc<'src> for Ping<'src> {
     Some(Ping {
       nonce: message.text(),
     })
+  }
+}
+
+impl<'src> super::FromIrc<'src> for Ping<'src> {
+  #[inline]
+  fn from_irc(message: IrcMessageRef<'src>) -> Result<Self, MessageParseError> {
+    Self::parse(message).ok_or(MessageParseError)
   }
 }
 

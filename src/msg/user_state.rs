@@ -5,8 +5,7 @@
 //!
 //! For example, [`UserState::badges`] may be different from [`GlobalUserState::badges`][crate::msg::global_user_state::GlobalUserState::badges].
 
-use super::is_not_empty;
-use super::{parse_badges, split_comma, Badge};
+use super::{is_not_empty, parse_badges, split_comma, Badge, MessageParseError};
 use crate::common::Channel;
 use crate::irc::{Command, IrcMessageRef, Tag};
 
@@ -48,8 +47,8 @@ generate_getters! {
   }
 }
 
-impl<'src> super::FromIrc<'src> for UserState<'src> {
-  fn from_irc(message: IrcMessageRef<'src>) -> Option<Self> {
+impl<'src> UserState<'src> {
+  fn parse(message: IrcMessageRef<'src>) -> Option<Self> {
     if message.command() != Command::UserState {
       return None;
     }
@@ -69,6 +68,13 @@ impl<'src> super::FromIrc<'src> for UserState<'src> {
         .unwrap_or_default(),
       color: message.tag(Tag::Color).filter(is_not_empty),
     })
+  }
+}
+
+impl<'src> super::FromIrc<'src> for UserState<'src> {
+  #[inline]
+  fn from_irc(message: IrcMessageRef<'src>) -> Result<Self, MessageParseError> {
+    Self::parse(message).ok_or(MessageParseError)
   }
 }
 

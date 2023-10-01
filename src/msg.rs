@@ -16,14 +16,14 @@ use smallvec::SmallVec;
 
 impl IrcMessage {
   /// Parses the base [`IrcMessage`] into a Twitch-specific [`Message`].
-  pub fn as_typed(&self) -> Option<Message<'_>> {
+  pub fn as_typed(&self) -> Result<Message<'_>, MessageParseError> {
     Message::from_irc(self.as_ref())
   }
 }
 
 impl<'src> IrcMessageRef<'src> {
   /// Parses the base [`IrcMessage`] into a Twitch-specific [`Message`].
-  pub fn as_typed(self) -> Option<Message<'src>> {
+  pub fn as_typed(self) -> Result<Message<'src>, MessageParseError> {
     Message::from_irc(self)
   }
 }
@@ -31,7 +31,7 @@ impl<'src> IrcMessageRef<'src> {
 /// Implemented for types which may be parsed from a base [`IrcMessage`].
 pub trait FromIrc<'src>: Sized + private::Sealed {
   /// Attempt to parse `Self` from an [`IrcMessage`].
-  fn from_irc(message: IrcMessageRef<'src>) -> Option<Self>;
+  fn from_irc(message: IrcMessageRef<'src>) -> Result<Self, MessageParseError>;
 }
 
 /// A fully parsed Twitch chat message.
@@ -60,8 +60,10 @@ impl<'src> Message<'src> {
   /// Attempt to parse a message from a string.
   ///
   /// This is shorthand for [`IrcMessageRef::parse`] followed by [`Message::from_irc`].
-  pub fn parse(src: &'src str) -> Option<Self> {
-    IrcMessageRef::parse(src).and_then(Message::from_irc)
+  pub fn parse(src: &'src str) -> Result<Self, MessageParseError> {
+    IrcMessageRef::parse(src)
+      .ok_or(MessageParseError)
+      .and_then(Message::from_irc)
   }
 }
 
@@ -79,14 +81,14 @@ impl<'src> TryFrom<IrcMessageRef<'src>> for Message<'src> {
   type Error = MessageParseError;
 
   fn try_from(value: IrcMessageRef<'src>) -> Result<Self, Self::Error> {
-    Message::from_irc(value).ok_or(MessageParseError)
+    Message::from_irc(value)
   }
 }
 
 impl<'src> FromIrc<'src> for Message<'src> {
-  fn from_irc(message: IrcMessageRef<'src>) -> Option<Self> {
+  fn from_irc(message: IrcMessageRef<'src>) -> Result<Self, MessageParseError> {
     use crate::irc::Command as C;
-    let message = match message.command() {
+    Ok(match message.command() {
       C::ClearChat => ClearChat::from_irc(message)?.into(),
       C::ClearMsg => ClearMsg::from_irc(message)?.into(),
       C::GlobalUserState => GlobalUserState::from_irc(message)?.into(),
@@ -102,8 +104,7 @@ impl<'src> FromIrc<'src> for Message<'src> {
       C::UserState => UserState::from_irc(message)?.into(),
       C::Whisper => Whisper::from_irc(message)?.into(),
       _ => Message::Other(message),
-    };
-    Some(message)
+    })
   }
 }
 

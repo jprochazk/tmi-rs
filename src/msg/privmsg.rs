@@ -1,7 +1,8 @@
 //! Represents a basic Twitch chat message sent by some user to a specific channel.
 
-use super::is_not_empty;
-use super::{parse_badges, parse_message_text, parse_timestamp, Badge, User};
+use super::{
+  is_not_empty, parse_badges, parse_message_text, parse_timestamp, Badge, MessageParseError, User,
+};
 use crate::common::unescaped::Unescaped;
 use crate::common::Channel;
 use crate::irc::{Command, IrcMessageRef, Tag};
@@ -95,8 +96,8 @@ generate_getters! {
   }
 }
 
-impl<'src> super::FromIrc<'src> for Privmsg<'src> {
-  fn from_irc(message: IrcMessageRef<'src>) -> Option<Self> {
+impl<'src> Privmsg<'src> {
+  fn parse(message: IrcMessageRef<'src>) -> Option<Self> {
     if message.command() != Command::Privmsg {
       return None;
     }
@@ -136,6 +137,13 @@ impl<'src> super::FromIrc<'src> for Privmsg<'src> {
       emotes: message.tag(Tag::Emotes).unwrap_or_default(),
       timestamp: message.tag(Tag::TmiSentTs).and_then(parse_timestamp)?,
     })
+  }
+}
+
+impl<'src> super::FromIrc<'src> for Privmsg<'src> {
+  #[inline]
+  fn from_irc(message: IrcMessageRef<'src>) -> Result<Self, MessageParseError> {
+    Self::parse(message).ok_or(MessageParseError)
   }
 }
 

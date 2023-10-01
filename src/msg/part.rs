@@ -1,5 +1,6 @@
 //! Sent when a user leaves a channel.
 
+use super::MessageParseError;
 use crate::common::Channel;
 use crate::irc::{Command, IrcMessageRef};
 
@@ -20,8 +21,8 @@ generate_getters! {
   }
 }
 
-impl<'src> super::FromIrc<'src> for Part<'src> {
-  fn from_irc(message: IrcMessageRef<'src>) -> Option<Self> {
+impl<'src> Part<'src> {
+  fn parse(message: IrcMessageRef<'src>) -> Option<Self> {
     if message.command() != Command::Part {
       return None;
     }
@@ -30,6 +31,13 @@ impl<'src> super::FromIrc<'src> for Part<'src> {
       channel: message.channel()?,
       user: message.prefix().and_then(|prefix| prefix.nick)?,
     })
+  }
+}
+
+impl<'src> super::FromIrc<'src> for Part<'src> {
+  #[inline]
+  fn from_irc(message: IrcMessageRef<'src>) -> Result<Self, MessageParseError> {
+    Self::parse(message).ok_or(MessageParseError)
   }
 }
 

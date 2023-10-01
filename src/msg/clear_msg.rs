@@ -1,6 +1,6 @@
 //! Sent when a single message is deleted.
 
-use super::{parse_message_text, parse_timestamp};
+use super::{parse_message_text, parse_timestamp, MessageParseError};
 use crate::common::Channel;
 use crate::irc::{Command, IrcMessageRef, Tag};
 use chrono::{DateTime, Utc};
@@ -42,8 +42,8 @@ generate_getters! {
   }
 }
 
-impl<'src> super::FromIrc<'src> for ClearMsg<'src> {
-  fn from_irc(message: IrcMessageRef<'src>) -> Option<Self> {
+impl<'src> ClearMsg<'src> {
+  fn parse(message: IrcMessageRef<'src>) -> Option<Self> {
     if message.command() != Command::ClearMsg {
       return None;
     }
@@ -58,6 +58,13 @@ impl<'src> super::FromIrc<'src> for ClearMsg<'src> {
       is_action,
       timestamp: parse_timestamp(message.tag(Tag::TmiSentTs)?)?,
     })
+  }
+}
+
+impl<'src> super::FromIrc<'src> for ClearMsg<'src> {
+  #[inline]
+  fn from_irc(message: IrcMessageRef<'src>) -> Result<Self, MessageParseError> {
+    Self::parse(message).ok_or(MessageParseError)
   }
 }
 

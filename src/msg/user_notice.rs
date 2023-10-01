@@ -1,7 +1,6 @@
 //! A user notice is sent when some [`Event`] occurs.
 
-use super::is_not_empty;
-use super::{parse_badges, parse_timestamp, Badge, User};
+use super::{is_not_empty, parse_badges, parse_timestamp, Badge, MessageParseError, User};
 use crate::common::unescaped::Unescaped;
 use crate::common::Channel;
 use crate::{Command, IrcMessageRef, Tag};
@@ -399,8 +398,8 @@ fn parse_promotion<'src>(message: &IrcMessageRef<'src>) -> Option<SubGiftPromo<'
 /// If it is present, then the event is anonymous.
 const AN_ANONYMOUS_GIFTER: Option<&str> = Some("274598607");
 
-impl<'src> super::FromIrc<'src> for UserNotice<'src> {
-  fn from_irc(message: IrcMessageRef<'src>) -> Option<Self> {
+impl<'src> UserNotice<'src> {
+  fn parse(message: IrcMessageRef<'src>) -> Option<Self> {
     if message.command() != Command::UserNotice {
       return None;
     }
@@ -548,6 +547,13 @@ impl<'src> super::FromIrc<'src> for UserNotice<'src> {
       message_id: message.tag(Tag::Id)?,
       timestamp: message.tag(Tag::TmiSentTs).and_then(parse_timestamp)?,
     })
+  }
+}
+
+impl<'src> super::FromIrc<'src> for UserNotice<'src> {
+  #[inline]
+  fn from_irc(message: IrcMessageRef<'src>) -> Result<Self, MessageParseError> {
+    Self::parse(message).ok_or(MessageParseError)
   }
 }
 

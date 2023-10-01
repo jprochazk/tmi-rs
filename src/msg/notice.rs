@@ -1,6 +1,7 @@
 //! Sent by Twitch for various reasons to notify the client about something,
 //! usually in response to invalid actions.
 
+use super::MessageParseError;
 use crate::common::Channel;
 use crate::irc::{Command, IrcMessageRef, Tag};
 
@@ -30,8 +31,8 @@ generate_getters! {
   }
 }
 
-impl<'src> super::FromIrc<'src> for Notice<'src> {
-  fn from_irc(message: IrcMessageRef<'src>) -> Option<Self> {
+impl<'src> Notice<'src> {
+  fn parse(message: IrcMessageRef<'src>) -> Option<Self> {
     if message.command() != Command::Notice {
       return None;
     }
@@ -41,6 +42,13 @@ impl<'src> super::FromIrc<'src> for Notice<'src> {
       text: message.text()?,
       id: message.tag(Tag::MsgId),
     })
+  }
+}
+
+impl<'src> super::FromIrc<'src> for Notice<'src> {
+  #[inline]
+  fn from_irc(message: IrcMessageRef<'src>) -> Result<Self, MessageParseError> {
+    Self::parse(message).ok_or(MessageParseError)
   }
 }
 

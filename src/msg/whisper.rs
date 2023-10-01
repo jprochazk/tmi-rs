@@ -1,7 +1,6 @@
 //! A direct message between users.
 
-use super::is_not_empty;
-use super::{parse_badges, Badge, User};
+use super::{is_not_empty, parse_badges, Badge, MessageParseError, User};
 use crate::irc::{Command, IrcMessageRef, Tag};
 
 /// A direct message between users.
@@ -45,8 +44,8 @@ generate_getters! {
   }
 }
 
-impl<'src> super::FromIrc<'src> for Whisper<'src> {
-  fn from_irc(message: IrcMessageRef<'src>) -> Option<Self> {
+impl<'src> Whisper<'src> {
+  fn parse(message: IrcMessageRef<'src>) -> Option<Self> {
     if message.command() != Command::Whisper {
       return None;
     }
@@ -69,6 +68,13 @@ impl<'src> super::FromIrc<'src> for Whisper<'src> {
         .unwrap_or_default(),
       emotes: message.tag(Tag::Emotes).unwrap_or_default(),
     })
+  }
+}
+
+impl<'src> super::FromIrc<'src> for Whisper<'src> {
+  #[inline]
+  fn from_irc(message: IrcMessageRef<'src>) -> Result<Self, MessageParseError> {
+    Self::parse(message).ok_or(MessageParseError)
   }
 }
 

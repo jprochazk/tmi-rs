@@ -1,7 +1,6 @@
 //! This command is sent once upon successful login to Twitch IRC.
 
-use super::is_not_empty;
-use super::{parse_badges, split_comma, Badge};
+use super::{is_not_empty, parse_badges, split_comma, Badge, MessageParseError};
 use crate::common::unescaped::Unescaped;
 use crate::irc::{Command, IrcMessageRef, Tag};
 
@@ -41,8 +40,8 @@ generate_getters! {
   }
 }
 
-impl<'src> super::FromIrc<'src> for GlobalUserState<'src> {
-  fn from_irc(message: IrcMessageRef<'src>) -> Option<Self> {
+impl<'src> GlobalUserState<'src> {
+  fn parse(message: IrcMessageRef<'src>) -> Option<Self> {
     if message.command() != Command::GlobalUserState {
       return None;
     }
@@ -62,6 +61,13 @@ impl<'src> super::FromIrc<'src> for GlobalUserState<'src> {
         .unwrap_or_default(),
       color: message.tag(Tag::Color).filter(is_not_empty),
     })
+  }
+}
+
+impl<'src> super::FromIrc<'src> for GlobalUserState<'src> {
+  #[inline]
+  fn from_irc(message: IrcMessageRef<'src>) -> Result<Self, MessageParseError> {
+    Self::parse(message).ok_or(MessageParseError)
   }
 }
 

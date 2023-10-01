@@ -6,6 +6,7 @@
 //! [Ping]: crate::msg::ping::Ping
 //! [nonce]: crate::msg::ping::Ping::nonce
 
+use super::MessageParseError;
 use crate::irc::{Command, IrcMessageRef};
 
 /// Sent by TMI as a response to a [`Ping`][Ping].
@@ -27,8 +28,8 @@ generate_getters! {
   }
 }
 
-impl<'src> super::FromIrc<'src> for Pong<'src> {
-  fn from_irc(message: IrcMessageRef<'src>) -> Option<Self> {
+impl<'src> Pong<'src> {
+  fn parse(message: IrcMessageRef<'src>) -> Option<Self> {
     if message.command() != Command::Pong {
       return None;
     }
@@ -36,6 +37,13 @@ impl<'src> super::FromIrc<'src> for Pong<'src> {
     Some(Pong {
       nonce: message.text(),
     })
+  }
+}
+
+impl<'src> super::FromIrc<'src> for Pong<'src> {
+  #[inline]
+  fn from_irc(message: IrcMessageRef<'src>) -> Result<Self, MessageParseError> {
+    Self::parse(message).ok_or(MessageParseError)
   }
 }
 
