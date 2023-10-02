@@ -16,7 +16,7 @@ UserNotice {
     ),
     text: None,
     system_message: Some(
-        "fallenseraphhh subscribed with Twitch Prime.",
+        "fallenseraphhh\\ssubscribed\\swith\\sTwitch\\sPrime.",
     ),
     event: SubOrResub(
         SubOrResub {
@@ -24,7 +24,7 @@ UserNotice {
             cumulative_months: 1,
             streak_months: None,
             sub_plan: "Prime",
-            sub_plan_name: "Channel Subscription (xqcow)",
+            sub_plan_name: "Channel\\sSubscription\\s(xqcow)",
         },
     ),
     event_id: "sub",

@@ -10,7 +10,7 @@ UserNotice {
     sender: None,
     text: None,
     system_message: Some(
-        "samura1jack_ttv is continuing the Gift Sub they got from an anonymous user!",
+        "samura1jack_ttv\\sis\\scontinuing\\sthe\\sGift\\sSub\\sthey\\sgot\\sfrom\\san\\sanonymous\\suser!",
     ),
     event: AnonGiftPaidUpgrade(
         AnonGiftPaidUpgrade {

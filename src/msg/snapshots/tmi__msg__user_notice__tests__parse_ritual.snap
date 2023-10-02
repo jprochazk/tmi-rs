@@ -18,7 +18,7 @@ UserNotice {
         "HeyGuys",
     ),
     system_message: Some(
-        "Seventoes is new here!",
+        "Seventoes\\sis\\snew\\shere!",
     ),
     event: Ritual(
         Ritual {

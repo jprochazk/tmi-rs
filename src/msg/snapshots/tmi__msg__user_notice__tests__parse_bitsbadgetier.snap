@@ -10,7 +10,7 @@ UserNotice {
     sender: None,
     text: None,
     system_message: Some(
-        "AdamAtReflectStudios's Gift shared rewards to 100 others in Chat!",
+        "AdamAtReflectStudios's\\sGift\\sshared\\srewards\\sto\\s100\\sothers\\sin\\sChat!",
     ),
     event: __non_exhaustive,
     event_id: "rewardgift",

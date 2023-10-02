@@ -10,7 +10,7 @@ UserNotice {
     sender: None,
     text: None,
     system_message: Some(
-        "An anonymous user is gifting 10 Tier 1 Subs to xQcOW's community!",
+        "An\\sanonymous\\suser\\sis\\sgifting\\s10\\sTier\\s1\\sSubs\\sto\\sxQcOW's\\scommunity!",
     ),
     event: AnonSubMysteryGift(
         AnonSubMysteryGift {

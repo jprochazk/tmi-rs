@@ -18,7 +18,7 @@ UserNotice {
         "xqcL",
     ),
     system_message: Some(
-        "Gutrin subscribed at Tier 1. They've subscribed for 2 months, currently on a 2 month streak!",
+        "Gutrin\\ssubscribed\\sat\\sTier\\s1.\\sThey've\\ssubscribed\\sfor\\s2\\smonths,\\scurrently\\son\\sa\\s2\\smonth\\sstreak!",
     ),
     event: SubOrResub(
         SubOrResub {
@@ -28,7 +28,7 @@ UserNotice {
                 2,
             ),
             sub_plan: "1000",
-            sub_plan_name: "Channel Subscription (xqcow)",
+            sub_plan_name: "Channel\\sSubscription\\s(xqcow)",
         },
     ),
     event_id: "resub",

@@ -16,7 +16,7 @@ UserNotice {
     ),
     text: None,
     system_message: Some(
-        "CrazyCrackAnimal is continuing the Gift Sub they got from Stridezgum!",
+        "CrazyCrackAnimal\\sis\\scontinuing\\sthe\\sGift\\sSub\\sthey\\sgot\\sfrom\\sStridezgum!",
     ),
     event: GiftPaidUpgrade(
         GiftPaidUpgrade {

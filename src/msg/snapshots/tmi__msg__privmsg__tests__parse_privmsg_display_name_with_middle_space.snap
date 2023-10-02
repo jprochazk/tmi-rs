@@ -11,7 +11,7 @@ Privmsg {
     sender: User {
         id: "36029255",
         login: "riotgames",
-        name: "Riot Games",
+        name: "Riot\\sGames",
     },
     reply_to: None,
     text: "test fake message",

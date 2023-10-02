@@ -11,7 +11,7 @@ Privmsg {
     sender: User {
         id: "467684514",
         login: "carvedtaleare",
-        name: "CarvedTaleare ",
+        name: "CarvedTaleare\\s",
     },
     reply_to: None,
     text: "NaM",

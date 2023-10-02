@@ -10,7 +10,7 @@ UserNotice {
     sender: None,
     text: None,
     system_message: Some(
-        "An anonymous user gifted a Tier 1 sub to Dot0422! ",
+        "An\\sanonymous\\suser\\sgifted\\sa\\sTier\\s1\\ssub\\sto\\sDot0422!\\s",
     ),
     event: SubGift(
         SubGift {
@@ -21,7 +21,7 @@ UserNotice {
                 name: "Dot0422",
             },
             sub_plan: "1000",
-            sub_plan_name: "Channel Subscription (xqcow)",
+            sub_plan_name: "Channel\\sSubscription\\s(xqcow)",
             num_gifted_months: 1,
         },
     ),

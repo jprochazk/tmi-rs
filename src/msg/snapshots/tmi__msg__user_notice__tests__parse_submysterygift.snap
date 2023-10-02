@@ -16,7 +16,7 @@ UserNotice {
     ),
     text: None,
     system_message: Some(
-        "AdamAtReflectStudios is gifting 20 Tier 1 Subs to xQcOW's community! They've gifted a total of 100 in the channel!",
+        "AdamAtReflectStudios\\sis\\sgifting\\s20\\sTier\\s1\\sSubs\\sto\\sxQcOW's\\scommunity!\\sThey've\\sgifted\\sa\\stotal\\sof\\s100\\sin\\sthe\\schannel!",
     ),
     event: SubMysteryGift(
         SubMysteryGift {
