@@ -30,7 +30,7 @@ async fn run(channels: &[tmi::Channel]) -> anyhow::Result<()> {
 
 ## Performance
 
-Calling the library blazingly fast is done in jest, but it is true that `tmi-rs` is very fast. `tmi-rs` is part of the [twitch-irc-benchmarks](https://github.com/jprochazk/twitch-irc-benchmarks), where it is currently the fastest implementation by a significant margin (roughly 2.5x faster than the second best Rust implementation). This is because underlying IRC message parser is handwritten and accelerated using SIMD on x86 and ARM. For every other architecture, there is a scalar fallback.
+Calling the library blazingly fast is done in jest, but it is true that `tmi-rs` is very fast. `tmi-rs` is part of the [twitch-irc-benchmarks](https://github.com/jprochazk/twitch-irc-benchmarks), where it is currently the fastest implementation by a significant margin (nearly 6x faster than the second best Rust implementation). This is because underlying IRC message parser is handwritten and accelerated using SIMD on x86 and ARM. For every other architecture, there is a scalar fallback.
 
 ## Acknowledgements
 
