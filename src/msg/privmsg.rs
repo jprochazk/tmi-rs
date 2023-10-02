@@ -67,7 +67,7 @@ generate_getters! {
     /// ⚠ Note: This is _hopelessly broken_ and should **never be used for any purpose whatsoever**,
     /// You should instead parse the emotes yourself out of the message according to the available emote sets.
     /// If for some reason you need it, here you go.
-    raw_emotes -> &'src str = self.emotes.clone(),
+    raw_emotes -> &'src str = self.emotes,
 
     /// The time at which the message was sent.
     timestamp -> DateTime<Utc>,

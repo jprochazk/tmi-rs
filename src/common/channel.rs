@@ -142,7 +142,7 @@ impl std::fmt::Display for Channel {
 }
 
 /// Failed to parse a channel name.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct InvalidChannelName;
 impl std::fmt::Display for InvalidChannelName {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -156,3 +156,22 @@ static_assert_sync!(ChannelRef);
 
 static_assert_send!(Channel);
 static_assert_sync!(Channel);
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn parse_channel() {
+    assert_eq!(
+      ChannelRef::parse("#test"),
+      Ok(ChannelRef::from_unchecked("#test"))
+    );
+    assert_eq!(ChannelRef::parse("test"), Err(InvalidChannelName));
+    assert_eq!(
+      Channel::parse("#test".into()),
+      Ok(Channel::from_unchecked("#test".into()))
+    );
+    assert_eq!(Channel::parse("test".into()), Err(InvalidChannelName));
+  }
+}
