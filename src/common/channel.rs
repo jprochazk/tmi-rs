@@ -2,7 +2,7 @@ use std::borrow::Borrow;
 use std::ops::Deref;
 
 /// Channel name known to be prefixed by `#`.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
 pub struct ChannelRef(str);
 
@@ -54,6 +54,12 @@ impl AsRef<ChannelRef> for ChannelRef {
 impl Borrow<str> for ChannelRef {
   fn borrow(&self) -> &str {
     &self.0
+  }
+}
+
+impl std::fmt::Debug for ChannelRef {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.debug_tuple("Channel").field(&self.as_str()).finish()
   }
 }
 
