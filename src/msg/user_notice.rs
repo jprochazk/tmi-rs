@@ -1,8 +1,7 @@
 //! A user notice is sent when some [`Event`] occurs.
 
 use super::{is_not_empty, parse_badges, parse_timestamp, Badge, MessageParseError, User};
-use crate::common::unescaped::Unescaped;
-use crate::common::Channel;
+use crate::common::{maybe_unescape, ChannelRef, Cow};
 use crate::{Command, IrcMessageRef, Tag};
 use chrono::{DateTime, Utc};
 
@@ -11,11 +10,11 @@ use chrono::{DateTime, Utc};
 /// A user notice is sent when some [`Event`] occurs.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UserNotice<'src> {
-  channel: Channel<'src>,
+  channel: &'src ChannelRef,
   channel_id: &'src str,
   sender: Option<User<'src>>,
   text: Option<&'src str>,
-  system_message: Option<Unescaped<'src>>,
+  system_message: Option<&'src str>,
   event: Event<'src>,
   event_id: &'src str,
   badges: Vec<Badge<'src>>,
@@ -28,10 +27,10 @@ pub struct UserNotice<'src> {
 generate_getters! {
   <'src> for UserNotice<'src> as self {
     /// Name of the channel which received this user notice.
-    channel -> &Channel<'_> = &self.channel,
+    channel -> &'src ChannelRef,
 
     /// ID of the channel which received this user notice.
-    channel_id -> &str,
+    channel_id -> &'src str,
 
     /// Origin of the user notice.
     ///
@@ -40,41 +39,41 @@ generate_getters! {
     /// For example, an anonymous gift sub would be sent as a [`Event::SubGift`], but unlike many
     /// other events, there is no `AnonSubGift` variant of this one, so the [`UserNotice::sender`] field will
     /// be set to [`None`].
-    sender -> Option<&User<'src>> = self.sender.as_ref(),
+    sender -> Option<User<'src>>,
 
     /// Optional message sent along with the user notice.
-    text -> Option<&str>,
+    text -> Option<&'src str>,
 
     /// Message sent with this user notice.
-    system_message -> Option<&str> = self.system_message.as_ref().map(|v| v.get()),
+    system_message -> Option<Cow<'src, str>> = self.system_message.map(maybe_unescape),
 
     /// Event-specific information.
-    event -> &Event<'src> = &self.event,
+    event -> Event<'src>,
 
     /// ID of the event.
     ///
     /// This may be used in case it is not available as a variant of the [`Event`] enum.
-    event_id -> &str,
+    event_id -> &'src str,
 
     /// List of channel badges enabled by the user in the [channel][`UserNotice::channel`].
-    badges -> &[Badge<'_>] = self.badges.as_ref(),
+    badges -> &[Badge<'src>] = self.badges.as_ref(),
 
     /// The emote raw emote ranges present in this message.
     ///
     /// ⚠ Note: This is _hopelessly broken_ and should **never be used for any purpose whatsoever**,
     /// You should instead parse the emotes yourself out of the message according to the available emote sets.
     /// If for some reason you need it, here you go.
-    raw_emotes -> &str = self.emotes.clone(),
+    raw_emotes -> &'src str = self.emotes.clone(),
 
     /// The user's selected name color.
     ///
     /// [`None`] means the user has not selected a color.
     /// To match the behavior of Twitch, users should be
     /// given a globally-consistent random color.
-    color -> Option<&str>,
+    color -> Option<&'src str>,
 
     /// Unique ID of the message.
-    message_id -> &str,
+    message_id -> &'src str,
 
     /// The time at which the message was sent.
     timestamp -> DateTime<Utc>,
@@ -136,7 +135,7 @@ pub struct SubOrResub<'src> {
   cumulative_months: u64,
   streak_months: Option<u64>,
   sub_plan: &'src str,
-  sub_plan_name: Unescaped<'src>,
+  sub_plan_name: &'src str,
 }
 
 generate_getters! {
@@ -156,10 +155,12 @@ generate_getters! {
     /// - `1000` -> Tier 1
     /// - `2000` -> Tier 2
     /// - `3000` -> Tier 3
-    sub_plan -> &str,
+    sub_plan -> &'src str,
 
     /// Channel-specific name for this subscription tier/plan.
-    sub_plan_name -> &str = self.sub_plan_name.get(),
+    ///
+    /// ⚠ This call will allocate and return a String if it needs to be unescaped.
+    sub_plan_name -> Cow<'src, str> = maybe_unescape(self.sub_plan_name),
   }
 }
 
@@ -180,7 +181,7 @@ generate_getters! {
     /// picture.
     ///
     /// E.g. `https://static-cdn.jtvnw.net/jtv_user_pictures/cae3ca63-510d-4715-b4ce-059dcf938978-profile_image-70x70.png`
-    profile_image_url -> &str,
+    profile_image_url -> &'src str,
   }
 }
 
@@ -192,7 +193,7 @@ pub struct SubGift<'src> {
   cumulative_months: u64,
   recipient: User<'src>,
   sub_plan: &'src str,
-  sub_plan_name: Unescaped<'src>,
+  sub_plan_name: &'src str,
   num_gifted_months: u64,
 }
 
@@ -210,10 +211,12 @@ generate_getters! {
     /// - `1000` -> Tier 1
     /// - `2000` -> Tier 2
     /// - `3000` -> Tier 3
-    sub_plan -> &str,
+    sub_plan -> &'src str,
 
     /// Channel-specific name for this subscription tier/plan.
-    sub_plan_name -> &str = self.sub_plan_name.get(),
+    ///
+    /// ⚠ This call will allocate and return a String if it needs to be unescaped.
+    sub_plan_name -> Cow<'src, str> = maybe_unescape(self.sub_plan_name),
 
     /// Number of months in a single multi-month gift.
     num_gifted_months -> u64,
@@ -242,7 +245,7 @@ generate_getters! {
     /// - `1000` -> Tier 1
     /// - `2000` -> Tier 2
     /// - `3000` -> Tier 3
-    sub_plan -> &str,
+    sub_plan -> &'src str,
   }
 }
 
@@ -264,7 +267,7 @@ generate_getters! {
     /// - `1000` -> Tier 1
     /// - `2000` -> Tier 2
     /// - `3000` -> Tier 3
-    sub_plan -> &str,
+    sub_plan -> &'src str,
   }
 }
 
@@ -279,10 +282,10 @@ pub struct GiftPaidUpgrade<'src> {
 generate_getters! {
   <'src> for GiftPaidUpgrade<'src> as self {
     /// Login of the gifter.
-    gifter_login -> &str,
+    gifter_login -> &'src str,
 
     /// Display name of the gifter.
-    gifter_name -> &str,
+    gifter_name -> &'src str,
 
     /// Set if the subscription is part of a promotion.
     promotion -> Option<SubGiftPromo<'src>>,
@@ -298,7 +301,7 @@ pub struct AnonGiftPaidUpgrade<'src> {
 generate_getters! {
   <'src> for AnonGiftPaidUpgrade<'src> as self {
     /// Set if the subscription is part of a promotion.
-    promotion -> Option<&SubGiftPromo<'_>> = self.promotion.as_ref(),
+    promotion -> Option<SubGiftPromo<'src>>,
   }
 }
 
@@ -318,7 +321,7 @@ generate_getters! {
     /// Name of the ritual
     ///
     /// Example value: `new_chatter`
-    name -> &str,
+    name -> &'src str,
   }
 }
 
@@ -358,7 +361,7 @@ generate_getters! {
     /// - `PURPLE`
     ///
     /// Where `PRIMARY` refers to the channel's profile accent color.
-    highlight_color -> &str,
+    highlight_color -> &'src str,
   }
 }
 
@@ -375,7 +378,7 @@ generate_getters! {
     total_gifts -> u64,
 
     /// Display of the promotion, e.g. `Subtember 2018`
-    promo_name -> &str,
+    promo_name -> &'src str,
   }
 }
 
@@ -418,7 +421,7 @@ impl<'src> UserNotice<'src> {
             .and_then(|v| v.parse().ok())
             .and_then(|n| if n > 0 { Some(n) } else { None }),
           sub_plan: message.tag(Tag::MsgParamSubPlan)?,
-          sub_plan_name: message.tag(Tag::MsgParamSubPlanName)?.into(),
+          sub_plan_name: message.tag(Tag::MsgParamSubPlanName)?,
         }),
         false,
       ),
@@ -439,10 +442,10 @@ impl<'src> UserNotice<'src> {
           recipient: User {
             id: message.tag(Tag::MsgParamRecipientId)?,
             login: message.tag(Tag::MsgParamRecipientUserName)?,
-            name: message.tag(Tag::MsgParamRecipientDisplayName)?.into(),
+            name: message.tag(Tag::MsgParamRecipientDisplayName)?,
           },
           sub_plan: message.tag(Tag::MsgParamSubPlan)?,
-          sub_plan_name: message.tag(Tag::MsgParamSubPlanName)?.into(),
+          sub_plan_name: message.tag(Tag::MsgParamSubPlanName)?,
           num_gifted_months: message
             .tag(Tag::MsgParamGiftMonths)
             .and_then(|v| v.parse().ok())?,
@@ -520,7 +523,7 @@ impl<'src> UserNotice<'src> {
       Some(User {
         id: message.tag(Tag::UserId)?,
         login: message.tag(Tag::Login)?,
-        name: message.tag(Tag::DisplayName)?.into(),
+        name: message.tag(Tag::DisplayName)?,
       })
     } else {
       None
@@ -531,10 +534,7 @@ impl<'src> UserNotice<'src> {
       channel_id: message.tag(Tag::RoomId)?,
       sender,
       text: message.text(),
-      system_message: message
-        .tag(Tag::SystemMsg)
-        .filter(is_not_empty)
-        .map(Unescaped::new),
+      system_message: message.tag(Tag::SystemMsg).filter(is_not_empty),
       event,
       event_id,
       badges: message

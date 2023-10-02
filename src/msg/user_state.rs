@@ -6,7 +6,7 @@
 //! For example, [`UserState::badges`] may be different from [`GlobalUserState::badges`][crate::msg::global_user_state::GlobalUserState::badges].
 
 use super::{is_not_empty, parse_badges, split_comma, Badge, MessageParseError};
-use crate::common::Channel;
+use crate::common::ChannelRef;
 use crate::irc::{Command, IrcMessageRef, Tag};
 
 /// Sent upon joining a channel, or upon successfully sending a `PRIVMSG` message to a channel.
@@ -17,7 +17,7 @@ use crate::irc::{Command, IrcMessageRef, Tag};
 /// For example, [`UserState::badges`] may be different from [`GlobalUserState::badges`][crate::msg::global_user_state::GlobalUserState::badges].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UserState<'src> {
-  channel: Channel<'src>,
+  channel: &'src ChannelRef,
   user_name: &'src str,
   badges: Vec<Badge<'src>>,
   emote_sets: Vec<&'src str>,
@@ -27,23 +27,23 @@ pub struct UserState<'src> {
 generate_getters! {
   <'src> for UserState<'src> as self {
     /// Name of the channel in which this state applies to.
-    channel -> &Channel<'_> = &self.channel,
+    channel -> &'src ChannelRef,
 
     /// Display name of the user.
-    user_name -> &str,
+    user_name -> &'src str,
 
     /// List of channel-specific badges.
-    badges -> &[Badge<'_>] = self.badges.as_ref(),
+    badges -> &[Badge<'src>] = self.badges.as_ref(),
 
     /// Emote sets which are available in this channel.
-    emote_sets -> &[&str] = self.emote_sets.as_ref(),
+    emote_sets -> &[&'src str] = self.emote_sets.as_ref(),
 
     /// The user's selected name color.
     ///
     /// [`None`] means the user has not selected a color.
     /// To match the behavior of Twitch, users should be
     /// given a globally-consistent random color.
-    color -> Option<&str>,
+    color -> Option<&'src str>,
   }
 }
 

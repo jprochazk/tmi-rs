@@ -2,14 +2,14 @@
 //! usually in response to invalid actions.
 
 use super::MessageParseError;
-use crate::common::Channel;
+use crate::common::ChannelRef;
 use crate::irc::{Command, IrcMessageRef, Tag};
 
 /// Sent by TMI for various reasons to notify the client about something,
 /// usually in response to invalid actions.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Notice<'src> {
-  channel: Option<Channel<'src>>,
+  channel: Option<&'src ChannelRef>,
   text: &'src str,
   id: Option<&'src str>,
 }
@@ -19,15 +19,15 @@ generate_getters! {
     /// Target channel name.
     ///
     /// This may be empty before successful login.
-    channel -> Option<Channel<'_>>,
+    channel -> Option<&'src ChannelRef>,
 
     /// Notice message.
-    text -> &str,
+    text -> &'src str,
 
     /// Notice ID, see <https://dev.twitch.tv/docs/irc/msg-id/>.
     ///
     /// This will only be empty before successful login.
-    id -> Option<&str>,
+    id -> Option<&'src str>,
   }
 }
 

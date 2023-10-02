@@ -24,7 +24,7 @@ pub struct Pong<'src> {
 generate_getters! {
   <'src> for Pong<'src> as self {
     /// Unique string sent with this ping.
-    nonce -> Option<&str>,
+    nonce -> Option<&'src str>,
   }
 }
 

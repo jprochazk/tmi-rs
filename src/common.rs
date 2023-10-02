@@ -1,77 +1,11 @@
 //! Random types and utilties used by the library.
 
-use std::borrow::Borrow;
+pub mod channel;
+
 use std::cell::RefCell;
-use std::ops::Deref;
 
-/// Channel name known to be prefixed by `#`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Channel<'src>(&'src str);
-
-impl<'src> Channel<'src> {
-  /// Get the string value of the channel name.
-  pub fn as_str(&self) -> &'src str {
-    self.0
-  }
-
-  /// Parse a string into a channel name.
-  ///
-  /// The channel name must begin with a `#` character.
-  pub fn parse(s: &'src str) -> Result<Self, InvalidChannelName> {
-    match s.starts_with('#') {
-      true => Ok(Self(s)),
-      false => Err(InvalidChannelName),
-    }
-  }
-
-  pub(crate) fn from_unchecked(s: &'src str) -> Self {
-    Self(s)
-  }
-}
-
-impl<'src> Deref for Channel<'src> {
-  type Target = str;
-
-  fn deref(&self) -> &Self::Target {
-    self.0
-  }
-}
-
-impl<'src> AsRef<str> for Channel<'src> {
-  fn as_ref(&self) -> &str {
-    self.0
-  }
-}
-
-impl<'src> Borrow<str> for Channel<'src> {
-  fn borrow(&self) -> &str {
-    self.0
-  }
-}
-
-impl<'src> std::fmt::Display for Channel<'src> {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    f.write_str(self.0)
-  }
-}
-
-impl<'src> TryFrom<&'src str> for Channel<'src> {
-  type Error = InvalidChannelName;
-
-  fn try_from(value: &'src str) -> Result<Self, Self::Error> {
-    Self::parse(value)
-  }
-}
-
-/// Failed to parse a channel name.
-#[derive(Debug)]
-pub struct InvalidChannelName;
-impl std::fmt::Display for InvalidChannelName {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    f.write_str("channel name is missing \"#\" prefix")
-  }
-}
-impl std::error::Error for InvalidChannelName {}
+pub use beef::lean::Cow;
+pub use channel::{Channel, ChannelRef, InvalidChannelName};
 
 /// This type is like a [`Range`][std::ops::Range],
 /// only smaller, and also implements `Copy`.
@@ -161,5 +95,50 @@ where
   }
 }
 
-#[doc(hidden)]
-pub mod unescaped;
+pub(crate) fn maybe_unescape<'a>(value: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
+  let mut value: Cow<'_, str> = value.into();
+  for i in 0..value.len() {
+    if value.as_bytes()[i] == b'\\' {
+      value = Cow::owned(actually_unescape(&value, i));
+      break;
+    }
+  }
+  value
+}
+
+#[inline]
+fn actually_unescape(input: &str, start: usize) -> String {
+  let mut out = String::with_capacity(input.len());
+  out.push_str(&input[..start]);
+
+  let mut escape = false;
+  for char in input[start..].chars() {
+    match char {
+      '\\' if escape => {
+        out.push('\\');
+        escape = false;
+      }
+      '\\' => escape = true,
+      ':' if escape => {
+        out.push(';');
+        escape = false;
+      }
+      's' if escape => {
+        out.push(' ');
+        escape = false;
+      }
+      'r' if escape => {
+        out.push('\r');
+        escape = false;
+      }
+      'n' if escape => {
+        out.push('\n');
+        escape = false;
+      }
+      '⸝' => out.push(','),
+      c => out.push(c),
+    }
+  }
+
+  out
+}

@@ -1,14 +1,14 @@
 //! A partial update to the settings of some channel.
 
 use super::{parse_bool, MessageParseError};
-use crate::common::Channel;
+use crate::common::ChannelRef;
 use crate::irc::{Command, IrcMessageRef, Tag};
 use chrono::Duration;
 
 /// A partial update to the settings of some channel.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RoomState<'src> {
-  channel: Channel<'src>,
+  channel: &'src ChannelRef,
   channel_id: &'src str,
   emote_only: Option<bool>,
   followers_only: Option<FollowersOnly>,
@@ -20,10 +20,10 @@ pub struct RoomState<'src> {
 generate_getters! {
   <'src> for RoomState<'src> as self {
     /// Login of the channel this state was applied to.
-    channel -> &Channel<'_> = &self.channel,
+    channel -> &'src ChannelRef,
 
     /// ID of the channel this state was applied to.
-    channel_id -> &str,
+    channel_id -> &'src str,
 
     /// Whether the room is in emote-only mode.
     ///

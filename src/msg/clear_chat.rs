@@ -1,14 +1,14 @@
 //! Sent when the chat is cleared of a batch of messages.
 
 use super::{parse_duration, parse_timestamp, MessageParseError};
-use crate::common::Channel;
+use crate::common::ChannelRef;
 use crate::irc::{Command, IrcMessageRef, Tag};
 use chrono::{DateTime, Duration, Utc};
 
 /// Sent when the chat is cleared of a batch of messages.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ClearChat<'src> {
-  channel: Channel<'src>,
+  channel: &'src ChannelRef,
   channel_id: &'src str,
   action: Action<'src>,
   timestamp: DateTime<Utc>,
@@ -17,13 +17,13 @@ pub struct ClearChat<'src> {
 generate_getters! {
   <'src> for ClearChat<'src> as self {
     /// Name of the affected channel.
-    channel -> &Channel<'_> = &self.channel,
+    channel -> &'src ChannelRef,
 
     /// ID of the affected channel.
-    channel_id -> &str,
+    channel_id -> &'src str,
 
     /// The specific kind of [`Action`] that this command represents.
-    action -> Action<'_>,
+    action -> Action<'src>,
 
     /// Time at which the [`ClearChat`] was executed on Twitch servers.
     timestamp -> DateTime<Utc>,
@@ -93,10 +93,10 @@ pub struct Ban<'src> {
 generate_getters! {
   <'src> for Ban<'src> as self {
     /// Login of the banned user.
-    user -> &str,
+    user -> &'src str,
 
     /// ID of the banned user.
-    id -> &str,
+    id -> &'src str,
   }
 }
 
@@ -111,10 +111,10 @@ pub struct TimeOut<'src> {
 generate_getters! {
   <'src> for TimeOut<'src> as self {
     /// Login of the timed out user.
-    user -> &str,
+    user -> &'src str,
 
     /// ID of the timed out user.
-    id -> &str,
+    id -> &'src str,
 
     /// Duration of the timeout.
     duration -> Duration,

@@ -10,7 +10,7 @@
 #[macro_use]
 mod macros;
 
-use crate::common::unescaped::Unescaped;
+use crate::common::{maybe_unescape, Cow};
 use crate::irc::{IrcMessage, IrcMessageRef};
 use smallvec::SmallVec;
 
@@ -197,7 +197,7 @@ generate_getters! {
     /// Version of the badge.
     ///
     /// This comes from the `badges` tag.
-    version -> &str,
+    version -> &'src str,
 
     /// Number of months subscribed.
     ///
@@ -219,18 +219,18 @@ generate_getters! {
     /// Name of the badge, e.g. `subscriber`.
     ///
     /// This comes from the `badges` tag.
-    name -> &str,
+    name -> &'src str,
 
     /// Version of the badge.
     ///
     /// This comes from the `badges` tag.
-    version -> &str,
+    version -> &'src str,
 
     /// Extra badge info, such as the exact number of
     /// subscribed months for `subscriber`.
     ///
     /// This comes from the `badge_info` tag.
-    extra -> Option<&str>,
+    extra -> Option<&'src str>,
   }
 }
 
@@ -239,22 +239,24 @@ generate_getters! {
 pub struct User<'src> {
   id: &'src str,
   login: &'src str,
-  name: Unescaped<'src>,
+  name: &'src str,
 }
 
 generate_getters! {
   <'src> for User<'src> as self {
     /// Id of the user.
-    id -> &str,
+    id -> &'src str,
 
     /// Login of the user.
-    login -> &str,
+    login -> &'src str,
 
     /// Display name.
     ///
     /// This is the name which appears in chat, and may contain arbitrary unicode characters.
     /// This is in contrast to [`User::login`] which is always only ASCII.
-    name -> &str = self.name.get(),
+    ///
+    /// ⚠ This call will allocate and return a String if it needs to be unescaped.
+    name -> Cow<'src, str> = maybe_unescape(self.name),
   }
 }
 

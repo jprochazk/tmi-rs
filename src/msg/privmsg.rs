@@ -3,15 +3,14 @@
 use super::{
   is_not_empty, parse_badges, parse_message_text, parse_timestamp, Badge, MessageParseError, User,
 };
-use crate::common::unescaped::Unescaped;
-use crate::common::Channel;
+use crate::common::{maybe_unescape, ChannelRef, Cow};
 use crate::irc::{Command, IrcMessageRef, Tag};
 use chrono::{DateTime, Utc};
 
 /// Represents a basic Twitch chat message sent by some user to a specific channel.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Privmsg<'src> {
-  channel: Channel<'src>,
+  channel: &'src ChannelRef,
   channel_id: &'src str,
   message_id: &'src str,
   sender: User<'src>,
@@ -28,37 +27,37 @@ pub struct Privmsg<'src> {
 generate_getters! {
   <'src> for Privmsg<'src> as self {
     /// Channel in which this message was sent.
-    channel -> &Channel<'_> = &self.channel,
+    channel -> &'src ChannelRef,
 
     /// ID of the channel in which this message was sent.
-    channel_id -> &str,
+    channel_id -> &'src str,
 
     /// Unique ID of the message.
-    message_id -> &str,
+    message_id -> &'src str,
 
     /// Basic info about the user who sent this message.
-    sender -> &User<'src> = &self.sender,
+    sender -> User<'src>,
 
     /// Info about the parent message this message is a reply.
-    reply_to -> Option<&Reply<'src>> = self.reply_to.as_ref(),
+    reply_to -> Option<Reply<'src>>,
 
     /// Text content of the message.
     ///
     /// This strips the action prefix/suffix bytes if the message was sent with `/me`.
-    text -> &str,
+    text -> &'src str,
 
     /// Whether the message was sent with `/me`.
     is_action -> bool,
 
     /// List of channel badges enabled by the user in the [channel][`Privmsg::channel`].
-    badges -> &[Badge<'_>] = self.badges.as_ref(),
+    badges -> &[Badge<'src>] = self.badges.as_ref(),
 
     /// The user's selected name color.
     ///
     /// [`None`] means the user has not selected a color.
     /// To match the behavior of Twitch, users should be
     /// given a globally-consistent random color.
-    color -> Option<&str>,
+    color -> Option<&'src str>,
 
     /// The number of bits gifted with this message.
     bits -> Option<u64>,
@@ -68,7 +67,7 @@ generate_getters! {
     /// ⚠ Note: This is _hopelessly broken_ and should **never be used for any purpose whatsoever**,
     /// You should instead parse the emotes yourself out of the message according to the available emote sets.
     /// If for some reason you need it, here you go.
-    raw_emotes -> &str = self.emotes.clone(),
+    raw_emotes -> &'src str = self.emotes.clone(),
 
     /// The time at which the message was sent.
     timestamp -> DateTime<Utc>,
@@ -80,19 +79,21 @@ generate_getters! {
 pub struct Reply<'src> {
   message_id: &'src str,
   sender: User<'src>,
-  text: Unescaped<'src>,
+  text: &'src str,
 }
 
 generate_getters! {
   <'src> for Reply<'src> as self {
     /// Reply parent message ID
-    message_id -> &str,
+    message_id -> &'src str,
 
     /// Reply parent sender
-    sender -> &User<'src> = &self.sender,
+    sender -> User<'src>,
 
     /// Reply parent text
-    text -> &str = self.text.get(),
+    ///
+    /// ⚠ This call will allocate and return a String if it needs to be unescaped.
+    text -> Cow<'src, str> = maybe_unescape(self.text),
   }
 }
 
@@ -108,9 +109,9 @@ impl<'src> Privmsg<'src> {
         sender: User {
           id: message.tag(Tag::ReplyParentUserId)?,
           login: message.tag(Tag::ReplyParentUserLogin)?,
-          name: message.tag(Tag::ReplyParentDisplayName)?.into(),
+          name: message.tag(Tag::ReplyParentDisplayName)?,
         },
-        text: message.tag(Tag::ReplyParentMsgBody)?.into(),
+        text: message.tag(Tag::ReplyParentMsgBody)?,
       })
     });
 
@@ -122,7 +123,7 @@ impl<'src> Privmsg<'src> {
       sender: User {
         id: message.tag(Tag::UserId)?,
         login: message.prefix().and_then(|prefix| prefix.nick)?,
-        name: message.tag(Tag::DisplayName)?.into(),
+        name: message.tag(Tag::DisplayName)?,
       },
       reply_to,
       text,

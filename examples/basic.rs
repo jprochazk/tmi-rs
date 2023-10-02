@@ -1,9 +1,7 @@
+use anyhow::Result;
 use clap::Parser;
 use tokio::select;
 use tokio::signal::ctrl_c;
-
-type Result<T, E = Box<dyn std::error::Error + Send + Sync + 'static>> =
-  ::core::result::Result<T, E>;
 
 #[derive(Parser)]
 #[command(author, version)]
@@ -31,10 +29,11 @@ async fn main() -> Result<()> {
     Some((nick, token)) => tmi::client::Credentials::new(nick, token),
     None => tmi::client::Credentials::anon(),
   };
+
   let channels = args
     .channel
-    .iter()
-    .map(|v| tmi::common::Channel::parse(v.as_str()))
+    .into_iter()
+    .map(tmi::Channel::parse)
     .collect::<Result<Vec<_>, _>>()?;
 
   let mut client = tmi::Client::builder()
@@ -44,23 +43,29 @@ async fn main() -> Result<()> {
 
   client.join_all(&channels).await?;
 
-  loop {
-    select! {
-      _ = ctrl_c() => {
-        break;
-      }
-      msg = client.recv() => {
-        match msg?.as_typed()? {
-          tmi::Message::Privmsg(msg) => on_msg(&mut client, msg).await?,
-          tmi::Message::Reconnect => client.reconnect().await?,
-          tmi::Message::Ping(ping) => client.pong(&ping).await?,
-          _ => {}
-        };
-      }
+  select! {
+    _ = ctrl_c() => {
+      Ok(())
+    }
+    res = tokio::spawn(run(client, channels)) => {
+      res?
     }
   }
+}
 
-  Ok(())
+async fn run(mut client: tmi::Client, channels: Vec<tmi::Channel>) -> Result<()> {
+  loop {
+    let msg = client.recv().await?;
+    match msg.as_typed()? {
+      tmi::Message::Privmsg(msg) => on_msg(&mut client, msg).await?,
+      tmi::Message::Reconnect => {
+        client.reconnect().await?;
+        client.join_all(&channels).await?;
+      }
+      tmi::Message::Ping(ping) => client.pong(&ping).await?,
+      _ => {}
+    };
+  }
 }
 
 async fn on_msg(client: &mut tmi::Client, msg: tmi::Privmsg<'_>) -> Result<()> {
@@ -70,15 +75,17 @@ async fn on_msg(client: &mut tmi::Client, msg: tmi::Privmsg<'_>) -> Result<()> {
     return Ok(());
   }
 
-  if !msg.text().starts_with("!ping") {
+  if !msg.text().starts_with("!yo") {
     return Ok(());
   }
 
   client
-    .privmsg(msg.channel(), "yo")?
+    .privmsg(msg.channel(), "yo")
     .reply_to(msg.message_id())
     .send()
     .await?;
+
+  println!("< {} yo", msg.channel());
 
   Ok(())
 }

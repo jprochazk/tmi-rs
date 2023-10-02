@@ -17,30 +17,30 @@ pub struct Whisper<'src> {
 generate_getters! {
   <'src> for Whisper<'src> as self {
     /// Login of the recipient.
-    recipient -> &str,
+    recipient -> &'src str,
 
     /// Login of the sender.
-    sender -> &User<'src> = &self.sender,
+    sender -> User<'src>,
 
     /// Text content of the message.
-    text -> &str,
+    text -> &'src str,
 
     /// List of badges visible in the whisper window.
-    badges -> &[Badge<'_>] = self.badges.as_ref(),
+    badges -> &[Badge<'src>] = self.badges.as_ref(),
 
     /// The emote raw emote ranges present in this message.
     ///
     /// ⚠ Note: This is _hopelessly broken_ and should **never be used for any purpose whatsoever**,
     /// You should instead parse the emotes yourself out of the message according to the available emote sets.
     /// If for some reason you need it, here you go.
-    raw_emotes -> &str = self.emotes.clone(),
+    raw_emotes -> &'src str = self.emotes.clone(),
 
     /// The [sender][`Whisper::sender`]'s selected name color.
     ///
     /// [`None`] means the user has not selected a color.
     /// To match the behavior of Twitch, users should be
     /// given a globally-consistent random color.
-    color -> Option<&str>,
+    color -> Option<&'src str>,
   }
 }
 
@@ -57,7 +57,7 @@ impl<'src> Whisper<'src> {
       sender: User {
         id: message.tag(Tag::UserId)?,
         login: message.prefix().and_then(|prefix| prefix.nick)?,
-        name: message.tag(Tag::DisplayName)?.into(),
+        name: message.tag(Tag::DisplayName)?,
       },
       text,
       color: message.tag(Tag::Color).filter(is_not_empty),

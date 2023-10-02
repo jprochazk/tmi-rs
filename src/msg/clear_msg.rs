@@ -1,14 +1,14 @@
 //! Sent when a single message is deleted.
 
 use super::{parse_message_text, parse_timestamp, MessageParseError};
-use crate::common::Channel;
+use crate::common::ChannelRef;
 use crate::irc::{Command, IrcMessageRef, Tag};
 use chrono::{DateTime, Utc};
 
 /// Sent when a single message is deleted.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ClearMsg<'src> {
-  channel: Channel<'src>,
+  channel: &'src ChannelRef,
   channel_id: &'src str,
   sender: &'src str,
   message_id: &'src str,
@@ -20,19 +20,19 @@ pub struct ClearMsg<'src> {
 generate_getters! {
   <'src> for ClearMsg<'src> as self {
     /// Login of the channel in which the message was deleted.
-    channel -> &Channel<'_> = &self.channel,
+    channel -> &'src ChannelRef,
 
     /// ID of the channel in which the message was deleted.
-    channel_id -> &str,
+    channel_id -> &'src str,
 
     /// Login of the user which sent the deleted message.
-    sender -> &str,
+    sender -> &'src str,
 
     /// Unique ID of the deleted message.
-    message_id -> &str,
+    message_id -> &'src str,
 
     /// Text of the deleted message.
-    text -> &str,
+    text -> &'src str,
 
     /// Whether the deleted message was sent with `/me`.
     is_action -> bool,

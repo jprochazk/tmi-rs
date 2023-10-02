@@ -3,7 +3,7 @@
 //! The entrypoint to this module is [`IrcMessage`].
 //!
 //! ```rust,no_run
-//! let msg = IrcMessage::parse("...");
+//! let msg = tmi::IrcMessage::parse("...");
 //! ```
 //!
 //! ⚠ This parser is _not_ compliant with the IRCv3 spec!
@@ -27,7 +27,7 @@ use simd::{parse_prefix, parse_tags};
 #[cfg(not(feature = "simd"))]
 use scalar::{parse_prefix, parse_tags};
 
-use crate::common::Channel;
+use crate::common::ChannelRef;
 use crate::common::Span;
 use std::fmt::{Debug, Display};
 
@@ -119,12 +119,12 @@ impl<'src> IrcMessageRef<'src> {
   }
 
   /// Get the channel name this message was sent to.
-  pub fn channel(&self) -> Option<Channel<'src>> {
+  pub fn channel(&self) -> Option<&'src ChannelRef> {
     self
       .parts
       .channel
       .map(|span| &self.src[span])
-      .map(Channel::from_unchecked)
+      .map(ChannelRef::from_unchecked)
   }
 
   /// Get the raw message params.

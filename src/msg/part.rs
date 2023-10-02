@@ -1,23 +1,23 @@
 //! Sent when a user leaves a channel.
 
 use super::MessageParseError;
-use crate::common::Channel;
+use crate::common::ChannelRef;
 use crate::irc::{Command, IrcMessageRef};
 
 /// Sent when a user leaves a channel.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Part<'src> {
-  channel: Channel<'src>,
+  channel: &'src ChannelRef,
   user: &'src str,
 }
 
 generate_getters! {
   <'src> for Part<'src> as self {
     /// Parted channel name.
-    channel -> &Channel<'_> = &self.channel,
+    channel -> &'src ChannelRef,
 
     /// Login of the user.
-    user -> &str,
+    user -> &'src str,
   }
 }
 

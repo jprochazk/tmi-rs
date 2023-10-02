@@ -1,15 +1,16 @@
 use super::{conn, Client};
 use crate::common::JoinIter;
-use crate::common::{Channel, InvalidChannelName};
+use crate::common::{ChannelRef, InvalidChannelName};
+use std::convert::Infallible;
 use std::fmt::Display;
 use tokio::io;
 use tokio::io::{AsyncWriteExt, WriteHalf};
 
 pub type WriteStream = WriteHalf<conn::Stream>;
 
-pub struct Privmsg<'c, 'a> {
-  client: &'c mut Client,
-  channel: Channel<'a>,
+pub struct Privmsg<'a> {
+  client: &'a mut Client,
+  channel: &'a ChannelRef,
   text: &'a str,
   reply_parent_msg_id: Option<&'a str>,
   client_nonce: Option<&'a str>,
@@ -28,7 +29,7 @@ impl<'a> std::fmt::Display for Tag<'a> {
   }
 }
 
-impl<'c, 'a> Privmsg<'c, 'a> {
+impl<'a> Privmsg<'a> {
   pub fn reply_to(mut self, reply_parent_msg_id: &'a str) -> Self {
     self.reply_parent_msg_id = Some(reply_parent_msg_id);
     self
@@ -79,7 +80,8 @@ impl Client {
   /// ⚠ The string MUST be terminated by `\r\n`.
   pub async fn send_raw<'a, S>(&mut self, s: S) -> Result<(), SendError>
   where
-    S: TryInto<RawMessage<'a>, Error = InvalidMessage> + 'a,
+    S: TryInto<RawMessage<'a>>,
+    SendError: From<S::Error>,
   {
     let RawMessage { data } = s.try_into()?;
     trace!(data, "sending message");
@@ -89,27 +91,33 @@ impl Client {
 
   /// Create a `privmsg` from a `channel` and `text`.
   ///
-  /// The message may be sent using the `send` method.
+  /// ```rust,no_run
+  /// # async fn _test() -> anyhow::Result<()> {
+  /// # let msg: tmi::Privmsg<'_> = todo!();
+  /// # let mut client: tmi::Client = todo!();
+  /// client
+  ///   .privmsg(msg.channel(), "yo")
+  ///   .reply_to(msg.message_id())
+  ///   .send()
+  ///   .await?;
+  /// # Ok(())
+  /// # }
+  /// ```
   ///
   /// You can specify additional properties using the builder methods:
   /// - `reply_to`: to specify a `reply-parent-msg-id` tag, which makes this privmsg a reply to another message.
   /// - `client_nonce`: to identify the message in the `Notice` which Twitch may send as a response to this message.
-  pub fn privmsg<'this, 'a, C, S>(
-    &'this mut self,
-    channel: &'a C,
-    text: &'a S,
-  ) -> Result<Privmsg<'this, 'a>, SendError>
+  pub fn privmsg<'a, C>(&'a mut self, channel: &'a C, text: &'a str) -> Privmsg<'a>
   where
-    C: ?Sized + AsRef<str>,
-    S: ?Sized + AsRef<str>,
+    C: AsRef<ChannelRef> + ?Sized + 'a,
   {
-    Ok(Privmsg {
+    Privmsg {
       client: self,
-      channel: Channel::parse(channel.as_ref())?,
-      text: text.as_ref(),
+      channel: channel.as_ref(),
+      text,
       reply_parent_msg_id: None,
       client_nonce: None,
-    })
+    }
   }
 
   /// Send a `PING` command with an optional `nonce` argument.
@@ -137,11 +145,11 @@ impl Client {
   /// ⚠ This call is not rate limited in any way.
   ///
   /// ⚠ `channel` MUST be a valid channel name prefixed by `#`.
-  pub async fn join(&mut self, channel: &impl AsRef<str>) -> Result<(), SendError> {
+  pub async fn join(&mut self, channel: impl AsRef<ChannelRef>) -> Result<(), SendError> {
     with_scratch!(self, |f| {
-      let channel = Channel::parse(channel.as_ref())?;
+      let channel = channel.as_ref();
       let _ = write!(f, "JOIN {channel}\r\n");
-      self.send_raw(f.as_str()).await
+      Ok(self.send_raw(f.as_str()).await?)
     })
   }
 
@@ -151,20 +159,20 @@ impl Client {
   ///
   /// ⚠ Each channel in `channels` MUST be a valid channel name
   /// prefixed by `#`.
-  pub async fn join_all<'a, I, S>(&mut self, channels: I) -> Result<(), SendError>
+  pub async fn join_all<I, C>(&mut self, channels: I) -> Result<(), SendError>
   where
-    I: IntoIterator<Item = &'a S>,
-    S: ?Sized + AsRef<str> + 'a,
+    I: IntoIterator<Item = C>,
+    C: AsRef<ChannelRef>,
   {
     with_scratch!(self, |f| {
       let _ = f.write_str("JOIN ");
       let mut channels = channels.into_iter();
       if let Some(channel) = channels.next() {
-        let channel = Channel::parse(channel.as_ref())?;
+        let channel = ChannelRef::parse(channel.as_ref())?;
         let _ = write!(f, "{channel}");
       }
       for channel in channels {
-        let channel = Channel::parse(channel.as_ref())?;
+        let channel = ChannelRef::parse(channel.as_ref())?;
         let _ = write!(f, ",{channel}");
       }
       let _ = f.write_str("\r\n");
@@ -204,6 +212,12 @@ impl From<InvalidMessage> for SendError {
 impl From<InvalidChannelName> for SendError {
   fn from(value: InvalidChannelName) -> Self {
     Self::InvalidChannelName(value)
+  }
+}
+
+impl From<Infallible> for SendError {
+  fn from(_: Infallible) -> Self {
+    unreachable!()
   }
 }
 

@@ -1,14 +1,14 @@
 //! This command is sent once upon successful login to Twitch IRC.
 
 use super::{is_not_empty, parse_badges, split_comma, Badge, MessageParseError};
-use crate::common::unescaped::Unescaped;
+use crate::common::{maybe_unescape, Cow};
 use crate::irc::{Command, IrcMessageRef, Tag};
 
 /// This command is sent once upon successful login to Twitch IRC.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GlobalUserState<'src> {
   id: &'src str,
-  name: Unescaped<'src>,
+  name: &'src str,
   badges: Vec<Badge<'src>>,
   emote_sets: Vec<&'src str>,
   color: Option<&'src str>,
@@ -17,26 +17,28 @@ pub struct GlobalUserState<'src> {
 generate_getters! {
   <'src> for GlobalUserState<'src> as self {
     /// ID of the logged in user.
-    id -> &str,
+    id -> &'src str,
 
     /// Display name of the logged in user.
     ///
     /// This is the name which appears in chat, and may contain arbitrary unicode characters.
     /// It is separate from the user login, which is always only ASCII.
-    name -> &str = self.name.get(),
+    ///
+    /// ⚠ This call will allocate and return a String if it needs to be unescaped.
+    name -> Cow<'src, str> = maybe_unescape(self.name),
 
     /// List of global badges.
-    badges -> &[Badge<'_>] = self.badges.as_ref(),
+    badges -> &[Badge<'src>] = self.badges.as_ref(),
 
     /// Emote sets which are available globally.
-    emote_sets -> &[&str] = self.emote_sets.as_ref(),
+    emote_sets -> &[&'src str] = self.emote_sets.as_ref(),
 
     /// Chat name color.
     ///
     /// [`None`] means the user has not selected a color.
     /// To match the behavior of Twitch, users should be
     /// given a globally-consistent random color.
-    color -> Option<&str>,
+    color -> Option<&'src str>,
   }
 }
 
@@ -48,7 +50,7 @@ impl<'src> GlobalUserState<'src> {
 
     Some(GlobalUserState {
       id: message.tag(Tag::UserId)?,
-      name: message.tag(Tag::DisplayName)?.into(),
+      name: message.tag(Tag::DisplayName)?,
       badges: message
         .tag(Tag::Badges)
         .zip(message.tag(Tag::BadgeInfo))

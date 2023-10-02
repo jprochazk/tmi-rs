@@ -16,7 +16,7 @@ macro_rules! assert_send {
 #[cfg(feature = "client")]
 pub mod client;
 #[cfg(feature = "client")]
-pub use client::Client;
+pub use client::{Client, Credentials};
 
 #[cfg(feature = "message-types")]
 pub mod msg;
@@ -27,3 +27,4 @@ pub mod irc;
 pub use irc::*;
 
 pub mod common;
+pub use common::{Channel, ChannelRef};
