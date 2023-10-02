@@ -4,8 +4,17 @@
 #[macro_use]
 extern crate tracing;
 
-pub(crate) const fn assert_send<T: Send>() {}
-macro_rules! assert_send {
+pub(crate) const fn assert_sync<T: ?Sized + Sync>() {}
+macro_rules! static_assert_sync {
+  ($T:ty) => {
+    const _: () = {
+      let _ = $crate::assert_sync::<$T>;
+    };
+  };
+}
+
+pub(crate) const fn assert_send<T: ?Sized + Send>() {}
+macro_rules! static_assert_send {
   ($T:ty) => {
     const _: () = {
       let _ = $crate::assert_send::<$T>;

@@ -520,5 +520,5 @@ impl Display for ConnectError {
 
 impl std::error::Error for ConnectError {}
 
-assert_send!(ConnectError);
-assert_send!(Client);
+static_assert_send!(Client);
+static_assert_sync!(Client);

@@ -144,3 +144,9 @@ impl std::fmt::Display for InvalidChannelName {
   }
 }
 impl std::error::Error for InvalidChannelName {}
+
+static_assert_send!(ChannelRef);
+static_assert_sync!(ChannelRef);
+
+static_assert_send!(Channel);
+static_assert_sync!(Channel);

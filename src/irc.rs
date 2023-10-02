@@ -305,8 +305,11 @@ impl Debug for IrcMessage {
   }
 }
 
-assert_send!(IrcMessageRef);
-assert_send!(IrcMessage);
+static_assert_send!(IrcMessageRef);
+static_assert_sync!(IrcMessageRef);
+
+static_assert_send!(IrcMessage);
+static_assert_sync!(IrcMessage);
 
 struct DebugIter<I>(std::cell::RefCell<I>);
 impl<I> DebugIter<I> {

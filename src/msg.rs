@@ -362,3 +362,6 @@ impl private::Sealed for UserNotice<'_> {}
 impl private::Sealed for UserState<'_> {}
 impl private::Sealed for Whisper<'_> {}
 impl private::Sealed for Message<'_> {}
+
+static_assert_send!(Message<'_>);
+static_assert_sync!(Message<'_>);
