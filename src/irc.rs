@@ -27,8 +27,7 @@ use simd::{parse_prefix, parse_tags};
 #[cfg(not(feature = "simd"))]
 use scalar::{parse_prefix, parse_tags};
 
-use crate::common::ChannelRef;
-use crate::common::Span;
+use crate::common::{ChannelRef, Span};
 use std::fmt::{Debug, Display};
 
 /// A base IRC message.
@@ -684,6 +683,8 @@ tags_def! {
   b"reply-parent-msg-id"; "reply-parent-msg-id" = ReplyParentMsgId,
   b"reply-parent-user-id"; "reply-parent-user-id" = ReplyParentUserId,
   b"reply-parent-user-login"; "reply-parent-user-login" = ReplyParentUserLogin,
+  b"reply-thread-parent-msg-id"; "reply-thread-parent-msg-id" = ReplyThreadParentMsgId,
+  b"reply-thread-parent-user-login"; "reply-thread-parent-user-login" = ReplyThreadParentUserLogin,
   b"followers-only"; "followers-only" = FollowersOnly,
   b"r9k"; "r9k" = R9K,
   b"rituals"; "rituals" = Rituals,
