@@ -69,6 +69,12 @@ async fn run(mut client: tmi::Client, channels: Vec<tmi::Channel>) -> Result<()>
 }
 
 async fn on_msg(client: &mut tmi::Client, msg: tmi::Privmsg<'_>) -> Result<()> {
+  println!(
+    "msg-id={:?}\nreply-parent-msg-id={:?}\nreply-thread-parent-msg-id={:?}",
+    msg.message_id(),
+    msg.reply_to().map(|v| v.message_id()),
+    msg.reply_to().map(|v| v.thread_message_id())
+  );
   println!("{}: {}", msg.sender().name(), msg.text());
 
   if client.credentials().is_anon() {

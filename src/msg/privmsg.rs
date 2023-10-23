@@ -77,6 +77,8 @@ generate_getters! {
 /// Information about the reply parent message.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Reply<'src> {
+  thread_message_id: &'src str,
+  thread_user_login: &'src str,
   message_id: &'src str,
   sender: User<'src>,
   text: &'src str,
@@ -84,6 +86,12 @@ pub struct Reply<'src> {
 
 generate_getters! {
   <'src> for Reply<'src> as self {
+    /// Reply thread parent message ID
+    thread_message_id -> &'src str,
+
+    /// Reply thread parent user login
+    thread_user_login -> &'src str,
+
     /// Reply parent message ID
     message_id -> &'src str,
 
@@ -105,6 +113,8 @@ impl<'src> Privmsg<'src> {
 
     let reply_to = message.tag(Tag::ReplyParentMsgId).and_then(|message_id| {
       Some(Reply {
+        thread_message_id: message.tag(Tag::ReplyThreadParentMsgId)?,
+        thread_user_login: message.tag(Tag::ReplyThreadParentUserLogin)?,
         message_id,
         sender: User {
           id: message.tag(Tag::ReplyParentUserId)?,
