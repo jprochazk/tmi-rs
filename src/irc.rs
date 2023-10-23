@@ -591,6 +591,7 @@ macro_rules! tags_def {
   ) => {
     /// A parsed tag value.
     #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+    #[non_exhaustive]
     pub enum $tag<'src> {
       $(
         $(#[$meta])*
@@ -620,6 +621,7 @@ macro_rules! tags_def {
 
     #[doc(hidden)]
     #[derive(Clone, Copy)]
+    #[non_exhaustive]
     pub enum $raw_tag {
       $($name,)*
       Unknown(Span),
