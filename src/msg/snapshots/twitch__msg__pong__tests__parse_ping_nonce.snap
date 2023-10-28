@@ -1,9 +1,0 @@
----
-source: src/msg/pong.rs
-expression: "f(\":tmi.twitch.tv PONG :nonce\")"
----
-Pong {
-    nonce: Some(
-        "nonce",
-    ),
-}

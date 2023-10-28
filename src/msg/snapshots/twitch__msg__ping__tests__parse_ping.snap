@@ -1,7 +1,0 @@
----
-source: src/msg/ping.rs
-expression: "f(\":tmi.twitch.tv PING\")"
----
-Ping {
-    nonce: None,
-}
