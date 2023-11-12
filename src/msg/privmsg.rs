@@ -71,7 +71,8 @@ generate_getters! {
     is_action -> bool,
 
     /// Iterator over the channel badges enabled by the user in the [channel][`Privmsg::channel`].
-    badges -> impl Iterator<Item = &Badge<'src>> = self.badges.iter(),
+    badges -> impl Iterator<Item = &Badge<'src>> + DoubleEndedIterator + ExactSizeIterator
+      = self.badges.iter(),
 
     /// Number of channel badges enabled by the user in the [channel][`Privmsg::channel`].
     num_badges -> usize = self.badges.len(),

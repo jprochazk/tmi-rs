@@ -39,7 +39,8 @@ generate_getters! {
     text -> &str = self.text.as_ref(),
 
     /// Iterator over the badges visible in the whisper window.
-    badges -> impl Iterator<Item = &Badge<'src>> = self.badges.iter(),
+    badges -> impl Iterator<Item = &Badge<'src>> + DoubleEndedIterator + ExactSizeIterator
+      = self.badges.iter(),
 
     /// Number of badges visible in the whisper window.
     num_badges -> usize = self.badges.len(),

@@ -304,7 +304,7 @@ fn parse_message_text(input: &str) -> (&str, bool) {
   (s, true)
 }
 
-fn split_comma(s: &str) -> impl Iterator<Item = &str> + '_ {
+fn split_comma(s: &str) -> impl DoubleEndedIterator<Item = &str> + '_ {
   s.split(',')
 }
 

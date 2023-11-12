@@ -82,7 +82,8 @@ generate_getters! {
     event_id -> &str = self.event_id.as_ref(),
 
     /// Iterator over the channel badges enabled by the user in the [channel][`UserNotice::channel`].
-    badges -> impl Iterator<Item = &Badge<'src>> = self.badges.iter(),
+    badges -> impl Iterator<Item = &Badge<'src>> + DoubleEndedIterator + ExactSizeIterator
+      = self.badges.iter(),
 
     /// Number of channel badges enabled by the user in the [channel][`UserNotice::channel`].
     num_badges -> usize = self.badges.len(),

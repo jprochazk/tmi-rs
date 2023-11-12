@@ -44,13 +44,15 @@ generate_getters! {
     user_name -> &str = self.user_name.as_ref(),
 
     /// Iterator over channel-specific badges.
-    badges -> impl Iterator<Item = &Badge<'src>> = self.badges.iter(),
+    badges -> impl Iterator<Item = &Badge<'src>> + DoubleEndedIterator + ExactSizeIterator
+      = self.badges.iter(),
 
     /// Number of channel-specific badges.
     num_badges -> usize = self.badges.len(),
 
     /// Iterator over the emote sets which are available in this channel.
-    emote_sets -> impl Iterator<Item = &str> = self.emote_sets.iter().map(|v| v.as_ref()),
+    emote_sets -> impl Iterator<Item = &str> + DoubleEndedIterator + ExactSizeIterator
+      = self.emote_sets.iter().map(|v| v.as_ref()),
 
     /// Number of emote sets which are avaialble in this channel.
     num_emote_sets -> usize = self.emote_sets.len(),
