@@ -175,3 +175,47 @@ mod tests {
     assert_eq!(Channel::parse("test".into()), Err(InvalidChannelName));
   }
 }
+
+#[cfg(feature = "serde")]
+mod _serde {
+  use super::*;
+  use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+
+  impl<'de: 'src, 'src> Deserialize<'de> for &'src ChannelRef {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+      D: Deserializer<'de>,
+    {
+      ChannelRef::parse(<&str as Deserialize<'de>>::deserialize(deserializer)?)
+        .map_err(de::Error::custom)
+    }
+  }
+
+  impl<'ser> Serialize for &'ser ChannelRef {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+      S: Serializer,
+    {
+      <&str as Serialize>::serialize(&self.as_str(), serializer)
+    }
+  }
+
+  impl<'de> Deserialize<'de> for Channel {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+      D: Deserializer<'de>,
+    {
+      Channel::parse(<String as Deserialize<'de>>::deserialize(deserializer)?)
+        .map_err(de::Error::custom)
+    }
+  }
+
+  impl Serialize for Channel {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+      S: Serializer,
+    {
+      <String as Serialize>::serialize(&self.0, serializer)
+    }
+  }
+}

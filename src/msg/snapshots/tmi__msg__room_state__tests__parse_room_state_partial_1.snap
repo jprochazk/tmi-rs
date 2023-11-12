@@ -11,10 +11,7 @@ RoomState {
     followers_only: None,
     r9k: None,
     slow: Some(
-        Duration {
-            secs: 5,
-            nanos: 0,
-        },
+        5s,
     ),
     subs_only: None,
 }

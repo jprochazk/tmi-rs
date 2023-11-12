@@ -17,10 +17,7 @@ RoomState {
         false,
     ),
     slow: Some(
-        Duration {
-            secs: 0,
-            nanos: 0,
-        },
+        0ns,
     ),
     subs_only: Some(
         false,

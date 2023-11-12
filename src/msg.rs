@@ -5,14 +5,13 @@
 //! To convert an incoming [`IrcMessage`] into a [`Message`],
 //! use [`IrcMessage::as_typed`].
 
-// TODO: `serde` derives under feature
-
 #[macro_use]
 mod macros;
 
-use crate::common::{maybe_unescape, Cow};
+use crate::common::maybe_unescape;
 use crate::irc::{IrcMessage, IrcMessageRef};
 use smallvec::SmallVec;
+use std::borrow::Cow;
 
 impl IrcMessage {
   /// Parses the base [`IrcMessage`] into a Twitch-specific [`Message`].
@@ -110,18 +109,30 @@ impl<'src> FromIrc<'src> for Message<'src> {
 
 /// A chat badge.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(
+  feature = "serde",
+  derive(serde::Serialize, serde::Deserialize),
+  serde(rename_all = "lowercase")
+)]
 pub enum Badge<'src> {
   /// `staff/1`
   Staff,
+
   /// `turbo/1`
   Turbo,
+
   /// `broadcaster/1`
   Broadcaster,
+
   /// `moderator/1`
   Moderator,
+
   /// `subscriber/{variant}` from `badges` + `subscriber/{months}` from `badge_info`.
+  #[cfg_attr(feature = "serde", serde(borrow))]
   Subscriber(Subscriber<'src>),
+
   /// Some other badge.
+  #[cfg_attr(feature = "serde", serde(borrow))]
   Other(BadgeData<'src>),
 }
 
@@ -136,29 +147,29 @@ impl<'src> From<Badge<'src>> for BadgeData<'src> {
   fn from(value: Badge<'src>) -> Self {
     match value {
       Badge::Staff => BadgeData {
-        name: "staff",
-        version: "1",
+        name: Cow::Borrowed("staff"),
+        version: Cow::Borrowed("1"),
         extra: None,
       },
       Badge::Turbo => BadgeData {
-        name: "turbo",
-        version: "1",
+        name: Cow::Borrowed("turbo"),
+        version: Cow::Borrowed("1"),
         extra: None,
       },
       Badge::Broadcaster => BadgeData {
-        name: "broadcaster",
-        version: "1",
+        name: Cow::Borrowed("broadcaster"),
+        version: Cow::Borrowed("1"),
         extra: None,
       },
       Badge::Moderator => BadgeData {
-        name: "moderator",
-        version: "1",
+        name: Cow::Borrowed("moderator"),
+        version: Cow::Borrowed("1"),
         extra: None,
       },
       Badge::Subscriber(Subscriber {
         version, months, ..
       }) => BadgeData {
-        name: "subscriber",
+        name: Cow::Borrowed("subscriber"),
         version,
         extra: Some(months),
       },
@@ -169,15 +180,19 @@ impl<'src> From<Badge<'src>> for BadgeData<'src> {
 
 impl<'src> From<BadgeData<'src>> for Badge<'src> {
   fn from(value: BadgeData<'src>) -> Self {
-    match value.name {
+    match value.name.as_ref() {
       "staff" => Self::Staff,
       "turbo" => Self::Turbo,
       "broadcaster" => Self::Broadcaster,
       "moderator" => Self::Moderator,
       "subscriber" => Self::Subscriber(Subscriber {
         version: value.version,
-        months: value.extra.unwrap_or("1"),
-        months_n: value.extra.and_then(|v| v.parse().ok()).unwrap_or(1),
+        months: value.extra.clone().unwrap_or(Cow::Borrowed("1")),
+        months_n: value
+          .extra
+          .as_ref()
+          .and_then(|v| v.parse().ok())
+          .unwrap_or(1),
       }),
       _ => Self::Other(value),
     }
@@ -186,9 +201,13 @@ impl<'src> From<BadgeData<'src>> for Badge<'src> {
 
 /// A subscriber badge.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct Subscriber<'src> {
-  version: &'src str,
-  months: &'src str,
+  version: Cow<'src, str>,
+  months: Cow<'src, str>,
+  // This is deserialized from `months` via `FromStr`,
+  // so we skip serializing it.
+  #[cfg_attr(feature = "serde", serde(skip_serializing))]
   months_n: u64,
 }
 
@@ -197,7 +216,7 @@ generate_getters! {
     /// Version of the badge.
     ///
     /// This comes from the `badges` tag.
-    version -> &'src str,
+    version -> &str = self.version.as_ref(),
 
     /// Number of months subscribed.
     ///
@@ -208,10 +227,11 @@ generate_getters! {
 
 /// Basic info about a badge.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BadgeData<'src> {
-  name: &'src str,
-  version: &'src str,
-  extra: Option<&'src str>,
+  name: Cow<'src, str>,
+  version: Cow<'src, str>,
+  extra: Option<Cow<'src, str>>,
 }
 
 generate_getters! {
@@ -219,36 +239,37 @@ generate_getters! {
     /// Name of the badge, e.g. `subscriber`.
     ///
     /// This comes from the `badges` tag.
-    name -> &'src str,
+    name -> &str = self.name.as_ref(),
 
     /// Version of the badge.
     ///
     /// This comes from the `badges` tag.
-    version -> &'src str,
+    version -> &str = self.version.as_ref(),
 
     /// Extra badge info, such as the exact number of
     /// subscribed months for `subscriber`.
     ///
     /// This comes from the `badge_info` tag.
-    extra -> Option<&'src str>,
+    extra -> Option<&str> = self.extra.as_deref(),
   }
 }
 
 /// Basic information about a user.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct User<'src> {
-  id: &'src str,
-  login: &'src str,
-  name: &'src str,
+  id: Cow<'src, str>,
+  login: Cow<'src, str>,
+  name: Cow<'src, str>,
 }
 
 generate_getters! {
   <'src> for User<'src> as self {
     /// Id of the user.
-    id -> &'src str,
+    id -> &str = self.id.as_ref(),
 
     /// Login of the user.
-    login -> &'src str,
+    login -> &str = self.login.as_ref(),
 
     /// Display name.
     ///
@@ -256,7 +277,7 @@ generate_getters! {
     /// This is in contrast to [`User::login`] which is always only ASCII.
     ///
     /// ⚠ This call will allocate and return a String if it needs to be unescaped.
-    name -> Cow<'src, str> = maybe_unescape(self.name),
+    name -> Cow<'src, str> = maybe_unescape(self.name.clone()),
   }
 }
 
@@ -269,8 +290,8 @@ fn parse_timestamp(s: &str) -> Option<chrono::DateTime<chrono::Utc>> {
   chrono::Utc.timestamp_millis_opt(s.parse().ok()?).single()
 }
 
-fn parse_duration(s: &str) -> Option<chrono::Duration> {
-  Some(chrono::Duration::seconds(s.parse().ok()?))
+fn parse_duration(s: &str) -> Option<std::time::Duration> {
+  Some(std::time::Duration::from_secs(s.parse().ok()?))
 }
 
 fn parse_message_text(input: &str) -> (&str, bool) {
@@ -302,12 +323,12 @@ fn parse_badges<'src>(badges: &'src str, badge_info: &'src str) -> Vec<Badge<'sr
     .flat_map(|badge| badge.split_once('/'))
     .map(|(name, version)| {
       BadgeData {
-        name,
-        version,
+        name: name.into(),
+        version: version.into(),
         extra: badge_info
           .iter()
           .find(|(needle, _)| *needle == name)
-          .map(|(_, value)| *value),
+          .map(|(_, value)| Cow::Borrowed(*value)),
       }
       .into()
     })
@@ -365,3 +386,31 @@ impl private::Sealed for Message<'_> {}
 
 static_assert_send!(Message<'_>);
 static_assert_sync!(Message<'_>);
+
+#[cfg(feature = "serde")]
+mod _serde {
+  use super::*;
+  use serde::{de, Deserialize, Deserializer};
+
+  #[cfg(feature = "serde")]
+  impl<'de: 'src, 'src> Deserialize<'de> for Subscriber<'src> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+      D: Deserializer<'de>,
+    {
+      #[derive(Deserialize)]
+      #[serde(rename = "Subcriber")]
+      struct _T<'src> {
+        version: Cow<'src, str>,
+        months: Cow<'src, str>,
+      }
+
+      let t = _T::deserialize(deserializer)?;
+      Ok(Subscriber {
+        version: t.version,
+        months_n: t.months.parse().map_err(de::Error::custom)?,
+        months: t.months,
+      })
+    }
+  }
+}

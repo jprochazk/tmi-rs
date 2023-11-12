@@ -1,29 +1,39 @@
 //! A partial update to the settings of some channel.
 
 use super::{parse_bool, MessageParseError};
-use crate::common::ChannelRef;
+use crate::common::{ChannelRef, MaybeOwned};
 use crate::irc::{Command, IrcMessageRef, Tag};
-use chrono::Duration;
+use std::borrow::Cow;
+use std::time::Duration;
 
 /// A partial update to the settings of some channel.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RoomState<'src> {
-  channel: &'src ChannelRef,
-  channel_id: &'src str,
+  #[cfg_attr(feature = "serde", serde(borrow))]
+  channel: MaybeOwned<'src, ChannelRef>,
+
+  #[cfg_attr(feature = "serde", serde(borrow))]
+  channel_id: Cow<'src, str>,
+
   emote_only: Option<bool>,
+
   followers_only: Option<FollowersOnly>,
+
   r9k: Option<bool>,
+
   slow: Option<Duration>,
+
   subs_only: Option<bool>,
 }
 
 generate_getters! {
   <'src> for RoomState<'src> as self {
     /// Login of the channel this state was applied to.
-    channel -> &'src ChannelRef,
+    channel -> &ChannelRef = self.channel.as_ref(),
 
     /// ID of the channel this state was applied to.
-    channel_id -> &'src str,
+    channel_id -> &str = self.channel_id.as_ref(),
 
     /// Whether the room is in emote-only mode.
     ///
@@ -60,6 +70,11 @@ generate_getters! {
 
 /// Followers-only mode configuration.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(
+  feature = "serde",
+  derive(serde::Serialize, serde::Deserialize),
+  serde(rename_all = "lowercase")
+)]
 pub enum FollowersOnly {
   /// Followers-only mode is disabled.
   ///
@@ -82,14 +97,14 @@ impl<'src> RoomState<'src> {
     }
 
     Some(RoomState {
-      channel: message.channel()?,
-      channel_id: message.tag(Tag::RoomId)?,
+      channel: MaybeOwned::Ref(message.channel()?),
+      channel_id: message.tag(Tag::RoomId)?.into(),
       emote_only: message.tag(Tag::EmoteOnly).map(parse_bool),
       followers_only: message
         .tag(Tag::FollowersOnly)
         .and_then(|v| v.parse().ok())
-        .map(|n| match n {
-          n if n > 0 => FollowersOnly::Enabled(Some(Duration::minutes(n))),
+        .map(|n: i64| match n {
+          n if n > 0 => FollowersOnly::Enabled(Some(Duration::from_secs((n * 60) as u64))),
           0 => FollowersOnly::Enabled(None),
           _ => FollowersOnly::Disabled,
         }),
@@ -97,7 +112,7 @@ impl<'src> RoomState<'src> {
       slow: message
         .tag(Tag::Slow)
         .and_then(|v| v.parse().ok())
-        .map(Duration::seconds),
+        .map(Duration::from_secs),
       subs_only: message.tag(Tag::SubsOnly).map(parse_bool),
     })
   }
@@ -146,6 +161,42 @@ mod tests {
   #[test]
   fn parse_room_state_partial_2() {
     assert_irc_snapshot!(
+      RoomState,
+      "@emote-only=1;room-id=40286300 :tmi.twitch.tv ROOMSTATE #randers"
+    );
+  }
+
+  #[cfg(feature = "serde")]
+  #[test]
+  fn roundtrip_room_state_basic_full() {
+    assert_irc_roundtrip!(RoomState, "@emote-only=0;followers-only=-1;r9k=0;rituals=0;room-id=40286300;slow=0;subs-only=0 :tmi.twitch.tv ROOMSTATE #randers");
+  }
+
+  #[cfg(feature = "serde")]
+  #[test]
+  fn roundtrip_room_state_basic_full2() {
+    assert_irc_roundtrip!(RoomState, "@emote-only=1;followers-only=0;r9k=1;rituals=0;room-id=40286300;slow=5;subs-only=1 :tmi.twitch.tv ROOMSTATE #randers");
+  }
+
+  #[cfg(feature = "serde")]
+  #[test]
+  fn roundtrip_room_state_followers_non_zero() {
+    assert_irc_roundtrip!(RoomState, "@emote-only=1;followers-only=10;r9k=1;rituals=0;room-id=40286300;slow=5;subs-only=1 :tmi.twitch.tv ROOMSTATE #randers");
+  }
+
+  #[cfg(feature = "serde")]
+  #[test]
+  fn roundtrip_room_state_partial_1() {
+    assert_irc_roundtrip!(
+      RoomState,
+      "@room-id=40286300;slow=5 :tmi.twitch.tv ROOMSTATE #randers"
+    );
+  }
+
+  #[cfg(feature = "serde")]
+  #[test]
+  fn roundtrip_room_state_partial_2() {
+    assert_irc_roundtrip!(
       RoomState,
       "@emote-only=1;room-id=40286300 :tmi.twitch.tv ROOMSTATE #randers"
     );

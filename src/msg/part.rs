@@ -1,23 +1,28 @@
 //! Sent when a user leaves a channel.
 
 use super::MessageParseError;
-use crate::common::ChannelRef;
+use crate::common::{ChannelRef, MaybeOwned};
 use crate::irc::{Command, IrcMessageRef};
+use std::borrow::Cow;
 
 /// Sent when a user leaves a channel.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Part<'src> {
-  channel: &'src ChannelRef,
-  user: &'src str,
+  #[cfg_attr(feature = "serde", serde(borrow))]
+  channel: MaybeOwned<'src, ChannelRef>,
+
+  #[cfg_attr(feature = "serde", serde(borrow))]
+  user: Cow<'src, str>,
 }
 
 generate_getters! {
   <'src> for Part<'src> as self {
     /// Parted channel name.
-    channel -> &'src ChannelRef,
+    channel -> &ChannelRef = self.channel.as_ref(),
 
     /// Login of the user.
-    user -> &'src str,
+    user -> &str = self.user.as_ref(),
   }
 }
 
@@ -28,8 +33,11 @@ impl<'src> Part<'src> {
     }
 
     Some(Part {
-      channel: message.channel()?,
-      user: message.prefix().and_then(|prefix| prefix.nick)?,
+      channel: MaybeOwned::Ref(message.channel()?),
+      user: message
+        .prefix()
+        .and_then(|prefix| prefix.nick)
+        .map(Cow::Borrowed)?,
     })
   }
 }
@@ -54,6 +62,15 @@ mod tests {
   #[test]
   fn parse_join() {
     assert_irc_snapshot!(
+      Part,
+      ":randers811!randers811@randers811.tmi.twitch.tv PART #pajlada"
+    );
+  }
+
+  #[cfg(feature = "serde")]
+  #[test]
+  fn roundtrip_join() {
+    assert_irc_roundtrip!(
       Part,
       ":randers811!randers811@randers811.tmi.twitch.tv PART #pajlada"
     );

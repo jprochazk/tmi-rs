@@ -8,6 +8,7 @@
 
 use super::MessageParseError;
 use crate::irc::{Command, IrcMessageRef};
+use std::borrow::Cow;
 
 /// Sent by TMI as a response to a [`Ping`][Ping].
 ///
@@ -17,14 +18,16 @@ use crate::irc::{Command, IrcMessageRef};
 /// [Ping]: crate::msg::ping::Ping
 /// [nonce]: crate::msg::ping::Ping::nonce
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Pong<'src> {
-  nonce: Option<&'src str>,
+  #[cfg_attr(feature = "serde", serde(borrow))]
+  nonce: Option<Cow<'src, str>>,
 }
 
 generate_getters! {
   <'src> for Pong<'src> as self {
     /// Unique string sent with this ping.
-    nonce -> Option<&'src str>,
+    nonce -> Option<&str> = self.nonce.as_deref(),
   }
 }
 
@@ -35,7 +38,7 @@ impl<'src> Pong<'src> {
     }
 
     Some(Pong {
-      nonce: message.text(),
+      nonce: message.text().map(Cow::Borrowed),
     })
   }
 }
@@ -65,5 +68,17 @@ mod tests {
   #[test]
   fn parse_ping_nonce() {
     assert_irc_snapshot!(Pong, ":tmi.twitch.tv PONG :nonce");
+  }
+
+  #[cfg(feature = "serde")]
+  #[test]
+  fn roundtrip_ping() {
+    assert_irc_roundtrip!(Pong, ":tmi.twitch.tv PONG");
+  }
+
+  #[cfg(feature = "serde")]
+  #[test]
+  fn roundtrip_ping_nonce() {
+    assert_irc_roundtrip!(Pong, ":tmi.twitch.tv PONG :nonce");
   }
 }

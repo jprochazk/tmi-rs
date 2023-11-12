@@ -2,9 +2,11 @@
 
 pub mod channel;
 
+use std::borrow::Cow;
 use std::cell::RefCell;
+use std::fmt::Debug;
+use std::ops::Deref;
 
-pub use beef::lean::Cow;
 pub use channel::{Channel, ChannelRef, InvalidChannelName};
 
 /// This type is like a [`Range`][std::ops::Range],
@@ -99,7 +101,7 @@ pub(crate) fn maybe_unescape<'a>(value: impl Into<Cow<'a, str>>) -> Cow<'a, str>
   let mut value: Cow<'_, str> = value.into();
   for i in 0..value.len() {
     if value.as_bytes()[i] == b'\\' {
-      value = Cow::owned(actually_unescape(&value, i));
+      value = Cow::Owned(actually_unescape(&value, i));
       break;
     }
   }
@@ -141,4 +143,120 @@ fn actually_unescape(input: &str, start: usize) -> String {
   }
 
   out
+}
+
+/// Cow-equivalent type which is used to bypass the deserialize
+/// restrictions for `Cow<'a, T>` where `T` is not `str`...
+pub(crate) enum MaybeOwned<'a, T: ?Sized + ToOwned> {
+  Ref(&'a T),
+  Own(T::Owned),
+}
+
+impl<'a, T: PartialEq> PartialEq for MaybeOwned<'a, T>
+where
+  T: ?Sized,
+  T: ToOwned,
+  T::Owned: AsRef<T>,
+{
+  fn eq(&self, other: &Self) -> bool {
+    self.as_ref() == other.as_ref()
+  }
+}
+
+impl<'a, T: Eq> Eq for MaybeOwned<'a, T>
+where
+  T: ?Sized,
+  T: ToOwned,
+  T::Owned: AsRef<T>,
+{
+}
+
+impl<'a, T> Deref for MaybeOwned<'a, T>
+where
+  T: ?Sized,
+  T: ToOwned,
+  T::Owned: AsRef<T>,
+{
+  type Target = T;
+
+  fn deref(&self) -> &Self::Target {
+    match self {
+      MaybeOwned::Ref(v) => v,
+      MaybeOwned::Own(v) => v.as_ref(),
+    }
+  }
+}
+
+impl<'a, T> AsRef<T> for MaybeOwned<'a, T>
+where
+  T: ?Sized,
+  T: ToOwned,
+  T::Owned: AsRef<T>,
+{
+  fn as_ref(&self) -> &T {
+    match self {
+      MaybeOwned::Ref(v) => v,
+      MaybeOwned::Own(v) => v.as_ref(),
+    }
+  }
+}
+
+impl<T> Debug for MaybeOwned<'_, T>
+where
+  T: ?Sized,
+  T: ToOwned,
+  T: Debug,
+  T::Owned: Debug,
+{
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Self::Ref(arg0) => Debug::fmt(arg0, f),
+      Self::Own(arg0) => Debug::fmt(arg0, f),
+    }
+  }
+}
+
+impl<T> Clone for MaybeOwned<'_, T>
+where
+  T: ?Sized,
+  T: ToOwned,
+  T::Owned: Clone,
+{
+  fn clone(&self) -> Self {
+    match self {
+      Self::Ref(arg0) => Self::Ref(*arg0),
+      Self::Own(arg0) => Self::Own(<T::Owned>::clone(arg0)),
+    }
+  }
+}
+
+#[cfg(feature = "serde")]
+mod _serde {
+  use super::*;
+  use serde::{de, Deserialize, Serialize};
+
+  impl<'a> Serialize for MaybeOwned<'a, ChannelRef> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+      S: serde::Serializer,
+    {
+      self.as_ref().serialize(serializer)
+    }
+  }
+
+  impl<'de: 'a, 'a> Deserialize<'de> for MaybeOwned<'a, ChannelRef> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+      D: serde::Deserializer<'de>,
+    {
+      match <Cow<'a, str>>::deserialize(deserializer)? {
+        Cow::Borrowed(v) => Ok(MaybeOwned::Ref(
+          ChannelRef::parse(v).map_err(de::Error::custom)?,
+        )),
+        Cow::Owned(v) => Ok(MaybeOwned::Own(
+          Channel::parse(v).map_err(de::Error::custom)?,
+        )),
+      }
+    }
+  }
 }

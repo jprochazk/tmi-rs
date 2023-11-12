@@ -36,12 +36,14 @@ async fn main() -> Result<()> {
     .map(tmi::Channel::parse)
     .collect::<Result<Vec<_>, _>>()?;
 
+  println!("Connecting as {}", credentials.nick);
   let mut client = tmi::Client::builder()
     .credentials(credentials)
     .connect()
     .await?;
 
   client.join_all(&channels).await?;
+  println!("Joined the following channels: {}", channels.join(", "));
 
   select! {
     _ = ctrl_c() => {
@@ -69,12 +71,6 @@ async fn run(mut client: tmi::Client, channels: Vec<tmi::Channel>) -> Result<()>
 }
 
 async fn on_msg(client: &mut tmi::Client, msg: tmi::Privmsg<'_>) -> Result<()> {
-  println!(
-    "msg-id={:?}\nreply-parent-msg-id={:?}\nreply-thread-parent-msg-id={:?}",
-    msg.message_id(),
-    msg.reply_to().map(|v| v.message_id()),
-    msg.reply_to().map(|v| v.thread_message_id())
-  );
   println!("{}: {}", msg.sender().name(), msg.text());
 
   if client.credentials().is_anon() {

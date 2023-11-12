@@ -13,10 +13,7 @@ RoomState {
     followers_only: Some(
         Enabled(
             Some(
-                Duration {
-                    secs: 600,
-                    nanos: 0,
-                },
+                600s,
             ),
         ),
     ),
@@ -24,10 +21,7 @@ RoomState {
         true,
     ),
     slow: Some(
-        Duration {
-            secs: 5,
-            nanos: 0,
-        },
+        5s,
     ),
     subs_only: Some(
         true,

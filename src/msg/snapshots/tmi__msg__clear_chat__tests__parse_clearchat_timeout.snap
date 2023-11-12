@@ -11,10 +11,7 @@ ClearChat {
         TimeOut {
             user: "fabzeef",
             id: "148973258",
-            duration: Duration {
-                secs: 1,
-                nanos: 0,
-            },
+            duration: 1s,
         },
     ),
     timestamp: 2020-07-12T11:37:08.245Z,

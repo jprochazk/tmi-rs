@@ -6,8 +6,9 @@
 //! For example, [`UserState::badges`] may be different from [`GlobalUserState::badges`][crate::msg::global_user_state::GlobalUserState::badges].
 
 use super::{is_not_empty, parse_badges, split_comma, Badge, MessageParseError};
-use crate::common::ChannelRef;
+use crate::common::{ChannelRef, MaybeOwned};
 use crate::irc::{Command, IrcMessageRef, Tag};
+use std::borrow::Cow;
 
 /// Sent upon joining a channel, or upon successfully sending a `PRIVMSG` message to a channel.
 ///
@@ -16,34 +17,50 @@ use crate::irc::{Command, IrcMessageRef, Tag};
 ///
 /// For example, [`UserState::badges`] may be different from [`GlobalUserState::badges`][crate::msg::global_user_state::GlobalUserState::badges].
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct UserState<'src> {
-  channel: &'src ChannelRef,
-  user_name: &'src str,
+  #[cfg_attr(feature = "serde", serde(borrow))]
+  channel: MaybeOwned<'src, ChannelRef>,
+
+  #[cfg_attr(feature = "serde", serde(borrow))]
+  user_name: Cow<'src, str>,
+
+  #[cfg_attr(feature = "serde", serde(borrow))]
   badges: Vec<Badge<'src>>,
-  emote_sets: Vec<&'src str>,
-  color: Option<&'src str>,
+
+  #[cfg_attr(feature = "serde", serde(borrow))]
+  emote_sets: Vec<Cow<'src, str>>,
+
+  #[cfg_attr(feature = "serde", serde(borrow))]
+  color: Option<Cow<'src, str>>,
 }
 
 generate_getters! {
   <'src> for UserState<'src> as self {
     /// Name of the channel in which this state applies to.
-    channel -> &'src ChannelRef,
+    channel -> &ChannelRef = self.channel.as_ref(),
 
     /// Display name of the user.
-    user_name -> &'src str,
+    user_name -> &str = self.user_name.as_ref(),
 
-    /// List of channel-specific badges.
-    badges -> &[Badge<'src>] = self.badges.as_ref(),
+    /// Iterator over channel-specific badges.
+    badges -> impl Iterator<Item = &Badge<'src>> = self.badges.iter(),
 
-    /// Emote sets which are available in this channel.
-    emote_sets -> &[&'src str] = self.emote_sets.as_ref(),
+    /// Number of channel-specific badges.
+    num_badges -> usize = self.badges.len(),
+
+    /// Iterator over the emote sets which are available in this channel.
+    emote_sets -> impl Iterator<Item = &str> = self.emote_sets.iter().map(|v| v.as_ref()),
+
+    /// Number of emote sets which are avaialble in this channel.
+    num_emote_sets -> usize = self.emote_sets.len(),
 
     /// The user's selected name color.
     ///
     /// [`None`] means the user has not selected a color.
     /// To match the behavior of Twitch, users should be
     /// given a globally-consistent random color.
-    color -> Option<&'src str>,
+    color -> Option<&str> = self.color.as_deref(),
   }
 }
 
@@ -54,8 +71,8 @@ impl<'src> UserState<'src> {
     }
 
     Some(UserState {
-      channel: message.channel()?,
-      user_name: message.tag(Tag::DisplayName)?,
+      channel: MaybeOwned::Ref(message.channel()?),
+      user_name: message.tag(Tag::DisplayName)?.into(),
       badges: message
         .tag(Tag::Badges)
         .zip(message.tag(Tag::BadgeInfo))
@@ -64,9 +81,13 @@ impl<'src> UserState<'src> {
       emote_sets: message
         .tag(Tag::EmoteSets)
         .map(split_comma)
+        .map(|i| i.map(Cow::Borrowed))
         .map(Iterator::collect)
         .unwrap_or_default(),
-      color: message.tag(Tag::Color).filter(is_not_empty),
+      color: message
+        .tag(Tag::Color)
+        .filter(is_not_empty)
+        .map(|v| v.into()),
     })
   }
 }
@@ -96,5 +117,17 @@ mod tests {
   #[test]
   fn parse_userstate_uuid_emote_set_id() {
     assert_irc_snapshot!(UserState, "@badge-info=;badges=moderator/1;color=#8A2BE2;display-name=TESTUSER;emote-sets=0,75c09c7b-332a-43ec-8be8-1d4571706155;mod=1;subscriber=0;user-type=mod :tmi.twitch.tv USERSTATE #randers");
+  }
+
+  #[cfg(feature = "serde")]
+  #[test]
+  fn roundtrip_userstate() {
+    assert_irc_roundtrip!(UserState, "@badge-info=;badges=;color=#FF0000;display-name=TESTUSER;emote-sets=0;mod=0;subscriber=0;user-type= :tmi.twitch.tv USERSTATE #randers");
+  }
+
+  #[cfg(feature = "serde")]
+  #[test]
+  fn roundtrip_userstate_uuid_emote_set_id() {
+    assert_irc_roundtrip!(UserState, "@badge-info=;badges=moderator/1;color=#8A2BE2;display-name=TESTUSER;emote-sets=0,75c09c7b-332a-43ec-8be8-1d4571706155;mod=1;subscriber=0;user-type=mod :tmi.twitch.tv USERSTATE #randers");
   }
 }

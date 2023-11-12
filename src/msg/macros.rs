@@ -38,3 +38,16 @@ macro_rules! assert_irc_snapshot {
     ::insta::assert_debug_snapshot!(f($input))
   }};
 }
+
+#[cfg(all(test, feature = "serde"))]
+macro_rules! assert_irc_roundtrip {
+  ($T:ty, $input:literal,) => {
+    assert_serde_roundtrip!($T, $input)
+  };
+  ($T:ty, $input:literal) => {{
+    let original = $crate::msg::macros::_parse_irc::<$T>($input);
+    let serialized = ::serde_json::to_string(&original).expect("failed to serialize");
+    let deserialized = ::serde_json::from_str(&serialized).expect("failed to deserialize");
+    assert_eq!(original, deserialized, "roundtrip failed");
+  }};
+}
