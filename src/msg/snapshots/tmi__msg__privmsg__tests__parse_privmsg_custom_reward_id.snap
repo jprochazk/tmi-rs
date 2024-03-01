@@ -1,0 +1,38 @@
+---
+source: src/msg/privmsg.rs
+expression: "f(\"@badge-info=subscriber/1;badges=broadcaster/1,subscriber/0;color=#8A2BE2;custom-reward-id=be22f712-8fd9-426a-90df-c13eae6cc6dc;display-name=vesdeg;emotes=;first-msg=0;flags=;id=79828352-d979-4e49-bd5e-15c487d275e2;mod=0;returning-chatter=0;room-id=164774298;subscriber=1;tmi-sent-ts=1709298826724;turbo=0;user-id=164774298;user-type= :vesdeg!vesdeg@vesdeg.tmi.twitch.tv PRIVMSG #vesdeg :#00FF00\")"
+---
+Privmsg {
+    channel: Channel(
+        "#vesdeg",
+    ),
+    channel_id: "164774298",
+    message_id: "79828352-d979-4e49-bd5e-15c487d275e2",
+    sender: User {
+        id: "164774298",
+        login: "vesdeg",
+        name: "vesdeg",
+    },
+    reply_to: None,
+    text: "#00FF00",
+    is_action: false,
+    badges: [
+        Broadcaster,
+        Subscriber(
+            Subscriber {
+                version: "0",
+                months: "1",
+                months_n: 1,
+            },
+        ),
+    ],
+    color: Some(
+        "#8A2BE2",
+    ),
+    custom_reward_id: Some(
+        "be22f712-8fd9-426a-90df-c13eae6cc6dc",
+    ),
+    bits: None,
+    emotes: "",
+    timestamp: 2024-03-01T13:13:46.724Z,
+}

@@ -20,6 +20,7 @@ Privmsg {
     color: Some(
         "#0000FF",
     ),
+    custom_reward_id: None,
     bits: None,
     emotes: "",
     timestamp: 2020-07-12T09:12:35.039Z,
