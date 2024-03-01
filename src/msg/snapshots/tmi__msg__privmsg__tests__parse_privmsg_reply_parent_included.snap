@@ -30,6 +30,7 @@ Privmsg {
     is_action: false,
     badges: [],
     color: None,
+    custom_reward_id: None,
     bits: None,
     emotes: "",
     timestamp: 2023-01-17T03:26:23.585Z,

@@ -734,7 +734,8 @@ tags_def! {
   b"msg-param-profileImageURL"; "msg-param-profileImageURL" = MsgParamProfileImageUrl,
   b"msg-param-mass-gift-count"; "msg-param-mass-gift-count" = MsgParamMassGiftCount,
   b"msg-param-gift-month-being-redeemed"; "msg-param-gift-month-being-redeemed" = MsgParamGiftMonthBeingRedeemed,
-  b"msg-param-anon-gift"; "msg-param-anon-gift" = MsgParamAnonGift
+  b"msg-param-anon-gift"; "msg-param-anon-gift" = MsgParamAnonGift,
+  b"custom-reward-id"; "custom-reward-id" = CustomRewardId
 }
 
 impl<'src> Display for Tag<'src> {

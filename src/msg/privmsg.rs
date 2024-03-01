@@ -37,6 +37,9 @@ pub struct Privmsg<'src> {
   #[cfg_attr(feature = "serde", serde(borrow))]
   color: Option<Cow<'src, str>>,
 
+  #[cfg_attr(feature = "serde", serde(borrow))]
+  custom_reward_id: Option<Cow<'src, str>>,
+
   bits: Option<u64>,
 
   #[cfg_attr(feature = "serde", serde(borrow))]
@@ -83,6 +86,11 @@ generate_getters! {
     /// To match the behavior of Twitch, users should be
     /// given a globally-consistent random color.
     color -> Option<&str> = self.color.as_deref(),
+
+    /// ID of the custom reward/redeem
+    ///
+    /// Note: this is only provided for redeems with a message
+    custom_reward_id -> Option<&str> = self.custom_reward_id.as_deref(),
 
     /// The number of bits gifted with this message.
     bits -> Option<u64>,
@@ -185,6 +193,10 @@ impl<'src> Privmsg<'src> {
         .tag(Tag::Color)
         .filter(is_not_empty)
         .map(Cow::Borrowed),
+      custom_reward_id: message
+        .tag(Tag::CustomRewardId)
+        .filter(is_not_empty)
+        .map(Cow::Borrowed),
       bits: message.tag(Tag::Bits).and_then(|bits| bits.parse().ok()),
       emotes: message.tag(Tag::Emotes).unwrap_or_default().into(),
       timestamp: message.tag(Tag::TmiSentTs).and_then(parse_timestamp)?,
@@ -255,6 +267,11 @@ mod tests {
   #[test]
   fn parse_privmsg_emote_non_numeric_id() {
     assert_irc_snapshot!(Privmsg, "@badge-info=;badges=;client-nonce=245b864d508a69a685e25104204bd31b;color=#FF144A;display-name=AvianArtworks;emote-only=1;emotes=300196486_TK:0-7;flags=;id=21194e0d-f0fa-4a8f-a14f-3cbe89366ad9;mod=0;room-id=11148817;subscriber=0;tmi-sent-ts=1594552113129;turbo=0;user-id=39565465;user-type= :avianartworks!avianartworks@avianartworks.tmi.twitch.tv PRIVMSG #pajlada :pajaM_TK");
+  }
+
+  #[test]
+  fn parse_privmsg_custom_reward_id() {
+    assert_irc_snapshot!(Privmsg, "@badge-info=subscriber/1;badges=broadcaster/1,subscriber/0;color=#8A2BE2;custom-reward-id=be22f712-8fd9-426a-90df-c13eae6cc6dc;display-name=vesdeg;emotes=;first-msg=0;flags=;id=79828352-d979-4e49-bd5e-15c487d275e2;mod=0;returning-chatter=0;room-id=164774298;subscriber=1;tmi-sent-ts=1709298826724;turbo=0;user-id=164774298;user-type= :vesdeg!vesdeg@vesdeg.tmi.twitch.tv PRIVMSG #vesdeg :#00FF00");
   }
 
   #[cfg(feature = "serde")]

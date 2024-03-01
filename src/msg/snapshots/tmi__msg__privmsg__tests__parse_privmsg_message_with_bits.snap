@@ -28,6 +28,7 @@ Privmsg {
     color: Some(
         "#004B49",
     ),
+    custom_reward_id: None,
     bits: Some(
         1,
     ),
