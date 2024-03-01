@@ -89,7 +89,7 @@ generate_getters! {
 
     /// ID of the custom reward/redeem
     ///
-    /// Note: this is only provided for redeems with a message
+    /// Note: This is only provided for redeems with a message.
     custom_reward_id -> Option<&str> = self.custom_reward_id.as_deref(),
 
     /// The number of bits gifted with this message.
