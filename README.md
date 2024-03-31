@@ -13,7 +13,7 @@
 $ cargo add tmi anyhow tokio -F tokio/full
 ```
 
-```rust
+```rust,no_run
 const CHANNELS: &[&str] = &["#forsen"];
 
 #[tokio::main]
