@@ -4,12 +4,25 @@
 //! The entrypoint to this module is the [`Client`].
 //!
 //! The simplest way to get started is using [`Client::anonymous`],
-//! which will connect to Twitch IRC anonymously,
-//! followed by joining some channels using [`Client::join`].
+//! which will connect to Twitch IRC anonymously.
+//!
+//! ```rust
+//! # async fn run() -> anyhow::Result<()> {
+//! let client = tmi::Client::anonymous().await?;
+//! # }
+//! ```
 //!
 //! If you wish to be able to send messages, you have to generate an oauth2 token,
-//! and then supply the [`Credentials`] to the client via [`Client::connect_with`],
-//! or [`Client::builder`] followed by [`ClientBuilder::credentials`].
+//! and provide it to the client:
+//!
+//! ```rust
+//! # async fn run() -> anyhow::Result<()> {
+//! let credentials = tmi::Credentials::new("your_username", "oauth:your_token");
+//! let client = tmi::Client::builder().credentials(credentials).connect().await?;
+//! # }
+//! ```
+//!
+//! and then use [`Client::builder`] followed by [`ClientBuilder::credentials`].
 //!
 //! Generating an oauth2 token is out of scope for this library.
 //! Head over to the [official documentation](https://dev.twitch.tv/docs/irc/authenticate-bot/#getting-an-access-token)
@@ -202,8 +215,6 @@ impl ClientBuilder {
   }
 
   /// Attempts to connect to Twitch IRC using this configuration.
-  ///
-  /// This uses the [`DEFAULT_TIMEOUT`].
   pub fn connect(self) -> impl Future<Output = Result<Client, ConnectError>> {
     Client::connect(self.config)
   }
@@ -241,8 +252,6 @@ impl Client {
   }
 
   /// Attemps to connect anonymously.
-  ///
-  /// This uses the [`DEFAULT_TIMEOUT`].
   pub fn anonymous() -> impl Future<Output = Result<Client, ConnectError>> {
     Self::connect(Config::default())
   }
@@ -267,8 +276,6 @@ impl Client {
   }
 
   /// Attempt to reconnect to Twitch IRC.
-  ///
-  /// This uses the [`DEFAULT_BACKOFF`] and [`DEFAULT_TIMEOUT`].
   pub async fn reconnect(&mut self) -> Result<(), ReconnectError> {
     trace!("reconnecting");
 

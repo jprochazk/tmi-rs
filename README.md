@@ -1,13 +1,25 @@
+# `tmi-rs` &emsp; [![Documentation]][docs.rs] [![Latest Version]][crates.io]
+
+[docs.rs]: https://docs.rs/tmi/latest/tmi/
+[crates.io]: https://crates.io/crates/tmi
+[Documentation]: https://img.shields.io/docsrs/tmi
+[Latest Version]: https://img.shields.io/crates/v/tmi.svg
+
 [Blazingly fast](#performance) 🚀 Rust 🦀 library for interacting with [twitch.tv](https://twitch.tv)'s chat interface.
 
+## Quick Start
+
 ```text,ignore
-$ cargo add tmi
+$ cargo add tmi anyhow tokio -F tokio/full
 ```
 
 ```rust
-async fn run(channels: &[tmi::Channel]) -> anyhow::Result<()> {
-  let mut client = tmi::Client::connect().await?;
-  client.join_all(channels).await?;
+const CHANNELS: &[&str] = &["#forsen"];
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+  let mut client = tmi::Client::anonymous().await?;
+  client.join_all(CHANNELS).await?;
 
   loop {
     let msg = client.recv().await?;
@@ -17,7 +29,7 @@ async fn run(channels: &[tmi::Channel]) -> anyhow::Result<()> {
       }
       tmi::Message::Reconnect => {
         client.reconnect().await?;
-        client.join_all(channels).await?;
+        client.join_all(CHANNELS).await?;
       }
       tmi::Message::Ping(ping) => {
         client.pong(&ping).await?;
