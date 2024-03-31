@@ -1,3 +1,12 @@
+//! Basic usage example.
+//!
+//! ```text,ignore
+//! $ cargo run --example basic -- \
+//!   --login your_user_name \
+//!   --token oauth:yfvzjqb705z12hrhy1zkwa9xt7v662 \
+//!   --channel #forsen
+//! ```
+
 use anyhow::Result;
 use clap::Parser;
 use tokio::select;
