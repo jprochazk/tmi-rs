@@ -35,7 +35,7 @@ async fn main() -> anyhow::Result<()> {
         client.pong(&ping).await?;
       }
       _ => {}
-    };
+    }
   }
 }
 ```

@@ -9,6 +9,7 @@
 //! ```rust
 //! # async fn run() -> anyhow::Result<()> {
 //! let client = tmi::Client::anonymous().await?;
+//! # Ok(())
 //! # }
 //! ```
 //!
@@ -19,6 +20,7 @@
 //! # async fn run() -> anyhow::Result<()> {
 //! let credentials = tmi::Credentials::new("your_username", "oauth:your_token");
 //! let client = tmi::Client::builder().credentials(credentials).connect().await?;
+//! # Ok(())
 //! # }
 //! ```
 //!
