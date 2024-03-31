@@ -11,26 +11,26 @@ permissions:
   contents: read
 
 jobs:
-  ci:
-    name: CI
+  lint:
+    name: Lint
     runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        rust: ["stable", "nightly"]
     steps:
       - uses: actions/checkout@v3
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: stable
+          toolchain: ${{ matrix.rust }}
           components: rustfmt, clippy
 
       - name: Cache
         uses: Swatinem/rust-cache@v2
-
-      - name: Format
-        uses: actions-rs/cargo@v1
         with:
-          command: fmt
-          args: --all -- --check
+          key: "${{ runner.os }}-lint-${{ matrix.rust }}"
 
       - name: Lint
         uses: actions-rs/cargo@v1
@@ -38,20 +38,41 @@ jobs:
           command: clippy
           args: --all-targets --all-features -- -D warnings
 
-      - name: Tests (no default features)
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --lib --no-default-features
+  test:
+    name: Test
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        rust: ["stable", "nightly"]
+        features:
+          [
+            { "key": "no-default-features", "args": "--no-default-features" },
+            { "key": "default-features", "args": "" },
+            { "key": "all-features", "args": "--all-features" },
+          ]
+    steps:
+      - uses: actions/checkout@v3
 
-      - name: Tests (default features)
-        uses: actions-rs/cargo@v1
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@v1
         with:
-          command: test
+          toolchain: ${{ matrix.rust }}
 
-      - name: Tests (all features)
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: "${{ runner.os }}-test-${{ matrix.rust }}-${{ matrix.features.args }}"
+
+      - name: cargo test (${{ matrix.features.key }})
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --all-features
+          args: --lib ${{ matrix.features.args }}
+
+      - name: cargo doc (${{ matrix.features.key }})
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --doc ${{ matrix.features.args }}
 
