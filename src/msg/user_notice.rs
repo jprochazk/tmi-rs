@@ -1,9 +1,9 @@
 //! A user notice is sent when some [`Event`] occurs.
 
 use super::{
-  is_not_empty, maybe_clone, parse_badges, parse_timestamp, Badge, MessageParseError, User,
+  is_not_empty, maybe_clone, maybe_unescape, parse_badges, parse_timestamp, Badge,
+  MessageParseError, User,
 };
-use crate::common::maybe_unescape;
 use crate::{Command, IrcMessageRef, Tag};
 use chrono::{DateTime, Utc};
 use std::borrow::Cow;

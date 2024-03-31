@@ -8,7 +8,6 @@
 #[macro_use]
 mod macros;
 
-use crate::common::maybe_unescape;
 use crate::irc::{IrcMessage, IrcMessageRef};
 use smallvec::SmallVec;
 use std::borrow::Cow;
@@ -464,4 +463,52 @@ mod _serde {
       })
     }
   }
+}
+
+pub(crate) fn maybe_unescape<'a>(value: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
+  let mut value: Cow<'_, str> = value.into();
+  for i in 0..value.len() {
+    if value.as_bytes()[i] == b'\\' {
+      value = Cow::Owned(actually_unescape(&value, i));
+      break;
+    }
+  }
+  value
+}
+
+#[inline]
+fn actually_unescape(input: &str, start: usize) -> String {
+  let mut out = String::with_capacity(input.len());
+  out.push_str(&input[..start]);
+
+  let mut escape = false;
+  for char in input[start..].chars() {
+    match char {
+      '\\' if escape => {
+        out.push('\\');
+        escape = false;
+      }
+      '\\' => escape = true,
+      ':' if escape => {
+        out.push(';');
+        escape = false;
+      }
+      's' if escape => {
+        out.push(' ');
+        escape = false;
+      }
+      'r' if escape => {
+        out.push('\r');
+        escape = false;
+      }
+      'n' if escape => {
+        out.push('\n');
+        escape = false;
+      }
+      '⸝' => out.push(','),
+      c => out.push(c),
+    }
+  }
+
+  out
 }

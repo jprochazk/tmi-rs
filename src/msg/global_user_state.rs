@@ -1,7 +1,8 @@
 //! This command is sent once upon successful login to Twitch IRC.
 
-use super::{is_not_empty, maybe_clone, parse_badges, split_comma, Badge, MessageParseError};
-use crate::common::maybe_unescape;
+use super::{
+  is_not_empty, maybe_clone, maybe_unescape, parse_badges, split_comma, Badge, MessageParseError,
+};
 use crate::irc::{Command, IrcMessageRef, Tag};
 use std::borrow::Cow;
 

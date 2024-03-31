@@ -1,6 +1,5 @@
 //! Random types and utilties used by the library.
 
-use std::borrow::Cow;
 use std::cell::RefCell;
 use std::fmt::Debug;
 
@@ -90,52 +89,4 @@ where
   fn join<Sep>(self, sep: Sep) -> Join<Self, Sep> {
     Join(RefCell::new(Some(self)), sep)
   }
-}
-
-pub(crate) fn maybe_unescape<'a>(value: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
-  let mut value: Cow<'_, str> = value.into();
-  for i in 0..value.len() {
-    if value.as_bytes()[i] == b'\\' {
-      value = Cow::Owned(actually_unescape(&value, i));
-      break;
-    }
-  }
-  value
-}
-
-#[inline]
-fn actually_unescape(input: &str, start: usize) -> String {
-  let mut out = String::with_capacity(input.len());
-  out.push_str(&input[..start]);
-
-  let mut escape = false;
-  for char in input[start..].chars() {
-    match char {
-      '\\' if escape => {
-        out.push('\\');
-        escape = false;
-      }
-      '\\' => escape = true,
-      ':' if escape => {
-        out.push(';');
-        escape = false;
-      }
-      's' if escape => {
-        out.push(' ');
-        escape = false;
-      }
-      'r' if escape => {
-        out.push('\r');
-        escape = false;
-      }
-      'n' if escape => {
-        out.push('\n');
-        escape = false;
-      }
-      '⸝' => out.push(','),
-      c => out.push(c),
-    }
-  }
-
-  out
 }

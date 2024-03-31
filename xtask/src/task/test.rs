@@ -1,5 +1,4 @@
-use crate::util::cargo;
-use crate::util::CommandExt;
+use crate::util::{cargo, CommandExt};
 use crate::Result;
 use argp::FromArgs;
 use std::process::Command;

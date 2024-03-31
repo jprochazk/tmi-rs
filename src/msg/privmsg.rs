@@ -1,10 +1,9 @@
 //! Represents a basic Twitch chat message sent by some user to a specific channel.
 
 use super::{
-  is_not_empty, maybe_clone, parse_badges, parse_message_text, parse_timestamp, Badge,
-  MessageParseError, User,
+  is_not_empty, maybe_clone, maybe_unescape, parse_badges, parse_message_text, parse_timestamp,
+  Badge, MessageParseError, User,
 };
-use crate::common::maybe_unescape;
 use crate::irc::{Command, IrcMessageRef, Tag};
 use chrono::{DateTime, Utc};
 use std::borrow::Cow;
