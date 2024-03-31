@@ -39,14 +39,14 @@ generate_getters! {
     name -> Cow<'src, str> = maybe_unescape(self.name.clone()),
 
     /// Iterator over global badges.
-    badges -> impl Iterator <Item = &Badge<'src>> + DoubleEndedIterator + ExactSizeIterator
+    badges -> impl DoubleEndedIterator<Item = &Badge<'src>> + ExactSizeIterator
       = self.badges.iter(),
 
     /// Number of global badges.
     num_badges -> usize = self.badges.len(),
 
     /// Iterator over emote sets which are available globally.
-    emote_sets -> impl Iterator<Item = &str> + DoubleEndedIterator + ExactSizeIterator
+    emote_sets -> impl DoubleEndedIterator<Item = &str> + ExactSizeIterator
       = self.emote_sets.iter().map(|v| v.as_ref()),
 
     /// Number of emote sets which are available globally.

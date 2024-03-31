@@ -3,7 +3,7 @@
 //! This is the main interface for interacting with Twitch IRC.
 //! The entrypoint to this module is the [`Client`].
 //!
-//! The simplest way to get started is using [`Client::connect`],
+//! The simplest way to get started is using [`Client::anonymous`],
 //! which will connect to Twitch IRC anonymously,
 //! followed by joining some channels using [`Client::join`].
 //!
@@ -13,7 +13,7 @@
 //!
 //! Generating an oauth2 token is out of scope for this library.
 //! Head over to the [official documentation](https://dev.twitch.tv/docs/irc/authenticate-bot/#getting-an-access-token)
-//! to see how you can generate one.
+//! to see how you can generate one. [twitch_oauth2](https://crates.io/crates/twitch_oauth2) may be used to automate most of it.
 //!
 //! ⚠ Note: [`Client`] is a fairly low-level interface! It does not automatically handle:
 //! - Rate limiting (both for JOINs and PRIVMSGs)
@@ -37,10 +37,8 @@ pub mod read;
 pub mod util;
 pub mod write;
 
-use self::conn::TlsConfig;
-use self::conn::{OpenStreamError, TlsConfigError};
-use self::read::ReadStream;
-use self::read::RecvError;
+use self::conn::{OpenStreamError, TlsConfig, TlsConfigError};
+use self::read::{ReadStream, RecvError};
 use self::write::WriteStream;
 use crate::irc::Command;
 use crate::IrcMessage;
@@ -56,29 +54,34 @@ use tokio_rustls::rustls::ServerName;
 use tokio_stream::wrappers::LinesStream;
 use util::Timeout;
 
+/// The default timeout used when connecting to Twitch IRC.
+pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// Credentials used to authenticate to Twitch IRC.
 ///
 /// The [`Default`] impl uses [`Credentials::anon`].
 #[derive(Clone)]
 pub struct Credentials {
-  /// The _login_ of the user.
-  pub nick: String,
-
-  /// The oauth2 token.
-  pub pass: String,
+  pub login: String,
+  pub token: Option<String>,
 }
 
 impl Credentials {
   const ANON_RANGE: std::ops::Range<u32> = 10000..99999;
 
-  /// Instantiate credentials from a `nick` and `pass`.
+  /// Credentials using an OAuth token.
   ///
-  /// This does nothing except make it a little more convenient
-  /// to construct `Credentials` from various string types.
-  pub fn new(nick: impl ToString, pass: impl ToString) -> Self {
+  /// `token` should be a User Access Token.
+  ///
+  /// You can generate one by following the instructions on [Authorization Code Grant Flow](https://dev.twitch.tv/docs/authentication/getting-tokens-oauth/#authorization-code-grant-flow).
+  ///
+  /// Make sure the token is valid before attempting to use it, and refresh it or generate a new one if it expires.
+  ///
+  /// [twitch_oauth2](https://crates.io/crates/twitch_oauth2) can help automate most of this.
+  pub fn new(login: impl ToString, token: impl ToString) -> Self {
     Self {
-      nick: nick.to_string(),
-      pass: pass.to_string(),
+      login: login.to_string(),
+      token: Some(token.to_string()),
     }
   }
 
@@ -92,19 +95,21 @@ impl Credentials {
   /// membership commands, etc.
   pub fn anon() -> Self {
     Self {
-      pass: "just_a_lil_guy".into(),
-      nick: format!("justinfan{}", thread_rng().gen_range(Self::ANON_RANGE)),
+      token: None,
+      login: format!("justinfan{}", thread_rng().gen_range(Self::ANON_RANGE)),
     }
   }
 
   pub fn is_anon(&self) -> bool {
-    let Some(digits) = self.nick.strip_prefix("justinfan") else {
-      return false;
-    };
-    let Some(digits) = digits.parse::<u32>().ok() else {
-      return false;
-    };
-    Self::ANON_RANGE.contains(&digits)
+    self.token.is_none()
+  }
+
+  pub fn login(&self) -> &str {
+    self.login.as_str()
+  }
+
+  pub fn token(&self) -> Option<&str> {
+    self.token.as_deref()
   }
 }
 
@@ -117,36 +122,13 @@ impl Default for Credentials {
 impl std::fmt::Debug for Credentials {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     f.debug_struct("Credentials")
-      .field("nick", &self.nick)
+      .field("nick", &self.login)
       .finish_non_exhaustive()
   }
 }
 
-/// Client configuration.
-///
-/// At the moment this only holds credentials.
-#[derive(Clone, Debug, Default)]
-pub struct Config {
-  /// Credentials to use when logging in to Twitch IRC.
-  pub credentials: Credentials,
-}
-
-impl Config {
-  /// Instantiate a config from some `credentials`.
-  pub fn new(credentials: Credentials) -> Self {
-    Self { credentials }
-  }
-}
-
-/// Builder for a [`Client`].
-pub struct ClientBuilder {
-  config: Config,
-}
-
-/// The default timeout used when connecting to Twitch IRC.
-pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
-
 /// Reconnect backoff configuration.
+#[derive(Clone, Copy, Debug)]
 pub struct Backoff {
   /// The maximum number of reconnect attempts to make.
   pub max_tries: Option<u64>,
@@ -161,13 +143,44 @@ pub struct Backoff {
   pub max_delay: Duration,
 }
 
-/// The default reconnect backoff.
-pub const DEFAULT_BACKOFF: Backoff = Backoff {
-  max_tries: Some(8),
-  initial_delay: Duration::from_secs(1),
-  delay_multiplier: 3,
-  max_delay: Duration::from_secs(12),
-};
+impl Default for Backoff {
+  fn default() -> Self {
+    Self {
+      max_tries: Some(8),
+      initial_delay: Duration::from_secs(1),
+      delay_multiplier: 3,
+      max_delay: Duration::from_secs(12),
+    }
+  }
+}
+
+/// Client configuration.
+#[derive(Clone, Debug)]
+pub struct Config {
+  /// Credentials to use when logging in to Twitch IRC.
+  pub credentials: Credentials,
+
+  /// Connect and reconnect timeout.
+  pub timeout: Duration,
+
+  /// Reconnect backoff.
+  pub backoff: Backoff,
+}
+
+impl Default for Config {
+  fn default() -> Self {
+    Self {
+      credentials: Default::default(),
+      timeout: DEFAULT_TIMEOUT,
+      backoff: Default::default(),
+    }
+  }
+}
+
+/// Builder for a [`Client`].
+pub struct ClientBuilder {
+  config: Config,
+}
 
 impl ClientBuilder {
   /// Set the credentials.
@@ -176,21 +189,23 @@ impl ClientBuilder {
     self
   }
 
-  /// Attempts to connect to Twitch IRC using this configuration.
-  ///
-  /// This uses the [`DEFAULT_TIMEOUT`].
-  pub fn connect(self) -> impl Future<Output = Result<Client, ConnectError>> {
-    Client::connect_with(self.config, DEFAULT_TIMEOUT)
+  /// Set the timeout used on various operations, such as connecting and reconnecting.
+  pub fn timeout(mut self, timeout: Duration) -> Self {
+    self.config.timeout = timeout;
+    self
+  }
+
+  /// Set the backoff settings used when reconnecting.
+  pub fn backoff(mut self, backoff: Backoff) -> Self {
+    self.config.backoff = backoff;
+    self
   }
 
   /// Attempts to connect to Twitch IRC using this configuration.
   ///
-  /// Uses the provided `timeout`.
-  pub fn connect_with_timeout(
-    self,
-    timeout: Duration,
-  ) -> impl Future<Output = Result<Client, ConnectError>> {
-    Client::connect_with(self.config, timeout)
+  /// This uses the [`DEFAULT_TIMEOUT`].
+  pub fn connect(self) -> impl Future<Output = Result<Client, ConnectError>> {
+    Client::connect(self.config)
   }
 }
 
@@ -225,50 +240,40 @@ impl Client {
     }
   }
 
-  /// Attemps to connect with the default configuration.
+  /// Attemps to connect anonymously.
   ///
   /// This uses the [`DEFAULT_TIMEOUT`].
-  ///
-  /// This connection is anonymous, which means you can't send messages.
-  pub fn connect() -> impl Future<Output = Result<Client, ConnectError>> {
-    Self::connect_with(Config::default(), DEFAULT_TIMEOUT)
+  pub fn anonymous() -> impl Future<Output = Result<Client, ConnectError>> {
+    Self::connect(Config::default())
   }
 
   /// Attempts to connect with the provided `config` and `timeout`.
-  pub async fn connect_with(config: Config, timeout: Duration) -> Result<Client, ConnectError> {
+  async fn connect(config: Config) -> Result<Client, ConnectError> {
     trace!("connecting");
     let tls = TlsConfig::load(ServerName::try_from(conn::HOST)?)?;
     trace!("opening connection to twitch");
+    let timeout = config.timeout;
     let stream = conn::open(tls.clone()).timeout(timeout).await??;
     let (reader, writer) = split(stream);
-    let mut chat = Client {
+    let mut client = Client {
       reader,
       writer,
       scratch: String::with_capacity(1024),
       tls,
       config,
     };
-    chat.handshake().timeout(timeout).await??;
-    Ok(chat)
+    client.handshake().timeout(timeout).await??;
+    Ok(client)
   }
 
   /// Attempt to reconnect to Twitch IRC.
   ///
   /// This uses the [`DEFAULT_BACKOFF`] and [`DEFAULT_TIMEOUT`].
-  pub fn reconnect(&mut self) -> impl Future<Output = Result<(), ReconnectError>> + '_ {
-    self.reconnect_with(DEFAULT_BACKOFF, DEFAULT_TIMEOUT)
-  }
-
-  /// Attempt to reconnect to Twitch IRC.
-  ///
-  /// This uses the provided `backoff` and `timeout`.
-  pub async fn reconnect_with(
-    &mut self,
-    backoff: Backoff,
-    timeout: Duration,
-  ) -> Result<(), ReconnectError> {
+  pub async fn reconnect(&mut self) -> Result<(), ReconnectError> {
     trace!("reconnecting");
 
+    let backoff = self.config.backoff;
+    let timeout = self.config.timeout;
     let mut tries = backoff.max_tries;
     let mut delay = backoff.initial_delay;
     let mut cause = ConnectError::Timeout;
@@ -294,9 +299,8 @@ impl Client {
         if e.should_retry() {
           cause = e;
           continue;
-        } else {
-          return Err(e.into());
         }
+        return Err(e.into());
       };
 
       return Ok(());
@@ -310,10 +314,17 @@ impl Client {
 
     let credentials = &self.config.credentials;
     const CAP: &str = "twitch.tv/commands twitch.tv/tags twitch.tv/membership";
-    trace!("CAP REQ {CAP:?}; NICK {:?}; PASS ***", credentials.nick);
+    trace!("CAP REQ {CAP:?}; NICK {:?}; PASS ***", credentials.login);
     write!(&mut self.scratch, "CAP REQ :{CAP}\r\n").unwrap();
-    write!(&mut self.scratch, "PASS {}\r\n", credentials.pass).unwrap();
-    write!(&mut self.scratch, "NICK {}\r\n", credentials.nick).unwrap();
+
+    let login = credentials.login.as_str();
+    let token = match credentials.token.as_ref() {
+      Some(token) => token.as_str(),
+      None => "just_a_lil_guy",
+    };
+    write!(&mut self.scratch, "PASS {token}\r\n").unwrap();
+    write!(&mut self.scratch, "NICK {login}\r\n").unwrap();
+
     self.writer.write_all(self.scratch.as_bytes()).await?;
     self.writer.flush().await?;
     self.scratch.clear();
@@ -352,10 +363,10 @@ impl Client {
         {
           trace!("invalid credentials");
           return Err(ConnectError::Auth);
-        } else {
-          trace!("unrecognized error");
-          return Err(ConnectError::Notice(message));
         }
+
+        trace!("unrecognized error");
+        return Err(ConnectError::Notice(message));
       }
       _ => {
         trace!("first message not recognized");

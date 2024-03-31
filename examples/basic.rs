@@ -8,7 +8,7 @@ use tokio::signal::ctrl_c;
 struct Args {
   /// Login username
   #[arg(long)]
-  nick: Option<String>,
+  login: Option<String>,
 
   /// Login oauth2 token
   #[arg(long)]
@@ -25,8 +25,8 @@ async fn main() -> Result<()> {
 
   let args = Args::parse();
 
-  let credentials = match args.nick.zip(args.token) {
-    Some((nick, token)) => tmi::client::Credentials::new(nick, token),
+  let credentials = match args.login.zip(args.token) {
+    Some((login, token)) => tmi::client::Credentials::new(login, token),
     None => tmi::client::Credentials::anon(),
   };
 
@@ -36,7 +36,7 @@ async fn main() -> Result<()> {
     .map(tmi::Channel::parse)
     .collect::<Result<Vec<_>, _>>()?;
 
-  println!("Connecting as {}", credentials.nick);
+  println!("Connecting as {}", credentials.login());
   let mut client = tmi::Client::builder()
     .credentials(credentials)
     .connect()
