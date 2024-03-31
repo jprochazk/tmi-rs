@@ -1,7 +1,7 @@
 //! A user notice is sent when some [`Event`] occurs.
 
 use super::{is_not_empty, parse_badges, parse_timestamp, Badge, MessageParseError, User};
-use crate::common::{maybe_unescape, ChannelRef, MaybeOwned};
+use crate::common::maybe_unescape;
 use crate::{Command, IrcMessageRef, Tag};
 use chrono::{DateTime, Utc};
 use std::borrow::Cow;
@@ -13,7 +13,7 @@ use std::borrow::Cow;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct UserNotice<'src> {
   #[cfg_attr(feature = "serde", serde(borrow))]
-  channel: MaybeOwned<'src, ChannelRef>,
+  channel: Cow<'src, str>,
 
   #[cfg_attr(feature = "serde", serde(borrow))]
   channel_id: Cow<'src, str>,
@@ -51,7 +51,7 @@ pub struct UserNotice<'src> {
 generate_getters! {
   <'src> for UserNotice<'src> as self {
     /// Name of the channel which received this user notice.
-    channel -> &ChannelRef = self.channel.as_ref(),
+    channel -> &str = self.channel.as_ref(),
 
     /// ID of the channel which received this user notice.
     channel_id -> &str = self.channel_id.as_ref(),
@@ -588,7 +588,7 @@ impl<'src> UserNotice<'src> {
     };
 
     Some(UserNotice {
-      channel: MaybeOwned::Ref(message.channel()?),
+      channel: message.channel()?.into(),
       channel_id: message.tag(Tag::RoomId)?.into(),
       sender,
       text: message.text().map(Cow::Borrowed),

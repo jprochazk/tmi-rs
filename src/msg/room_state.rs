@@ -1,7 +1,6 @@
 //! A partial update to the settings of some channel.
 
 use super::{parse_bool, MessageParseError};
-use crate::common::{ChannelRef, MaybeOwned};
 use crate::irc::{Command, IrcMessageRef, Tag};
 use std::borrow::Cow;
 use std::time::Duration;
@@ -11,7 +10,7 @@ use std::time::Duration;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RoomState<'src> {
   #[cfg_attr(feature = "serde", serde(borrow))]
-  channel: MaybeOwned<'src, ChannelRef>,
+  channel: Cow<'src, str>,
 
   #[cfg_attr(feature = "serde", serde(borrow))]
   channel_id: Cow<'src, str>,
@@ -30,7 +29,7 @@ pub struct RoomState<'src> {
 generate_getters! {
   <'src> for RoomState<'src> as self {
     /// Login of the channel this state was applied to.
-    channel -> &ChannelRef = self.channel.as_ref(),
+    channel -> &str = self.channel.as_ref(),
 
     /// ID of the channel this state was applied to.
     channel_id -> &str = self.channel_id.as_ref(),
@@ -97,7 +96,7 @@ impl<'src> RoomState<'src> {
     }
 
     Some(RoomState {
-      channel: MaybeOwned::Ref(message.channel()?),
+      channel: message.channel()?.into(),
       channel_id: message.tag(Tag::RoomId)?.into(),
       emote_only: message.tag(Tag::EmoteOnly).map(parse_bool),
       followers_only: message

@@ -1,7 +1,6 @@
 //! Sent when a user leaves a channel.
 
 use super::MessageParseError;
-use crate::common::{ChannelRef, MaybeOwned};
 use crate::irc::{Command, IrcMessageRef};
 use std::borrow::Cow;
 
@@ -10,7 +9,7 @@ use std::borrow::Cow;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Part<'src> {
   #[cfg_attr(feature = "serde", serde(borrow))]
-  channel: MaybeOwned<'src, ChannelRef>,
+  channel: Cow<'src, str>,
 
   #[cfg_attr(feature = "serde", serde(borrow))]
   user: Cow<'src, str>,
@@ -19,7 +18,7 @@ pub struct Part<'src> {
 generate_getters! {
   <'src> for Part<'src> as self {
     /// Parted channel name.
-    channel -> &ChannelRef = self.channel.as_ref(),
+    channel -> &str = self.channel.as_ref(),
 
     /// Login of the user.
     user -> &str = self.user.as_ref(),
@@ -33,7 +32,7 @@ impl<'src> Part<'src> {
     }
 
     Some(Part {
-      channel: MaybeOwned::Ref(message.channel()?),
+      channel: message.channel()?.into(),
       user: message
         .prefix()
         .and_then(|prefix| prefix.nick)

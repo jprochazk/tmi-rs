@@ -3,7 +3,7 @@
 use super::{
   is_not_empty, parse_badges, parse_message_text, parse_timestamp, Badge, MessageParseError, User,
 };
-use crate::common::{maybe_unescape, ChannelRef, MaybeOwned};
+use crate::common::maybe_unescape;
 use crate::irc::{Command, IrcMessageRef, Tag};
 use chrono::{DateTime, Utc};
 use std::borrow::Cow;
@@ -13,7 +13,7 @@ use std::borrow::Cow;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Privmsg<'src> {
   #[cfg_attr(feature = "serde", serde(borrow))]
-  channel: MaybeOwned<'src, ChannelRef>,
+  channel: Cow<'src, str>,
 
   #[cfg_attr(feature = "serde", serde(borrow))]
   channel_id: Cow<'src, str>,
@@ -51,7 +51,7 @@ pub struct Privmsg<'src> {
 generate_getters! {
   <'src> for Privmsg<'src> as self {
     /// Channel in which this message was sent.
-    channel -> &ChannelRef = self.channel.as_ref(),
+    channel -> &str = self.channel.as_ref(),
 
     /// ID of the channel in which this message was sent.
     channel_id -> &str = self.channel_id.as_ref(),
@@ -170,7 +170,7 @@ impl<'src> Privmsg<'src> {
 
     let (text, is_action) = parse_message_text(message.text()?);
     Some(Privmsg {
-      channel: MaybeOwned::Ref(message.channel()?),
+      channel: message.channel()?.into(),
       channel_id: message.tag(Tag::RoomId)?.into(),
       message_id: message.tag(Tag::Id)?.into(),
       sender: User {

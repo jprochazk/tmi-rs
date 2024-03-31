@@ -37,10 +37,10 @@ pub trait CommandExt {
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>;
 
-  fn with_env<K, V>(self, key: K, val: V) -> Self
+  /* fn with_env<K, V>(self, key: K, val: V) -> Self
   where
     K: AsRef<OsStr>,
-    V: AsRef<OsStr>;
+    V: AsRef<OsStr>; */
 
   fn run(self) -> Result;
 
@@ -65,14 +65,14 @@ impl CommandExt for Command {
     self
   }
 
-  fn with_env<K, V>(mut self, key: K, val: V) -> Self
+  /* fn with_env<K, V>(mut self, key: K, val: V) -> Self
   where
     K: AsRef<OsStr>,
     V: AsRef<OsStr>,
   {
     self.env(key, val);
     self
-  }
+  } */
 
   fn run(mut self) -> Result {
     self.spawn()?.wait()?.check()

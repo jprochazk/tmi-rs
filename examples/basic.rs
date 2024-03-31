@@ -38,12 +38,7 @@ async fn main() -> Result<()> {
     Some((login, token)) => tmi::client::Credentials::new(login, token),
     None => tmi::client::Credentials::anon(),
   };
-
-  let channels = args
-    .channel
-    .into_iter()
-    .map(tmi::Channel::parse)
-    .collect::<Result<Vec<_>, _>>()?;
+  let channels = args.channel;
 
   println!("Connecting as {}", credentials.login());
   let mut client = tmi::Client::builder()
@@ -64,7 +59,7 @@ async fn main() -> Result<()> {
   }
 }
 
-async fn run(mut client: tmi::Client, channels: Vec<tmi::Channel>) -> Result<()> {
+async fn run(mut client: tmi::Client, channels: Vec<String>) -> Result<()> {
   loop {
     let msg = client.recv().await?;
     match msg.as_typed()? {

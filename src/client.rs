@@ -322,7 +322,12 @@ impl Client {
       Some(token) => token.as_str(),
       None => "just_a_lil_guy",
     };
-    write!(&mut self.scratch, "PASS {token}\r\n").unwrap();
+    let oauth = if token.starts_with("oauth:") {
+      ""
+    } else {
+      "oauth:"
+    };
+    write!(&mut self.scratch, "PASS {oauth}{token}\r\n").unwrap();
     write!(&mut self.scratch, "NICK {login}\r\n").unwrap();
 
     self.writer.write_all(self.scratch.as_bytes()).await?;

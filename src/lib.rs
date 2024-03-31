@@ -36,4 +36,3 @@ pub mod irc;
 pub use irc::*;
 
 pub mod common;
-pub use common::{Channel, ChannelRef};

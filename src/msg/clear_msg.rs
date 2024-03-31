@@ -1,7 +1,6 @@
 //! Sent when a single message is deleted.
 
 use super::{parse_message_text, parse_timestamp, MessageParseError};
-use crate::common::{ChannelRef, MaybeOwned};
 use crate::irc::{Command, IrcMessageRef, Tag};
 use chrono::{DateTime, Utc};
 use std::borrow::Cow;
@@ -11,7 +10,7 @@ use std::borrow::Cow;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ClearMsg<'src> {
   #[cfg_attr(feature = "serde", serde(borrow))]
-  channel: MaybeOwned<'src, ChannelRef>,
+  channel: Cow<'src, str>,
 
   #[cfg_attr(feature = "serde", serde(borrow))]
   channel_id: Cow<'src, str>,
@@ -33,7 +32,7 @@ pub struct ClearMsg<'src> {
 generate_getters! {
   <'src> for ClearMsg<'src> as self {
     /// Login of the channel in which the message was deleted.
-    channel -> &ChannelRef = self.channel.as_ref(),
+    channel -> &str = self.channel.as_ref(),
 
     /// ID of the channel in which the message was deleted.
     channel_id -> &str = self.channel_id.as_ref(),
@@ -63,7 +62,7 @@ impl<'src> ClearMsg<'src> {
 
     let (text, is_action) = parse_message_text(message.text()?);
     Some(ClearMsg {
-      channel: MaybeOwned::Ref(message.channel()?),
+      channel: message.channel()?.into(),
       channel_id: message.tag(Tag::RoomId)?.into(),
       sender: message.tag(Tag::Login)?.into(),
       message_id: message.tag(Tag::TargetMsgId)?.into(),

@@ -6,7 +6,6 @@
 //! For example, [`UserState::badges`] may be different from [`GlobalUserState::badges`][crate::msg::global_user_state::GlobalUserState::badges].
 
 use super::{is_not_empty, parse_badges, split_comma, Badge, MessageParseError};
-use crate::common::{ChannelRef, MaybeOwned};
 use crate::irc::{Command, IrcMessageRef, Tag};
 use std::borrow::Cow;
 
@@ -20,7 +19,7 @@ use std::borrow::Cow;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct UserState<'src> {
   #[cfg_attr(feature = "serde", serde(borrow))]
-  channel: MaybeOwned<'src, ChannelRef>,
+  channel: Cow<'src, str>,
 
   #[cfg_attr(feature = "serde", serde(borrow))]
   user_name: Cow<'src, str>,
@@ -38,7 +37,7 @@ pub struct UserState<'src> {
 generate_getters! {
   <'src> for UserState<'src> as self {
     /// Name of the channel in which this state applies to.
-    channel -> &ChannelRef = self.channel.as_ref(),
+    channel -> &str = self.channel.as_ref(),
 
     /// Display name of the user.
     user_name -> &str = self.user_name.as_ref(),
@@ -73,7 +72,7 @@ impl<'src> UserState<'src> {
     }
 
     Some(UserState {
-      channel: MaybeOwned::Ref(message.channel()?),
+      channel: message.channel()?.into(),
       user_name: message.tag(Tag::DisplayName)?.into(),
       badges: message
         .tag(Tag::Badges)

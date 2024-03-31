@@ -27,7 +27,7 @@ use simd::{parse_prefix, parse_tags};
 #[cfg(not(feature = "simd"))]
 use scalar::{parse_prefix, parse_tags};
 
-use crate::common::{ChannelRef, Span};
+use crate::common::Span;
 use std::fmt::{Debug, Display};
 
 /// A base IRC message.
@@ -118,12 +118,8 @@ impl<'src> IrcMessageRef<'src> {
   }
 
   /// Get the channel name this message was sent to.
-  pub fn channel(&self) -> Option<&'src ChannelRef> {
-    self
-      .parts
-      .channel
-      .map(|span| &self.src[span])
-      .map(ChannelRef::from_unchecked)
+  pub fn channel(&self) -> Option<&'src str> {
+    self.parts.channel.map(|span| &self.src[span])
   }
 
   /// Get the raw message params.

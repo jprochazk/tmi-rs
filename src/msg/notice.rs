@@ -2,7 +2,6 @@
 //! usually in response to invalid actions.
 
 use super::MessageParseError;
-use crate::common::{ChannelRef, MaybeOwned};
 use crate::irc::{Command, IrcMessageRef, Tag};
 use std::borrow::Cow;
 
@@ -12,7 +11,7 @@ use std::borrow::Cow;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Notice<'src> {
   #[cfg_attr(feature = "serde", serde(borrow))]
-  channel: Option<MaybeOwned<'src, ChannelRef>>,
+  channel: Option<Cow<'src, str>>,
 
   #[cfg_attr(feature = "serde", serde(borrow))]
   text: Cow<'src, str>,
@@ -26,7 +25,7 @@ generate_getters! {
     /// Target channel name.
     ///
     /// This may be empty before successful login.
-    channel -> Option<&ChannelRef> = self.channel.as_deref(),
+    channel -> Option<&str> = self.channel.as_deref(),
 
     /// Notice message.
     text -> &str = self.text.as_ref(),
@@ -45,7 +44,7 @@ impl<'src> Notice<'src> {
     }
 
     Some(Notice {
-      channel: message.channel().map(MaybeOwned::Ref),
+      channel: message.channel().map(Cow::Borrowed),
       text: message.text()?.into(),
       id: message.tag(Tag::MsgId).map(Cow::Borrowed),
     })

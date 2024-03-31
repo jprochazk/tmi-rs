@@ -1,7 +1,6 @@
 //! Sent when the chat is cleared of a batch of messages.
 
 use super::{parse_duration, parse_timestamp, MessageParseError};
-use crate::common::{ChannelRef, MaybeOwned};
 use crate::irc::{Command, IrcMessageRef, Tag};
 use chrono::{DateTime, Utc};
 use std::borrow::Cow;
@@ -12,7 +11,7 @@ use std::time::Duration;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ClearChat<'src> {
   #[cfg_attr(feature = "serde", serde(borrow))]
-  channel: MaybeOwned<'src, ChannelRef>,
+  channel: Cow<'src, str>,
 
   #[cfg_attr(feature = "serde", serde(borrow))]
   channel_id: Cow<'src, str>,
@@ -26,7 +25,7 @@ pub struct ClearChat<'src> {
 generate_getters! {
   <'src> for ClearChat<'src> as self {
     /// Name of the affected channel.
-    channel -> &ChannelRef = self.channel.as_ref(),
+    channel -> &str = self.channel.as_ref(),
 
     /// ID of the affected channel.
     channel_id -> &str = self.channel_id.as_ref(),
@@ -153,7 +152,7 @@ impl<'src> ClearChat<'src> {
     }
 
     Some(ClearChat {
-      channel: MaybeOwned::Ref(message.channel()?),
+      channel: message.channel()?.into(),
       channel_id: message.tag(Tag::RoomId)?.into(),
       action: match (
         message.text(),
