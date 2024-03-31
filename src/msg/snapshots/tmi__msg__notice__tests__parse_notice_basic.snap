@@ -4,9 +4,7 @@ expression: "f(\"@msg-id=msg_banned :tmi.twitch.tv NOTICE #forsen :You are perma
 ---
 Notice {
     channel: Some(
-        Channel(
-            "#forsen",
-        ),
+        "#forsen",
     ),
     text: "You are permanently banned from talking in forsen.",
     id: Some(

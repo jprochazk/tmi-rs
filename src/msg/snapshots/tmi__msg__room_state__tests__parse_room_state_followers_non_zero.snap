@@ -3,9 +3,7 @@ source: src/msg/room_state.rs
 expression: "f(\"@emote-only=1;followers-only=10;r9k=1;rituals=0;room-id=40286300;slow=5;subs-only=1 :tmi.twitch.tv ROOMSTATE #randers\")"
 ---
 RoomState {
-    channel: Channel(
-        "#randers",
-    ),
+    channel: "#randers",
     channel_id: "40286300",
     emote_only: Some(
         true,

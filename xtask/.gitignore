@@ -3,3 +3,4 @@ bench/
 tmp/
 
 perf.*
+*.snap.new

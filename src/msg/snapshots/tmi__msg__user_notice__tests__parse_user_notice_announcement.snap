@@ -3,9 +3,7 @@ source: src/msg/user_notice.rs
 expression: "f(\"@emotes=;login=pajbot;vip=0;tmi-sent-ts=1695554663565;flags=;mod=1;subscriber=1;id=bb1bec25-8f26-4ba3-a084-a6a2ca332f00;badge-info=subscriber/93;system-msg=;user-id=82008718;user-type=mod;room-id=11148817;badges=moderator/1,subscriber/3072;msg-param-color=PRIMARY;msg-id=announcement;color=#2E8B57;display-name=pajbot :tmi.twitch.tv USERNOTICE #pajlada :$ping xd\")"
 ---
 UserNotice {
-    channel: Channel(
-        "#pajlada",
-    ),
+    channel: "#pajlada",
     channel_id: "11148817",
     sender: Some(
         User {

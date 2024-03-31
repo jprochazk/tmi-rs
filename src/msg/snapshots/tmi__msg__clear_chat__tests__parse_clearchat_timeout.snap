@@ -3,9 +3,7 @@ source: src/msg/clear_chat.rs
 expression: "f(\"@ban-duration=1;room-id=11148817;target-user-id=148973258;tmi-sent-ts=1594553828245 :tmi.twitch.tv CLEARCHAT #pajlada :fabzeef\")"
 ---
 ClearChat {
-    channel: Channel(
-        "#pajlada",
-    ),
+    channel: "#pajlada",
     channel_id: "11148817",
     action: TimeOut(
         TimeOut {

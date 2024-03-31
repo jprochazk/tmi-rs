@@ -3,9 +3,7 @@ source: src/msg/privmsg.rs
 expression: "f(\"@rm-received-ts=1594554085918;historical=1;badge-info=;badges=;client-nonce=815810609edecdf4537bd9586994182b;color=;display-name=CarvedTaleare\\\\s;emotes=;flags=;id=c9b941d9-a0ab-4534-9903-971768fcdf10;mod=0;room-id=22484632;subscriber=0;tmi-sent-ts=1594554085753;turbo=0;user-id=467684514;user-type= :carvedtaleare!carvedtaleare@carvedtaleare.tmi.twitch.tv PRIVMSG #forsen :NaM\")"
 ---
 Privmsg {
-    channel: Channel(
-        "#forsen",
-    ),
+    channel: "#forsen",
     channel_id: "22484632",
     message_id: "c9b941d9-a0ab-4534-9903-971768fcdf10",
     sender: User {

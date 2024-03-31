@@ -3,9 +3,7 @@ source: src/msg/clear_chat.rs
 expression: "f(\"@room-id=40286300;tmi-sent-ts=1594561392337 :tmi.twitch.tv CLEARCHAT #randers\")"
 ---
 ClearChat {
-    channel: Channel(
-        "#randers",
-    ),
+    channel: "#randers",
     channel_id: "40286300",
     action: Clear,
     timestamp: 2020-07-12T13:43:12.337Z,

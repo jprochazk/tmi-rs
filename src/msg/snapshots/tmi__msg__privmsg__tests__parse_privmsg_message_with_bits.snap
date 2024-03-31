@@ -3,9 +3,7 @@ source: src/msg/privmsg.rs
 expression: "f(\"@badge-info=;badges=bits/100;bits=1;color=#004B49;display-name=TETYYS;emotes=;flags=;id=d7f03a35-f339-41ca-b4d4-7c0721438570;mod=0;room-id=11148817;subscriber=0;tmi-sent-ts=1594571566672;turbo=0;user-id=36175310;user-type= :tetyys!tetyys@tetyys.tmi.twitch.tv PRIVMSG #pajlada :trihard1\")"
 ---
 Privmsg {
-    channel: Channel(
-        "#pajlada",
-    ),
+    channel: "#pajlada",
     channel_id: "11148817",
     message_id: "d7f03a35-f339-41ca-b4d4-7c0721438570",
     sender: User {

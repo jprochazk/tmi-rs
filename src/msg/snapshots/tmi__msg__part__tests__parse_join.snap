@@ -3,8 +3,6 @@ source: src/msg/part.rs
 expression: "f(\":randers811!randers811@randers811.tmi.twitch.tv PART #pajlada\")"
 ---
 Part {
-    channel: Channel(
-        "#pajlada",
-    ),
+    channel: "#pajlada",
     user: "randers811",
 }

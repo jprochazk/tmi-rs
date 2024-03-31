@@ -3,9 +3,7 @@ source: src/msg/user_notice.rs
 expression: "f(\"@badge-info=;badges=;color=;display-name=AnAnonymousGifter;emotes=;flags=;id=62c3fd39-84cc-452a-9096-628a5306633a;login=ananonymousgifter;mod=0;msg-id=subgift;msg-param-fun-string=FunStringThree;msg-param-gift-months=1;msg-param-months=13;msg-param-origin-id=da\\\\s39\\\\sa3\\\\see\\\\s5e\\\\s6b\\\\s4b\\\\s0d\\\\s32\\\\s55\\\\sbf\\\\sef\\\\s95\\\\s60\\\\s18\\\\s90\\\\saf\\\\sd8\\\\s07\\\\s09;msg-param-recipient-display-name=Dot0422;msg-param-recipient-id=151784015;msg-param-recipient-user-name=dot0422;msg-param-sub-plan-name=Channel\\\\sSubscription\\\\s(xqcow);msg-param-sub-plan=1000;room-id=71092938;subscriber=0;system-msg=An\\\\sanonymous\\\\suser\\\\sgifted\\\\sa\\\\sTier\\\\s1\\\\ssub\\\\sto\\\\sDot0422!\\\\s;tmi-sent-ts=1594495108936;user-id=274598607;user-type= :tmi.twitch.tv USERNOTICE #xqcow\")"
 ---
 UserNotice {
-    channel: Channel(
-        "#xqcow",
-    ),
+    channel: "#xqcow",
     channel_id: "71092938",
     sender: None,
     text: None,
