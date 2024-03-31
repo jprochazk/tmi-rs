@@ -1,6 +1,6 @@
 //! A direct message between users.
 
-use super::{is_not_empty, parse_badges, Badge, MessageParseError, User};
+use super::{is_not_empty, maybe_clone, parse_badges, Badge, MessageParseError, User};
 use crate::irc::{Command, IrcMessageRef, Tag};
 use std::borrow::Cow;
 
@@ -88,6 +88,18 @@ impl<'src> Whisper<'src> {
         .unwrap_or_default(),
       emotes: message.tag(Tag::Emotes).unwrap_or_default().into(),
     })
+  }
+
+  /// Convert this to a `'static` lifetime
+  pub fn into_owned(self) -> Whisper<'static> {
+    Whisper {
+      recipient: maybe_clone(self.recipient),
+      sender: self.sender.into_owned(),
+      text: maybe_clone(self.text),
+      badges: self.badges.into_iter().map(Badge::into_owned).collect(),
+      emotes: maybe_clone(self.emotes),
+      color: self.color.map(maybe_clone),
+    }
   }
 }
 

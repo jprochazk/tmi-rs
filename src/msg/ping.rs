@@ -7,7 +7,7 @@
 //!
 //! [Pong]: crate::msg::pong::Pong
 
-use super::MessageParseError;
+use super::{maybe_clone, MessageParseError};
 use crate::irc::{Command, IrcMessageRef};
 use std::borrow::Cow;
 
@@ -42,6 +42,13 @@ impl<'src> Ping<'src> {
     Some(Ping {
       nonce: message.text().map(Cow::Borrowed),
     })
+  }
+
+  /// Clone data to give the value a `'static` lifetime.
+  pub fn into_owned(self) -> Ping<'static> {
+    Ping {
+      nonce: self.nonce.map(maybe_clone),
+    }
   }
 }
 

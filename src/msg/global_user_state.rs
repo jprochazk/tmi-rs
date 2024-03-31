@@ -1,6 +1,6 @@
 //! This command is sent once upon successful login to Twitch IRC.
 
-use super::{is_not_empty, parse_badges, split_comma, Badge, MessageParseError};
+use super::{is_not_empty, maybe_clone, parse_badges, split_comma, Badge, MessageParseError};
 use crate::common::maybe_unescape;
 use crate::irc::{Command, IrcMessageRef, Tag};
 use std::borrow::Cow;
@@ -86,6 +86,17 @@ impl<'src> GlobalUserState<'src> {
         .filter(is_not_empty)
         .map(Cow::Borrowed),
     })
+  }
+
+  /// Clone data to give the value a `'static` lifetime.
+  pub fn into_owned(self) -> GlobalUserState<'static> {
+    GlobalUserState {
+      id: maybe_clone(self.id),
+      name: maybe_clone(self.name),
+      badges: self.badges.into_iter().map(Badge::into_owned).collect(),
+      emote_sets: self.emote_sets.into_iter().map(maybe_clone).collect(),
+      color: self.color.map(maybe_clone),
+    }
   }
 }
 

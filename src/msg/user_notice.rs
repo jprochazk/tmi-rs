@@ -1,6 +1,8 @@
 //! A user notice is sent when some [`Event`] occurs.
 
-use super::{is_not_empty, parse_badges, parse_timestamp, Badge, MessageParseError, User};
+use super::{
+  is_not_empty, maybe_clone, parse_badges, parse_timestamp, Badge, MessageParseError, User,
+};
 use crate::common::maybe_unescape;
 use crate::{Command, IrcMessageRef, Tag};
 use chrono::{DateTime, Utc};
@@ -166,9 +168,8 @@ pub enum Event<'src> {
   #[cfg_attr(feature = "serde", serde(borrow))]
   Announcement(Announcement<'src>),
 
-  #[allow(non_camel_case_types)]
-  #[doc(hidden)]
-  __non_exhaustive,
+  /// Unknown event. Try using `event_id` instead.
+  Unknown,
 }
 
 /// User subscribes or resubscribes to a channel.
@@ -574,7 +575,7 @@ impl<'src> UserNotice<'src> {
         }),
         false,
       ),
-      _ => (Event::__non_exhaustive, true),
+      _ => (Event::Unknown, true),
     };
 
     let sender = if !is_anon {
@@ -611,6 +612,85 @@ impl<'src> UserNotice<'src> {
       message_id: message.tag(Tag::Id)?.into(),
       timestamp: message.tag(Tag::TmiSentTs).and_then(parse_timestamp)?,
     })
+  }
+
+  /// Clone data to give the value a `'static` lifetime.
+  pub fn into_owned(self) -> UserNotice<'static> {
+    UserNotice {
+      channel: maybe_clone(self.channel),
+      channel_id: maybe_clone(self.channel_id),
+      sender: self.sender.map(User::into_owned),
+      text: self.text.map(maybe_clone),
+      system_message: self.system_message.map(maybe_clone),
+      event: self.event.into_owned(),
+      event_id: maybe_clone(self.event_id),
+      badges: self.badges.into_iter().map(Badge::into_owned).collect(),
+      emotes: maybe_clone(self.emotes),
+      color: self.color.map(maybe_clone),
+      message_id: maybe_clone(self.message_id),
+      timestamp: self.timestamp,
+    }
+  }
+}
+
+impl<'src> Event<'src> {
+  /// Clone data to give the value a `'static` lifetime.
+  pub fn into_owned(self) -> Event<'static> {
+    match self {
+      Event::SubOrResub(v) => Event::SubOrResub(SubOrResub {
+        is_resub: v.is_resub,
+        cumulative_months: v.cumulative_months,
+        streak_months: v.streak_months,
+        sub_plan: maybe_clone(v.sub_plan),
+        sub_plan_name: maybe_clone(v.sub_plan_name),
+      }),
+      Event::Raid(v) => Event::Raid(Raid {
+        viewer_count: v.viewer_count,
+        profile_image_url: maybe_clone(v.profile_image_url),
+      }),
+      Event::SubGift(v) => Event::SubGift(SubGift {
+        cumulative_months: v.cumulative_months,
+        recipient: v.recipient.into_owned(),
+        sub_plan: maybe_clone(v.sub_plan),
+        sub_plan_name: maybe_clone(v.sub_plan_name),
+        num_gifted_months: v.num_gifted_months,
+      }),
+      Event::SubMysteryGift(v) => Event::SubMysteryGift(SubMysteryGift {
+        count: v.count,
+        sender_total_gifts: v.sender_total_gifts,
+        sub_plan: maybe_clone(v.sub_plan),
+      }),
+      Event::AnonSubMysteryGift(v) => Event::AnonSubMysteryGift(AnonSubMysteryGift {
+        count: v.count,
+        sub_plan: maybe_clone(v.sub_plan),
+      }),
+      Event::GiftPaidUpgrade(v) => Event::GiftPaidUpgrade(GiftPaidUpgrade {
+        gifter_login: maybe_clone(v.gifter_login),
+        gifter_name: maybe_clone(v.gifter_name),
+        promotion: v.promotion.map(SubGiftPromo::into_owned),
+      }),
+      Event::AnonGiftPaidUpgrade(v) => Event::AnonGiftPaidUpgrade(AnonGiftPaidUpgrade {
+        promotion: v.promotion.map(SubGiftPromo::into_owned),
+      }),
+      Event::Ritual(v) => Event::Ritual(Ritual {
+        name: maybe_clone(v.name),
+      }),
+      Event::BitsBadgeTier(v) => Event::BitsBadgeTier(BitsBadgeTier { tier: v.tier }),
+      Event::Announcement(v) => Event::Announcement(Announcement {
+        highlight_color: maybe_clone(v.highlight_color),
+      }),
+      Event::Unknown => Event::Unknown,
+    }
+  }
+}
+
+impl<'src> SubGiftPromo<'src> {
+  /// Clone data to give the value a `'static` lifetime.
+  pub fn into_owned(self) -> SubGiftPromo<'static> {
+    SubGiftPromo {
+      total_gifts: self.total_gifts,
+      promo_name: maybe_clone(self.promo_name),
+    }
   }
 }
 

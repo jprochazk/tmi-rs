@@ -1,6 +1,6 @@
 //! Sent when a single message is deleted.
 
-use super::{parse_message_text, parse_timestamp, MessageParseError};
+use super::{maybe_clone, parse_message_text, parse_timestamp, MessageParseError};
 use crate::irc::{Command, IrcMessageRef, Tag};
 use chrono::{DateTime, Utc};
 use std::borrow::Cow;
@@ -70,6 +70,19 @@ impl<'src> ClearMsg<'src> {
       is_action,
       timestamp: parse_timestamp(message.tag(Tag::TmiSentTs)?)?,
     })
+  }
+
+  /// Clone data to give the value a `'static` lifetime.
+  pub fn into_owned(self) -> ClearMsg<'static> {
+    ClearMsg {
+      channel: maybe_clone(self.channel),
+      channel_id: maybe_clone(self.channel_id),
+      sender: maybe_clone(self.sender),
+      message_id: maybe_clone(self.message_id),
+      text: maybe_clone(self.text),
+      is_action: self.is_action,
+      timestamp: self.timestamp,
+    }
   }
 }
 

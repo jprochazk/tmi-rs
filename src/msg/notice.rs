@@ -1,7 +1,7 @@
 //! Sent by Twitch for various reasons to notify the client about something,
 //! usually in response to invalid actions.
 
-use super::MessageParseError;
+use super::{maybe_clone, MessageParseError};
 use crate::irc::{Command, IrcMessageRef, Tag};
 use std::borrow::Cow;
 
@@ -48,6 +48,15 @@ impl<'src> Notice<'src> {
       text: message.text()?.into(),
       id: message.tag(Tag::MsgId).map(Cow::Borrowed),
     })
+  }
+
+  /// Clone data to give the value a `'static` lifetime.
+  pub fn into_owned(self) -> Notice<'static> {
+    Notice {
+      channel: self.channel.map(maybe_clone),
+      text: maybe_clone(self.text),
+      id: self.id.map(maybe_clone),
+    }
   }
 }
 

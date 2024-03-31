@@ -141,6 +141,17 @@ impl<'src> Badge<'src> {
   pub fn as_badge_data(&self) -> BadgeData<'src> {
     BadgeData::from(self.clone())
   }
+
+  pub fn into_owned(self) -> Badge<'static> {
+    match self {
+      Badge::Staff => Badge::Staff,
+      Badge::Turbo => Badge::Turbo,
+      Badge::Broadcaster => Badge::Broadcaster,
+      Badge::Moderator => Badge::Moderator,
+      Badge::Subscriber(v) => Badge::Subscriber(v.into_owned()),
+      Badge::Other(v) => Badge::Other(v.into_owned()),
+    }
+  }
 }
 
 impl<'src> From<Badge<'src>> for BadgeData<'src> {
@@ -225,6 +236,17 @@ generate_getters! {
   }
 }
 
+impl Subscriber<'_> {
+  /// Clone data to give the value a `'static` lifetime.
+  pub fn into_owned(self) -> Subscriber<'static> {
+    Subscriber {
+      version: maybe_clone(self.version),
+      months: maybe_clone(self.months),
+      months_n: self.months_n,
+    }
+  }
+}
+
 /// Basic info about a badge.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -254,6 +276,17 @@ generate_getters! {
   }
 }
 
+impl BadgeData<'_> {
+  /// Clone data to give the value a `'static` lifetime.
+  pub fn into_owned(self) -> BadgeData<'static> {
+    BadgeData {
+      name: maybe_clone(self.name),
+      version: maybe_clone(self.version),
+      extra: self.extra.map(maybe_clone),
+    }
+  }
+}
+
 /// Basic information about a user.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -278,6 +311,17 @@ generate_getters! {
     ///
     /// ⚠ This call will allocate and return a String if it needs to be unescaped.
     name -> Cow<'src, str> = maybe_unescape(self.name.clone()),
+  }
+}
+
+impl User<'_> {
+  /// Clone data to give the value a `'static` lifetime.
+  pub fn into_owned(self) -> User<'static> {
+    User {
+      id: maybe_clone(self.id),
+      login: maybe_clone(self.login),
+      name: maybe_clone(self.name),
+    }
   }
 }
 
@@ -337,6 +381,13 @@ fn parse_badges<'src>(badges: &'src str, badge_info: &'src str) -> Vec<Badge<'sr
 
 fn parse_bool(v: &str) -> bool {
   v.parse::<u8>().ok().map(|n| n > 0).unwrap_or(false)
+}
+
+fn maybe_clone<T: ToOwned + ?Sized>(v: Cow<'_, T>) -> Cow<'static, T> {
+  match v {
+    Cow::Borrowed(v) => Cow::Owned(v.to_owned()),
+    Cow::Owned(v) => Cow::Owned(v),
+  }
 }
 
 pub mod clear_chat;

@@ -1,6 +1,6 @@
 //! A partial update to the settings of some channel.
 
-use super::{parse_bool, MessageParseError};
+use super::{maybe_clone, parse_bool, MessageParseError};
 use crate::irc::{Command, IrcMessageRef, Tag};
 use std::borrow::Cow;
 use std::time::Duration;
@@ -114,6 +114,19 @@ impl<'src> RoomState<'src> {
         .map(Duration::from_secs),
       subs_only: message.tag(Tag::SubsOnly).map(parse_bool),
     })
+  }
+
+  /// Clone data to give the value a `'static` lifetime.
+  pub fn into_owned(self) -> RoomState<'static> {
+    RoomState {
+      channel: maybe_clone(self.channel),
+      channel_id: maybe_clone(self.channel_id),
+      emote_only: self.emote_only,
+      followers_only: self.followers_only,
+      r9k: self.r9k,
+      slow: self.slow,
+      subs_only: self.subs_only,
+    }
   }
 }
 

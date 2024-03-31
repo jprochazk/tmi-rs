@@ -6,7 +6,7 @@
 //! [Ping]: crate::msg::ping::Ping
 //! [nonce]: crate::msg::ping::Ping::nonce
 
-use super::MessageParseError;
+use super::{maybe_clone, MessageParseError};
 use crate::irc::{Command, IrcMessageRef};
 use std::borrow::Cow;
 
@@ -40,6 +40,13 @@ impl<'src> Pong<'src> {
     Some(Pong {
       nonce: message.text().map(Cow::Borrowed),
     })
+  }
+
+  /// Clone data to give the value a `'static` lifetime.
+  pub fn into_owned(self) -> Pong<'static> {
+    Pong {
+      nonce: self.nonce.map(maybe_clone),
+    }
   }
 }
 

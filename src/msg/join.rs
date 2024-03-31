@@ -1,6 +1,6 @@
 //! Sent when a user joins a channel.
 
-use super::MessageParseError;
+use super::{maybe_clone, MessageParseError};
 use crate::irc::{Command, IrcMessageRef};
 use std::borrow::Cow;
 
@@ -38,6 +38,14 @@ impl<'src> Join<'src> {
         .and_then(|prefix| prefix.nick)
         .map(Cow::Borrowed)?,
     })
+  }
+
+  /// Clone data to give the value a `'static` lifetime.
+  pub fn into_owned(self) -> Join<'static> {
+    Join {
+      channel: maybe_clone(self.channel),
+      user: maybe_clone(self.user),
+    }
   }
 }
 

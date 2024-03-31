@@ -1,6 +1,6 @@
 //! Sent when the chat is cleared of a batch of messages.
 
-use super::{parse_duration, parse_timestamp, MessageParseError};
+use super::{maybe_clone, parse_duration, parse_timestamp, MessageParseError};
 use crate::irc::{Command, IrcMessageRef, Tag};
 use chrono::{DateTime, Utc};
 use std::borrow::Cow;
@@ -171,6 +171,34 @@ impl<'src> ClearChat<'src> {
       },
       timestamp: parse_timestamp(message.tag(Tag::TmiSentTs)?)?,
     })
+  }
+
+  /// Clone data to give the value a `'static` lifetime.
+  pub fn into_owned(self) -> ClearChat<'static> {
+    ClearChat {
+      channel: maybe_clone(self.channel),
+      channel_id: maybe_clone(self.channel_id),
+      action: self.action.into_owned(),
+      timestamp: self.timestamp,
+    }
+  }
+}
+
+impl<'src> Action<'src> {
+  /// Clone data to give the value a `'static` lifetime.
+  pub fn into_owned(self) -> Action<'static> {
+    match self {
+      Action::Clear => Action::Clear,
+      Action::Ban(Ban { user, id }) => Action::Ban(Ban {
+        user: maybe_clone(user),
+        id: maybe_clone(id),
+      }),
+      Action::TimeOut(TimeOut { user, id, duration }) => Action::TimeOut(TimeOut {
+        user: maybe_clone(user),
+        id: maybe_clone(id),
+        duration,
+      }),
+    }
   }
 }
 

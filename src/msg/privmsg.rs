@@ -1,7 +1,8 @@
 //! Represents a basic Twitch chat message sent by some user to a specific channel.
 
 use super::{
-  is_not_empty, parse_badges, parse_message_text, parse_timestamp, Badge, MessageParseError, User,
+  is_not_empty, maybe_clone, parse_badges, parse_message_text, parse_timestamp, Badge,
+  MessageParseError, User,
 };
 use crate::common::maybe_unescape;
 use crate::irc::{Command, IrcMessageRef, Tag};
@@ -201,6 +202,38 @@ impl<'src> Privmsg<'src> {
       emotes: message.tag(Tag::Emotes).unwrap_or_default().into(),
       timestamp: message.tag(Tag::TmiSentTs).and_then(parse_timestamp)?,
     })
+  }
+
+  /// Clone data to give the value a `'static` lifetime.
+  pub fn into_owned(self) -> Privmsg<'static> {
+    Privmsg {
+      channel: maybe_clone(self.channel),
+      channel_id: maybe_clone(self.channel_id),
+      message_id: maybe_clone(self.message_id),
+      sender: self.sender.into_owned(),
+      reply_to: self.reply_to.map(Reply::into_owned),
+      text: maybe_clone(self.text),
+      is_action: self.is_action,
+      badges: self.badges.into_iter().map(Badge::into_owned).collect(),
+      color: self.color.map(maybe_clone),
+      custom_reward_id: self.custom_reward_id.map(maybe_clone),
+      bits: self.bits,
+      emotes: maybe_clone(self.emotes),
+      timestamp: self.timestamp,
+    }
+  }
+}
+
+impl<'src> Reply<'src> {
+  /// Clone data to give the value a `'static` lifetime.
+  pub fn into_owned(self) -> Reply<'static> {
+    Reply {
+      thread_message_id: maybe_clone(self.thread_message_id),
+      thread_user_login: maybe_clone(self.thread_user_login),
+      message_id: maybe_clone(self.message_id),
+      sender: self.sender.into_owned(),
+      text: maybe_clone(self.text),
+    }
   }
 }
 

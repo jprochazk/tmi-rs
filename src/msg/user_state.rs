@@ -5,7 +5,7 @@
 //!
 //! For example, [`UserState::badges`] may be different from [`GlobalUserState::badges`][crate::msg::global_user_state::GlobalUserState::badges].
 
-use super::{is_not_empty, parse_badges, split_comma, Badge, MessageParseError};
+use super::{is_not_empty, maybe_clone, parse_badges, split_comma, Badge, MessageParseError};
 use crate::irc::{Command, IrcMessageRef, Tag};
 use std::borrow::Cow;
 
@@ -90,6 +90,17 @@ impl<'src> UserState<'src> {
         .filter(is_not_empty)
         .map(|v| v.into()),
     })
+  }
+
+  /// Clone data to give the value a `'static` lifetime.
+  pub fn into_owned(self) -> UserState<'static> {
+    UserState {
+      channel: maybe_clone(self.channel),
+      user_name: maybe_clone(self.user_name),
+      badges: self.badges.into_iter().map(Badge::into_owned).collect(),
+      emote_sets: self.emote_sets.into_iter().map(maybe_clone).collect(),
+      color: self.color.map(maybe_clone),
+    }
   }
 }
 
