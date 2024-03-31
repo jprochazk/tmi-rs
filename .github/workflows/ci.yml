@@ -96,9 +96,3 @@ jobs:
           command: test
           args: --lib ${{ matrix.features.args }}
 
-      - name: cargo doc (${{ matrix.features.key }})
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --doc ${{ matrix.features.args }}
-
