@@ -243,6 +243,8 @@ fn find_semi_or_space(s: &str) -> Option<Found> {
   chunk16_test(s, test)
 }
 
+// TODO: maybe bring this back if it can be fixed
+
 /// Parse an IRC message prefix:
 ///
 /// `:host`
@@ -298,6 +300,9 @@ pub fn parse_prefix(src: &str, pos: &mut usize) -> Option<RawPrefix> {
       }
     };
   }
+
+  // vscode-lldb `/py` expression to watch `src[*pos..]`:
+  // /py print(''.join(c for c in src[*pos:]))
 
   if !src[*pos..].starts_with(':') {
     return None;

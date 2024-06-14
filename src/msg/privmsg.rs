@@ -362,4 +362,9 @@ mod tests {
   fn roundtrip_privmsg_emote_non_numeric_id() {
     assert_irc_roundtrip!(Privmsg, "@badge-info=;badges=;client-nonce=245b864d508a69a685e25104204bd31b;color=#FF144A;display-name=AvianArtworks;emote-only=1;emotes=300196486_TK:0-7;flags=;id=21194e0d-f0fa-4a8f-a14f-3cbe89366ad9;mod=0;room-id=11148817;subscriber=0;tmi-sent-ts=1594552113129;turbo=0;user-id=39565465;user-type= :avianartworks!avianartworks@avianartworks.tmi.twitch.tv PRIVMSG #pajlada :pajaM_TK");
   }
+
+  #[test]
+  fn regression_invalid_prefix_span_overread() {
+    Privmsg::parse(IrcMessageRef::parse("@badge-info=;badges=moments/1;color=;display-name=kovacicdusko2001;emotes=;first-msg=0;flags=;id=97798b78-b5c7-4a0a-bcd4-e9ec12de926a;mod=0;returning-chatter=0;room-id=71092938;subscriber=0;tmi-sent-ts=1663858872621;turbo=0;user-id=251524724;user-type= :kovacicdusko2001!kovacicdusko2001@kovacicdusko2001.tmi.twitch.tv PRIVMSG #xqc :!play").unwrap()).unwrap();
+  }
 }

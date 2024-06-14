@@ -20,12 +20,13 @@ mod macros;
 mod simd;
 
 mod scalar;
+use scalar::parse_prefix;
 
 #[cfg(feature = "simd")]
-use simd::{parse_prefix, parse_tags};
+use simd::parse_tags;
 
 #[cfg(not(feature = "simd"))]
-use scalar::{parse_prefix, parse_tags};
+use scalar::parse_tags;
 
 use crate::common::Span;
 use std::fmt::{Debug, Display};

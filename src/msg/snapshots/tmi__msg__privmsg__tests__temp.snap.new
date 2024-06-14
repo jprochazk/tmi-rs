@@ -1,0 +1,32 @@
+---
+source: src/msg/privmsg.rs
+assertion_line: 368
+expression: "f(\"@badge-info=;badges=moments/1;color=;display-name=kovacicdusko2001;emotes=;first-msg=0;flags=;id=97798b78-b5c7-4a0a-bcd4-e9ec12de926a;mod=0;returning-chatter=0;room-id=71092938;subscriber=0;tmi-sent-ts=1663858872621;turbo=0;user-id=251524724;user-type= :kovacicdusko2001!kovacicdusko2001@kovacicdusko2001.tmi.twitch.tv PRIVMSG #xqc :!play\")"
+---
+Privmsg {
+    channel: "#xqc",
+    channel_id: "71092938",
+    message_id: "97798b78-b5c7-4a0a-bcd4-e9ec12de926a",
+    sender: User {
+        id: "251524724",
+        login: "kovacicdusko2001",
+        name: "kovacicdusko2001",
+    },
+    reply_to: None,
+    text: "!play",
+    is_action: false,
+    badges: [
+        Other(
+            BadgeData {
+                name: "moments",
+                version: "1",
+                extra: None,
+            },
+        ),
+    ],
+    color: None,
+    custom_reward_id: None,
+    bits: None,
+    emotes: "",
+    timestamp: 2022-09-22T15:01:12.621Z,
+}
