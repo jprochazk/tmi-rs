@@ -7,6 +7,10 @@ use std::process::{Command, Stdio};
   Path::new(env!("CARGO_MANIFEST_DIR"))
 } */
 
+pub fn git(cmd: &str) -> Command {
+  Command::new("git").with_arg(cmd)
+}
+
 pub fn rustup(cmd: &str) -> Command {
   Command::new("rustup").with_arg(cmd)
 }

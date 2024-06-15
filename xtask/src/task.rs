@@ -1,6 +1,7 @@
 use crate::Result;
 use argp::FromArgs;
 
+mod changelog;
 mod setup;
 mod test;
 
@@ -9,6 +10,7 @@ mod test;
 pub enum Task {
   Setup(setup::Setup),
   Test(test::Test),
+  Changelog(changelog::Changelog),
 }
 
 impl Task {
@@ -17,6 +19,7 @@ impl Task {
     match self {
       T::Setup(task) => task.run(),
       T::Test(task) => task.run(),
+      T::Changelog(task) => task.run(),
     }
   }
 }

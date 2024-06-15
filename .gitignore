@@ -3,3 +3,5 @@ bench/
 tmp/
 
 perf.*
+
+CHANGELOG.new.md
