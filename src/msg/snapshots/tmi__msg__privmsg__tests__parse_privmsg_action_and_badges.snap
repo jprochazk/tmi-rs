@@ -5,13 +5,15 @@ expression: "f(\"@badge-info=subscriber/22;badges=moderator/1,subscriber/12;colo
 Privmsg {
     channel: "#pajlada",
     channel_id: "11148817",
-    message_id: "d831d848-b7c7-4559-ae3a-2cb88f4dbfed",
+    msg_id: None,
+    id: "d831d848-b7c7-4559-ae3a-2cb88f4dbfed",
     sender: User {
         id: "40286300",
         login: "randers",
         name: "randers",
     },
     reply_to: None,
+    pinned_chat: None,
     text: "-tags",
     is_action: true,
     badges: [

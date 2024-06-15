@@ -5,13 +5,15 @@ expression: "f(\"@rm-received-ts=1594554085918;historical=1;badge-info=;badges=;
 Privmsg {
     channel: "#forsen",
     channel_id: "22484632",
-    message_id: "c9b941d9-a0ab-4534-9903-971768fcdf10",
+    msg_id: None,
+    id: "c9b941d9-a0ab-4534-9903-971768fcdf10",
     sender: User {
         id: "467684514",
         login: "carvedtaleare",
         name: "CarvedTaleare\\s",
     },
     reply_to: None,
+    pinned_chat: None,
     text: "NaM",
     is_action: false,
     badges: [],

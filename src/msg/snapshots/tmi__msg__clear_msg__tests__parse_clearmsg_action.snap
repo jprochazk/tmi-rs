@@ -6,7 +6,7 @@ ClearMsg {
     channel: "#pajlada",
     channel_id: "",
     sender: "alazymeme",
-    message_id: "3c92014f-340a-4dc3-a9c9-e5cf182f4a84",
+    target_message_id: "3c92014f-340a-4dc3-a9c9-e5cf182f4a84",
     text: "lole",
     is_action: true,
     timestamp: 2020-07-12T13:52:35.611Z,

@@ -96,7 +96,7 @@ impl Client {
   /// # let mut client: tmi::Client = todo!();
   /// client
   ///   .privmsg(msg.channel(), "yo")
-  ///   .reply_to(msg.message_id())
+  ///   .reply_to(msg.id())
   ///   .send()
   ///   .await?;
   /// # Ok(())

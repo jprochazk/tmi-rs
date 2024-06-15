@@ -584,7 +584,7 @@ impl<'src> Command<'src> {
 macro_rules! tags_def {
   (
     $tag:ident, $raw_tag:ident, $tag_mod:ident;
-    $($(#[$meta:meta])* $bytes:literal; $key:literal = $name:ident),*
+    $($(#[$meta:meta])* $bytes:literal; $key:literal = $name:ident),* $(,)?
   ) => {
     /// A parsed tag value.
     #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -677,13 +677,29 @@ tags_def! {
   b"user-type"; "user-type" = UserType,
   b"client-nonce"; "client-nonce" = ClientNonce,
   b"first-msg"; "first-msg" = FirstMsg,
+
   b"reply-parent-display-name"; "reply-parent-display-name" = ReplyParentDisplayName,
+
   b"reply-parent-msg-body"; "reply-parent-msg-body" = ReplyParentMsgBody,
+
+  /// ID of the message the user replied to.
+  ///
+  /// This is different from `reply-thread-parent-msg-id` as it identifies the specific message
+  /// the user replied to, not the thread.
   b"reply-parent-msg-id"; "reply-parent-msg-id" = ReplyParentMsgId,
+
   b"reply-parent-user-id"; "reply-parent-user-id" = ReplyParentUserId,
+
   b"reply-parent-user-login"; "reply-parent-user-login" = ReplyParentUserLogin,
+
+  /// Root message ID of the thread the user replied to.
+  ///
+  /// This never changes for a given thread, so it can be used to identify the thread.
   b"reply-thread-parent-msg-id"; "reply-thread-parent-msg-id" = ReplyThreadParentMsgId,
+
+  /// Login of the user who posted the root message in the thread the user replied to.
   b"reply-thread-parent-user-login"; "reply-thread-parent-user-login" = ReplyThreadParentUserLogin,
+
   b"followers-only"; "followers-only" = FollowersOnly,
   b"r9k"; "r9k" = R9K,
   b"rituals"; "rituals" = Rituals,
@@ -732,7 +748,30 @@ tags_def! {
   b"msg-param-mass-gift-count"; "msg-param-mass-gift-count" = MsgParamMassGiftCount,
   b"msg-param-gift-month-being-redeemed"; "msg-param-gift-month-being-redeemed" = MsgParamGiftMonthBeingRedeemed,
   b"msg-param-anon-gift"; "msg-param-anon-gift" = MsgParamAnonGift,
-  b"custom-reward-id"; "custom-reward-id" = CustomRewardId
+  b"custom-reward-id"; "custom-reward-id" = CustomRewardId,
+
+  /// The value of the Hype Chat sent by the user.
+  b"pinned-chat-paid-amount"; "pinned-chat-paid-amount" = PinnedChatPaidAmount,
+
+  /// The value of the Hype Chat sent by the user. This seems to always be the same as `pinned-chat-paid-amount`.
+  b"pinned-chat-paid-canonical-amount"; "pinned-chat-paid-amount" = PinnedChatPaidCanonicalAmount,
+
+  /// The ISO 4217 alphabetic currency code the user has sent the Hype Chat in.
+  b"pinned-chat-paid-currency"; "pinned-chat-paid-currency" = PinnedChatPaidCurrency,
+
+  /// Indicates how many decimal points this currency represents partial amounts in.
+  b"pinned-chat-paid-exponent"; "pinned-chat-paid-exponent" = PinnedChatPaidExponent,
+
+  /// The level of the Hype Chat, in English.
+  ///
+  /// Possible values are capitalized words from `ONE` to `TEN`: ONE TWO THREE FOUR FIVE SIX SEVEN EIGHT NINE TEN
+  b"pinned-chat-paid-level"; "pinned-chat-paid-level" = PinnedChatPaidLevel,
+
+  /// A Boolean value that determines if the message sent with the Hype Chat was filled in by the system.
+  ///
+  /// If `true` (1), the user entered no message and the body message was automatically filled in by the system.
+  /// If `false` (0), the user provided their own message to send with the Hype Chat.
+  b"pinned-chat-paid-is-system-message"; "pinned-chat-paid-is-system-message" = PinnedChatPaidIsSystemMessage,
 }
 
 impl<'src> Display for Tag<'src> {

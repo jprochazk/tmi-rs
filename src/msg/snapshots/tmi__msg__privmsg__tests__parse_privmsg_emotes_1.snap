@@ -5,13 +5,15 @@ expression: "f(\"@badge-info=;badges=moderator/1;client-nonce=fc4ebe0889105c8404
 Privmsg {
     channel: "#moscowwbish",
     channel_id: "55203741",
-    message_id: "3d9540a0-04b6-4bea-baf9-9165b14160be",
+    msg_id: None,
+    id: "3d9540a0-04b6-4bea-baf9-9165b14160be",
     sender: User {
         id: "111024753",
         login: "boring_nick",
         name: "boring_nick",
     },
     reply_to: None,
+    pinned_chat: None,
     text: "Kappa Keepo Kappa Kappa test Keepo Keepo 123 :) :) :P",
     is_action: false,
     badges: [

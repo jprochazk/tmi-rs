@@ -87,7 +87,7 @@ async fn on_msg(client: &mut tmi::Client, msg: tmi::Privmsg<'_>) -> Result<()> {
 
   client
     .privmsg(msg.channel(), "yo")
-    .reply_to(msg.message_id())
+    .reply_to(msg.id())
     .send()
     .await?;
 

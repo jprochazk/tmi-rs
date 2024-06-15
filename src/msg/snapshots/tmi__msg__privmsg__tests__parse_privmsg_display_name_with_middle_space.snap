@@ -5,13 +5,15 @@ expression: "f(\"@badge-info=;badges=;color=;display-name=Riot\\\\sGames;emotes=
 Privmsg {
     channel: "#riotgames",
     channel_id: "36029255",
-    message_id: "bdfa278e-11c4-484f-9491-0a61b16fab60",
+    msg_id: None,
+    id: "bdfa278e-11c4-484f-9491-0a61b16fab60",
     sender: User {
         id: "36029255",
         login: "riotgames",
         name: "Riot\\sGames",
     },
     reply_to: None,
+    pinned_chat: None,
     text: "test fake message",
     is_action: false,
     badges: [],

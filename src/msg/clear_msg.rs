@@ -19,7 +19,7 @@ pub struct ClearMsg<'src> {
   sender: Cow<'src, str>,
 
   #[cfg_attr(feature = "serde", serde(borrow))]
-  message_id: Cow<'src, str>,
+  target_message_id: Cow<'src, str>,
 
   #[cfg_attr(feature = "serde", serde(borrow))]
   text: Cow<'src, str>,
@@ -41,7 +41,7 @@ generate_getters! {
     sender -> &str = self.sender.as_ref(),
 
     /// Unique ID of the deleted message.
-    message_id -> &str = self.message_id.as_ref(),
+    target_message_id -> &str = self.target_message_id.as_ref(),
 
     /// Text of the deleted message.
     text -> &str = self.text.as_ref(),
@@ -65,7 +65,7 @@ impl<'src> ClearMsg<'src> {
       channel: message.channel()?.into(),
       channel_id: message.tag(Tag::RoomId)?.into(),
       sender: message.tag(Tag::Login)?.into(),
-      message_id: message.tag(Tag::TargetMsgId)?.into(),
+      target_message_id: message.tag(Tag::TargetMsgId)?.into(),
       text: text.into(),
       is_action,
       timestamp: parse_timestamp(message.tag(Tag::TmiSentTs)?)?,
@@ -78,7 +78,7 @@ impl<'src> ClearMsg<'src> {
       channel: maybe_clone(self.channel),
       channel_id: maybe_clone(self.channel_id),
       sender: maybe_clone(self.sender),
-      message_id: maybe_clone(self.message_id),
+      target_message_id: maybe_clone(self.target_message_id),
       text: maybe_clone(self.text),
       is_action: self.is_action,
       timestamp: self.timestamp,

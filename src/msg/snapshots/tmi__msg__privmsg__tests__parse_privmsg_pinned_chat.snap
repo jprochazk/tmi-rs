@@ -1,0 +1,41 @@
+---
+source: src/msg/privmsg.rs
+expression: "f(\"@badge-info=;badges=glhf-pledge/1;color=;display-name=pajlada;emotes=;first-msg=0;flags=;id=f6fb34f8-562f-4b4d-b628-32113d0ef4b0;mod=0;pinned-chat-paid-amount=200;pinned-chat-paid-canonical-amount=200;pinned-chat-paid-currency=USD;pinned-chat-paid-exponent=2;pinned-chat-paid-is-system-message=0;pinned-chat-paid-level=ONE;returning-chatter=0;room-id=12345678;subscriber=0;tmi-sent-ts=1687471984306;turbo=0;user-id=12345678;user-type= :pajlada!pajlada@pajlada.tmi.twitch.tv PRIVMSG #channel :This is a pinned message\")"
+---
+Privmsg {
+    channel: "#channel",
+    channel_id: "12345678",
+    msg_id: None,
+    id: "f6fb34f8-562f-4b4d-b628-32113d0ef4b0",
+    sender: User {
+        id: "12345678",
+        login: "pajlada",
+        name: "pajlada",
+    },
+    reply_to: None,
+    pinned_chat: Some(
+        PinnedChat {
+            paid_amount: 200,
+            paid_currency: "USD",
+            paid_exponent: 2,
+            paid_level: ONE,
+            is_system_message: false,
+        },
+    ),
+    text: "This is a pinned message",
+    is_action: false,
+    badges: [
+        Other(
+            BadgeData {
+                name: "glhf-pledge",
+                version: "1",
+                extra: None,
+            },
+        ),
+    ],
+    color: None,
+    custom_reward_id: None,
+    bits: None,
+    emotes: "",
+    timestamp: 2023-06-22T22:13:04.306Z,
+}

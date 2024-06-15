@@ -5,13 +5,15 @@ expression: "f(\"@badge-info=;badges=;client-nonce=245b864d508a69a685e25104204bd
 Privmsg {
     channel: "#pajlada",
     channel_id: "11148817",
-    message_id: "21194e0d-f0fa-4a8f-a14f-3cbe89366ad9",
+    msg_id: None,
+    id: "21194e0d-f0fa-4a8f-a14f-3cbe89366ad9",
     sender: User {
         id: "39565465",
         login: "avianartworks",
         name: "AvianArtworks",
     },
     reply_to: None,
+    pinned_chat: None,
     text: "pajaM_TK",
     is_action: false,
     badges: [],

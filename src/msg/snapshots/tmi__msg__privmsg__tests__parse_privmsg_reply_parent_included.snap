@@ -5,7 +5,8 @@ expression: "f(\"@badge-info=;badges=;client-nonce=cd56193132f934ac71b4d5ac488d4
 Privmsg {
     channel: "#retoon",
     channel_id: "37940952",
-    message_id: "5b4f63a9-776f-4fce-bf3c-d9707f52e32d",
+    msg_id: None,
+    id: "5b4f63a9-776f-4fce-bf3c-d9707f52e32d",
     sender: User {
         id: "133651738",
         login: "leftswing",
@@ -13,8 +14,8 @@ Privmsg {
     },
     reply_to: Some(
         Reply {
-            thread_message_id: "6b13e51b-7ecb-43b5-ba5b-2bb5288df696",
-            thread_user_login: "retoon",
+            thread_parent_message_id: "6b13e51b-7ecb-43b5-ba5b-2bb5288df696",
+            thread_parent_user_login: "retoon",
             message_id: "6b13e51b-7ecb-43b5-ba5b-2bb5288df696",
             sender: User {
                 id: "37940952",
@@ -24,6 +25,7 @@ Privmsg {
             text: "hello",
         },
     ),
+    pinned_chat: None,
     text: "@Retoon yes",
     is_action: false,
     badges: [],

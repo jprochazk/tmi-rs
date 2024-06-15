@@ -5,13 +5,15 @@ expression: "f(\"@badge-info=;badges=;color=#0000FF;display-name=JuN1oRRRR;emote
 Privmsg {
     channel: "#pajlada",
     channel_id: "11148817",
-    message_id: "e9d998c3-36f1-430f-89ec-6b887c28af36",
+    msg_id: None,
+    id: "e9d998c3-36f1-430f-89ec-6b887c28af36",
     sender: User {
         id: "29803735",
         login: "jun1orrrr",
         name: "JuN1oRRRR",
     },
     reply_to: None,
+    pinned_chat: None,
     text: "dank cam",
     is_action: false,
     badges: [],
