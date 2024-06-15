@@ -1,21 +1,15 @@
-use super::{RawPrefix, RawTags, Span, Whitelist};
+use super::FixedVec;
+use super::{RawPrefix, RawTags, Span};
 
 /// `@a=a;b=b;c= :<rest>`
 #[inline(always)]
-pub fn parse_tags<const IC: usize, F>(
-  src: &str,
-  pos: &mut usize,
-  whitelist: &Whitelist<IC, F>,
-) -> RawTags
-where
-  F: Fn(&str, &mut RawTags, Span, Span),
-{
+pub fn parse_tags(src: &str, pos: &mut usize) -> RawTags {
   if !src[*pos..].starts_with('@') {
-    return RawTags::new();
+    return RawTags::default();
   }
 
   let start = *pos + 1;
-  let mut tags = RawTags::with_capacity(IC);
+  let mut tags = FixedVec::new();
   let mut key = Span::from(start..0);
   let mut value = Span::from(0..0);
   let mut end = 0;
@@ -53,49 +47,6 @@ where
   *pos = end;
 
   tags
-}
-
-/// `:nick!user@host <rest>`
-#[inline(always)]
-pub fn parse_prefix(src: &str, pos: &mut usize) -> Option<RawPrefix> {
-  if !src[*pos..].starts_with(':') {
-    return None;
-  }
-
-  // :host <rest>
-  // :nick@host <rest>
-  // :nick!user@host <rest>
-  let bytes = src.as_bytes();
-
-  let start = *pos + 1;
-  let mut host_start = start;
-  let mut nick = None;
-  let mut nick_end = None;
-  let mut user = None;
-  for i in start..bytes.len() {
-    match unsafe { *bytes.get_unchecked(i) } {
-      b' ' => {
-        let host = Span::from(host_start..i);
-        *pos = i + 1;
-        return Some(RawPrefix { nick, user, host });
-      }
-      b'@' => {
-        host_start = i + 1;
-        if let Some(nick_end) = nick_end {
-          user = Some(Span::from(nick_end + 1..i));
-        } else {
-          nick = Some(Span::from(start..i));
-        }
-      }
-      b'!' => {
-        nick = Some(Span::from(start..i));
-        nick_end = Some(i);
-      }
-      _ => {}
-    }
-  }
-
-  None
 }
 
 #[cfg(test)]
