@@ -15,7 +15,7 @@ to better match the tag names used by Twitch.
 
 ### Performance
 
-This release includes a full rewrite of the tag parser, which resulted in a ~20% performance improvement.
+This release includes a full rewrite of the tag parser, which resulted in a ~15% performance improvement.
 
 Full commit range: [0.6.1..f5e539f](https://github.com/jprochazk/tmi-rs/compare/0.6.1...f5e539f)
 
