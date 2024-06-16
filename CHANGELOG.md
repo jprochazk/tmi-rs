@@ -12,6 +12,8 @@ to better match the tag names used by Twitch.
 
 - `message_id` on `Privmsg` is now `id`
 - `message_id` on `ClearMsg` is now `target_message_id`
+- `tags` on `IrcMessage`/`IrcMessageRef` now returns string slices for keys
+  - You can use `tmi::Tag::parse` to continue using the enum in your match statements
 
 ### Performance
 

@@ -24,6 +24,7 @@ macro_rules! tags_def {
 
     impl<'src> $tag<'src> {
       #[doc = concat!("Get the string value of the [`", stringify!($tag), "`].")]
+      #[inline]
       pub fn as_str(&self) -> &'src str {
         match self {
           $(Self::$name => $key,)*
@@ -32,7 +33,7 @@ macro_rules! tags_def {
       }
 
       #[doc = concat!("Parse a [`", stringify!($tag), "`] from a string.")]
-      #[inline(never)]
+      #[inline]
       pub fn parse(src: &'src str) -> Self {
         match src.as_bytes() {
           $($bytes => Self::$name,)*
@@ -239,6 +240,7 @@ pub(super) struct TagPair {
 impl TagPair {
   // key=value
   // ^  ^
+  #[inline]
   pub fn key(&self) -> Span {
     let start = self.key_start;
     let end = start + self.key_end as u32;
@@ -247,12 +249,14 @@ impl TagPair {
 
   // key=value
   //     ^    ^
+  #[inline]
   pub fn value(&self) -> Span {
     let start = self.key_start + self.key_end as u32 + 1;
     let end = start + self.value_end as u32;
     Span { start, end }
   }
 
+  #[inline]
   pub fn get<'a>(&self, src: &'a str) -> (&'a str, &'a str) {
     (&src[self.key()], &src[self.value()])
   }
