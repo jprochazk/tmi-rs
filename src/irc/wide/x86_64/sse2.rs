@@ -49,6 +49,9 @@ impl Vector128 {
     Self(_mm_loadu_si128(data.as_ptr().add(offset) as *const __m128i))
   }
 
+  // TODO: `is_aligned` is nightly only?!
+  //       should manually check for alignment, or just dont use unaligned loads
+  /*
   /// Load 16 bytes from the given slice into a vector.
   ///
   /// - `data` must be aligned to 16 bytes.
@@ -59,6 +62,7 @@ impl Vector128 {
     debug_assert!(data.as_ptr().cast::<Align16>().is_aligned());
     Self(_mm_load_si128(data.as_ptr().add(offset) as *const __m128i))
   }
+  */
 
   /// Load at most 16 bytes from the given slice into a vector
   /// by loading it into an intermediate buffer on the stack.

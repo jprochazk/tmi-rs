@@ -51,6 +51,9 @@ impl Vector256 {
     ))
   }
 
+  // TODO: `is_aligned` is nightly only?!
+  //       should manually check for alignment, or just dont use unaligned loads
+  /*
   /// Load 32 bytes from the given slice into a vector.
   ///
   /// - `data` must be aligned to 32 bytes.
@@ -63,6 +66,7 @@ impl Vector256 {
       data.as_ptr().add(offset) as *const __m256i
     ))
   }
+  */
 
   /// Load at most 32 bytes from the given slice into a vector
   /// by loading it into an intermediate buffer on the stack.
