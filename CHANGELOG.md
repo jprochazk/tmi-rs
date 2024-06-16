@@ -1,5 +1,7 @@
 ## Unreleased
 
+## 0.7.0
+
 This release adds support for a few new tags, and changes the names of some typed message fields
 to better match the tag names used by Twitch.
 
