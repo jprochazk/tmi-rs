@@ -347,26 +347,10 @@ pub fn unescape(value: &str) -> String {
   out
 }
 
-#[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[inline]
-fn find(data: &[u8], mut offset: usize, byte: u8) -> Option<usize> {
-  while offset < data.len() {
-    let (chunk, next_offset) = wide::Vector128::load(data, offset);
-    if let Some(pos) = chunk.find_first(byte) {
-      return Some(offset + pos);
-    }
-    offset = next_offset;
-  }
-  None
-}
+#[cfg(feature = "simd")]
+use wide::find;
 
-#[cfg(all(feature = "simd", target_arch = "aarch64"))]
-#[inline]
-fn find(data: &[u8], mut offset: usize, byte: u8) -> Option<usize> {
-  todo!()
-}
-
-#[cfg(not(all(feature = "simd", any(target_arch = "x86_64", target_arch = "aarch64"))))]
+#[cfg(not(feature = "simd"))]
 #[inline]
 fn find(data: &[u8], offset: usize, byte: u8) -> Option<usize> {
   data[offset..]

@@ -5,16 +5,22 @@ use std::process::Command;
 
 #[derive(FromArgs)]
 #[argp(subcommand, name = "test", description = "Run tests")]
-pub struct Test {}
+pub struct Test {
+  /// Additional arguments for the test command
+  #[argp(positional)]
+  rest: Vec<String>,
+}
 
 impl Test {
   pub fn run(self) -> Result {
-    tests().run()?;
+    tests(&self.rest).run()?;
 
     Ok(())
   }
 }
 
-fn tests() -> Command {
-  cargo("insta").with_args(["test", "--all-features", "--lib", "--review"])
+fn tests(args: &[String]) -> Command {
+  cargo("insta")
+    .with_args(["test", "--all-features", "--lib", "--review"])
+    .with_args(args)
 }

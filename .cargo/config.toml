@@ -1,2 +1,10 @@
 [alias]
 x = "run --quiet --manifest-path ./xtask/Cargo.toml --"
+
+[target.x86_64-unknown-linux-gnu]
+# target-cpu=native
+# target-feature=+avx2
+# rustflags = [
+#   "-C", "target-cpu=native",
+#   "-C", "target-feature=+avx2",
+# ]
