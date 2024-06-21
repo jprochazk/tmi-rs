@@ -4,7 +4,7 @@
   target_arch = "x86_64",
   any(target_feature = "sse2", target_feature = "avx2")
 ))]
-mod x86_64;
+pub(super) mod x86_64;
 
 #[cfg(all(
   target_arch = "x86_64",

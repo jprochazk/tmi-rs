@@ -71,6 +71,7 @@ serde_json = "1.0.108"
 
 [profile.bench]
 lto = "fat"
+debug = true
 
 [profile.release]
 lto = "fat"

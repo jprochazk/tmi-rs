@@ -295,6 +295,107 @@ impl<const CAPACITY: usize, T: Clone + Copy + Default> Array<CAPACITY, T> {
   }
 }
 
+/*
+
+enum State {
+  Key,
+  Value,
+}
+
+let mut state = Key;
+for offset in chunks(16) {
+  let chunk = load_unaliged(data, offset);
+  let vector_eq = chunk.eq('=').movemask();
+  let vector_semi = chunk.eq(';').movemask();
+  let vector_both = vector_eq | vector_semi;
+
+  while vector_both != 0 {
+    match state {
+      Key => {
+        let eq_idx = vector_eq.trailing_zeros();
+        vector_eq |= 1 << eq_idx;
+        vector_both |= 1 << eq_idx;
+
+        let pos = offset + eq_idx; // pos of `=`
+        // insert...
+
+        state = Value;
+      }
+      Value => {
+        let semi_idx = vector_semi.trailing_zeros();
+        vector_semi |= 1 << semi_idx;
+        vector_both |= 1 << semi_idx;
+
+        let pos = offset + semi_idx; // pos of `;`
+        // insert...
+
+        state = Key;
+      }
+    }
+  }
+}
+
+*/
+
+use super::wide::x86_64::sse2;
+
+#[derive(Clone, Copy)]
+enum State {
+  Key { key_start: usize },
+  Value { key_start: usize, key_end: usize },
+}
+
+#[inline(always)]
+fn parse_chunk(
+  offset: usize,
+  chunk: sse2::Vector,
+  state: &mut State,
+  tags: &mut Array<128, TagPair>,
+) {
+  let mut vector_eq = chunk.eq(b'=').movemask();
+  let mut vector_semi = chunk.eq(b';').movemask();
+
+  loop {
+    match *state {
+      State::Key { key_start } => {
+        if !vector_eq.has_match() {
+          break;
+        }
+
+        let idx = vector_eq.first_match();
+        vector_eq.clear_to(idx);
+
+        let pos = offset + idx; // pos of `=`
+
+        *state = State::Value {
+          key_start,
+          key_end: pos,
+        };
+      }
+      State::Value { key_start, key_end } => {
+        if !vector_semi.has_match() {
+          break;
+        }
+
+        let idx = vector_semi.first_match();
+        vector_semi.clear_to(idx);
+
+        let pos = offset + idx; // pos of `;`
+
+        *state = State::Key { key_start: pos + 1 };
+
+        tags.push(TagPair {
+          // relative to original `src`
+          key_start: key_start as u32 + 1,
+          key_end: (key_end - key_start) as u16,
+          // starts after `=`
+          value_end: (pos - (key_end + 1)) as u16,
+        });
+      }
+    }
+  }
+}
+
 pub(super) fn parse(src: &str, pos: &mut usize) -> Option<RawTags> {
   let src = src[*pos..].strip_prefix('@')?.as_bytes();
 
@@ -302,38 +403,34 @@ pub(super) fn parse(src: &str, pos: &mut usize) -> Option<RawTags> {
   let end = find(src, 0, b' ')?;
   *pos += end + 2; // skip '@' + space
 
-  // 2. scan through the remainder to find key=value pairs
-  //    separated by semicolons
-
   let remainder = &src[..end];
-  let mut tags = Array::<128, _>::new();
+  let mut tags = Array::<128, TagPair>::new();
   let mut offset = 0;
-  while offset < remainder.len() {
-    // KEY=VALUE;
-    // ^
-    let key_start = offset;
 
-    // KEY=VALUE;
-    //    ^
-    let Some(key_end) = find(remainder, key_start, b'=') else {
-      break;
-    };
+  let mut state = State::Key { key_start: 0 };
+  while offset + 16 < remainder.len() {
+    let chunk = sse2::Vector::load_unaligned_16(remainder, offset);
+    parse_chunk(offset, chunk, &mut state, &mut tags);
+    offset += 16;
+  }
 
-    // KEY=VALUE;
-    //     ^
-    let value_start = key_end + 1;
+  if remainder.len() - offset > 0 {
+    let chunk = sse2::Vector::load_unaligned_remainder(remainder, offset);
+    parse_chunk(offset, chunk, &mut state, &mut tags);
 
-    // KEY=VALUE;
-    //          ^
-    let value_end = find(remainder, value_start, b';').unwrap_or(remainder.len());
+    if let State::Value { key_start, key_end } = state {
+      // value contains whatever is left after key_end
 
-    tags.push(TagPair {
-      key_start: key_start as u32 + 1, // relative to original `src`
-      key_end: (key_end - key_start) as u16,
-      value_end: (value_end - key_end - 1) as u16, // exclude `;`
-    });
+      let pos = remainder.len(); // pos of `;`
 
-    offset = value_end + 1;
+      tags.push(TagPair {
+        // relative to original `src`
+        key_start: key_start as u32 + 1,
+        key_end: (key_end - key_start) as u16,
+        // starts after `=`
+        value_end: (pos - (key_end + 1)) as u16,
+      });
+    }
   }
 
   Some(RawTags(tags.to_vec()))
