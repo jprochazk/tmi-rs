@@ -1,4 +1,28 @@
-## Unreleased
+## 0.7.1
+
+This release include another full rewrite of the tag parser, using a new approach that resulted
+in an average 50% performance improvement over version `0.7.0`.
+
+```
+# Baseline: f5c6c32da475a7436c0aa58e4f24874364955dcf
+
+# ARM NEON
+twitch/1000 
+  before: 245.584 µs
+  after:  121.391 µs
+  change: -49.4%
+
+# x86 AVX512
+twitch/1000
+  before: 188.064 µs
+  after:   94.260 µs
+  change: -50.1%
+```
+
+x86 now has implementations using SSE2, AVX2, and AVX512, choosing the best available at compile time.
+For that reason, the crate should ideally be compiled with `RUSTFLAGS="-C target-cpu=native"`.
+
+Full commit range: [0.7.0..3b19a23](https://github.com/jprochazk/tmi-rs/compare/0.7.0...3b19a23)
 
 ## 0.7.0
 
