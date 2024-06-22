@@ -12,7 +12,7 @@
 //
 // `vshrn_n_u16` performs a "vector shift right by constant and narrow".
 // The way I understand it is that for every 16-bit element in the vector,
-// it "snips off" the 4 most significant bits + 4 least significant bits:
+// it trims the 4 most significant bits + 4 least significant bits:
 //
 // ```text,ignore
 // # for a single element:
@@ -35,18 +35,6 @@ use core::arch::aarch64::{
   vshrn_n_u16,
 };
 
-#[inline]
-pub fn find(data: &[u8], mut offset: usize, byte: u8) -> Option<usize> {
-  while offset < data.len() {
-    let (chunk, next_offset) = Vector128::load(data, offset);
-    if let Some(pos) = chunk.find_first(byte) {
-      return Some(offset + pos);
-    }
-    offset = next_offset;
-  }
-  None
-}
-
 // NOTE: neon has no alignment requirements for loads,
 //       but alignment is still better than no alignment.
 
@@ -55,86 +43,116 @@ struct Align16([u8; 16]);
 
 #[derive(Clone, Copy)]
 #[repr(transparent)]
-pub struct Vector128(uint8x16_t);
+pub struct Vector(uint8x16_t);
 
-impl Vector128 {
+impl Vector {
+  /// Size in bytes.
+  pub const SIZE: usize = 16;
+
   #[inline]
   pub const fn fill(v: u8) -> Self {
     Self(unsafe { core::mem::transmute::<[u8; 16], uint8x16_t>([v; 16]) })
-  }
-
-  #[inline]
-  pub fn load(data: &[u8], offset: usize) -> (Self, usize) {
-    unsafe {
-      if offset + 16 <= data.len() {
-        let vector = Self::load_unaligned_16(data, offset);
-        (vector, offset + 16)
-      } else {
-        let vector = Self::load_unaligned_remainder(data, offset);
-        (vector, data.len())
-      }
-    }
   }
 
   /// Load 16 bytes from the given slice into a vector.
   ///
   /// `data[offset..].len()` must be greater than 16 bytes.
   #[inline(always)]
-  unsafe fn load_unaligned_16(data: &[u8], offset: usize) -> Self {
-    debug_assert!(data[offset..].len() >= 16);
-    Self(vld1q_u8(data.as_ptr().add(offset)))
+  pub fn load_unaligned(data: &[u8], offset: usize) -> Self {
+    unsafe {
+      debug_assert!(data[offset..].len() >= 16);
+      Self(vld1q_u8(data.as_ptr().add(offset)))
+    }
+  }
+
+  /// Load 16 bytes from the given slice into a vector.
+  ///
+  /// `data[offset..].len()` must be greater than 16 bytes.
+  /// The data must be 16-byte aligned.
+  #[inline(always)]
+  pub fn load_aligned(data: &[u8], offset: usize) -> Self {
+    unsafe {
+      debug_assert!(data[offset..].len() >= 16);
+      debug_assert!(data.as_ptr().add(offset) as usize % 16 == 0);
+      Self(vld1q_u8(data.as_ptr().add(offset)))
+    }
   }
 
   /// Load at most 16 bytes from the given slice into a vector
   /// by loading it into an intermediate buffer on the stack.
   #[inline(always)]
-  unsafe fn load_unaligned_remainder(data: &[u8], offset: usize) -> Self {
-    let mut buf = Align16([0; 16]);
-    buf.0[..data.len() - offset].copy_from_slice(&data[offset..]);
+  pub fn load_unaligned_remainder(data: &[u8], offset: usize) -> Self {
+    unsafe {
+      let mut buf = Align16([0; 16]);
+      buf.0[..data.len() - offset].copy_from_slice(&data[offset..]);
 
-    Self(vld1q_u8(buf.0.as_ptr()))
-  }
-
-  #[inline(always)]
-  pub fn find_first(self, byte: u8) -> Option<usize> {
-    let mask = self.cmpeq(Vector128::fill(byte)).movemask();
-    if mask.has_match() {
-      Some(mask.first_match_index())
-    } else {
-      None
+      Self(vld1q_u8(buf.0.as_ptr()))
     }
   }
 
   #[inline(always)]
-  fn cmpeq(self, other: Self) -> Self {
-    unsafe { Self(vceqq_u8(self.0, other.0)) }
+  pub fn eq(self, byte: u8) -> Self {
+    unsafe { Self(vceqq_u8(self.0, Self::fill(byte).0)) }
   }
 
   #[inline(always)]
-  fn movemask(self) -> Mask16 {
+  pub fn movemask(self) -> Mask {
     unsafe {
       let mask = vreinterpretq_u16_u8(self.0);
       let res = vshrn_n_u16(mask, 4); // the magic sauce
       let matches = vget_lane_u64(vreinterpret_u64_u8(res), 0);
-      Mask16(matches)
+      Mask(matches)
     }
   }
 }
 
 #[derive(Clone, Copy)]
 #[repr(transparent)]
-struct Mask16(u64);
+pub struct Mask(u64);
 
-impl Mask16 {
+impl Mask {
   #[inline(always)]
-  fn has_match(&self) -> bool {
+  pub fn has_match(&self) -> bool {
     // We have a match if the mask is not empty.
     self.0 != 0
   }
 
   #[inline(always)]
-  fn first_match_index(&self) -> usize {
+  pub fn first_match(&self) -> Match {
     // There are 4 bits per character, so divide the trailing zeros by 4 (shift right by 2).
-    (self.0.trailing_zeros() >> 2) as usize
+    Match(self.0.trailing_zeros() as usize)
+  }
+
+  /// Clear all bits up to and including `bit`.
+  #[inline(always)]
+  pub fn clear_to(&mut self, m: Match) {
+    //   0b00000000_11110000_11111111_00000000
+    // clear_to 8
+    //   0b00000000_11110000_11110000_00000000
+
+    self.0 &= !(0xffff_ffff_ffff_ffff >> (63 - (m.0 + 3)));
+  }
+}
+
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+pub struct Match(usize);
+
+impl Match {
+  #[inline(always)]
+  pub fn as_index(self) -> usize {
+    self.0 >> 2
+  }
+}
+
+#[cfg(test)]
+mod test {
+  use super::*;
+
+  #[test]
+  fn test_clear_to() {
+    let mut mask = Mask(0b00000000_11110000_11111111_00000000);
+    mask.clear_to(mask.first_match());
+    assert_eq!(mask.0, 0b00000000_11110000_11110000_00000000);
   }
 }

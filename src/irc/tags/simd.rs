@@ -59,10 +59,10 @@ fn parse_chunk(offset: usize, chunk: V, state: &mut State, tags: &mut Array<128,
           break;
         }
 
-        let idx = vector_eq.first_match();
-        vector_eq.clear_to(idx);
+        let m = vector_eq.first_match();
+        vector_eq.clear_to(m);
 
-        let pos = offset + idx; // pos of `=`
+        let pos = offset + m.as_index(); // pos of `=`
 
         *state = State::Value {
           key_start,
@@ -74,12 +74,14 @@ fn parse_chunk(offset: usize, chunk: V, state: &mut State, tags: &mut Array<128,
           break;
         }
 
-        let idx = vector_semi.first_match();
-        vector_semi.clear_to(idx);
+        let m = vector_semi.first_match();
+        vector_semi.clear_to(m);
 
-        let pos = offset + idx; // pos of `;`
+        let pos = offset + m.as_index(); // pos of `;`
 
         *state = State::Key { key_start: pos + 1 };
+
+        println!("{key_start} {key_end} {pos}");
 
         tags.push(TagPair {
           // relative to original `src`
@@ -118,7 +120,7 @@ fn find_first(data: &[u8], byte: u8) -> Option<usize> {
   let chunk = V::load_unaligned(data, 0);
   let mask = chunk.eq(byte).movemask();
   if mask.has_match() {
-    return Some(mask.first_match());
+    return Some(mask.first_match().as_index());
   }
 
   // 3. read the rest of the data in vector-size aligned chunks
@@ -134,31 +136,35 @@ fn find_first(data: &[u8], byte: u8) -> Option<usize> {
   let mut offset = aligned_start_offset;
   while offset + UNROLLED_BYTES < data.len() {
     // do all loads up-front to saturate the pipeline
-    let eq_0 = V::load_aligned(data, offset + V::SIZE * 0).eq(byte);
-    let eq_1 = V::load_aligned(data, offset + V::SIZE * 1).eq(byte);
-    let eq_2 = V::load_aligned(data, offset + V::SIZE * 2).eq(byte);
-    let eq_3 = V::load_aligned(data, offset + V::SIZE * 3).eq(byte);
+    let chunk_0 = V::load_aligned(data, offset + V::SIZE * 0).eq(byte);
+    let chunk_1 = V::load_aligned(data, offset + V::SIZE * 1).eq(byte);
+    let chunk_2 = V::load_aligned(data, offset + V::SIZE * 2).eq(byte);
+    let chunk_3 = V::load_aligned(data, offset + V::SIZE * 3).eq(byte);
 
     // TODO: movemask_will_have_non_zero
 
-    let mask = eq_0.movemask();
+    let mask = chunk_0.movemask();
     if mask.has_match() {
-      return Some(offset + mask.first_match() + 0 * V::SIZE);
+      let pos = mask.first_match().as_index();
+      return Some(offset + pos + 0 * V::SIZE);
     }
 
-    let mask = eq_1.movemask();
+    let mask = chunk_1.movemask();
     if mask.has_match() {
-      return Some(offset + mask.first_match() + 1 * V::SIZE);
+      let pos = mask.first_match().as_index();
+      return Some(offset + pos + 1 * V::SIZE);
     }
 
-    let mask = eq_2.movemask();
+    let mask = chunk_2.movemask();
     if mask.has_match() {
-      return Some(offset + mask.first_match() + 2 * V::SIZE);
+      let pos = mask.first_match().as_index();
+      return Some(offset + pos + 2 * V::SIZE);
     }
 
-    let mask = eq_3.movemask();
+    let mask = chunk_3.movemask();
     if mask.has_match() {
-      return Some(offset + mask.first_match() + 3 * V::SIZE);
+      let pos = mask.first_match().as_index();
+      return Some(offset + pos + 3 * V::SIZE);
     }
 
     offset += V::SIZE * 4;
@@ -171,7 +177,8 @@ fn find_first(data: &[u8], byte: u8) -> Option<usize> {
     let chunk = V::load_aligned(data, offset);
     let mask = chunk.eq(byte).movemask();
     if mask.has_match() {
-      return Some(offset + mask.first_match());
+      let pos = mask.first_match().as_index();
+      return Some(offset + pos);
     }
 
     offset += V::SIZE;
@@ -187,7 +194,8 @@ fn find_first(data: &[u8], byte: u8) -> Option<usize> {
     let chunk = V::load_unaligned(data, offset);
     let mask = chunk.eq(byte).movemask();
     if mask.has_match() {
-      return Some(offset + mask.first_match());
+      let pos = mask.first_match().as_index();
+      return Some(offset + pos);
     }
   }
 

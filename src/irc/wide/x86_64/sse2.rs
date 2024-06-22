@@ -37,7 +37,7 @@ impl Vector {
   pub fn load_aligned(data: &[u8], offset: usize) -> Self {
     unsafe {
       debug_assert!(data[offset..].len() >= 16);
-      debug_assert!(data.as_ptr().add(offset) as usize % 32 == 0);
+      debug_assert!(data.as_ptr().add(offset) as usize % 16 == 0);
       Self(_mm_load_si128(data.as_ptr().add(offset) as *const __m128i))
     }
   }
