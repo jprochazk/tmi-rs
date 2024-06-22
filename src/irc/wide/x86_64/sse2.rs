@@ -69,10 +69,6 @@ impl Vector {
   }
 }
 
-// 1. get next 16-byte aligned offset in the data = aligned_start
-// 2. use scalar method to handle values up to aligned_start
-// 3. use aligned loads to find
-
 #[derive(Clone, Copy)]
 #[repr(transparent)]
 pub struct Mask(u32);
@@ -84,13 +80,24 @@ impl Mask {
   }
 
   #[inline(always)]
-  pub fn first_match(&self) -> usize {
-    self.0.trailing_zeros() as usize
+  pub fn first_match(&self) -> Match {
+    Match(self.0.trailing_zeros() as usize)
   }
 
+  /// Clear all bits up to and including `m`.
   #[inline(always)]
-  pub fn clear_to(&mut self, bit: usize) {
-    // clear all bits up to and including `bit`
-    self.0 &= !(0xffff_ffff >> (31 - bit));
+  pub fn clear_to(&mut self, m: Match) {
+    self.0 &= !(0xffff_ffff >> (31 - m.0));
+  }
+}
+
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+pub struct Match(usize);
+
+impl Match {
+  #[inline(always)]
+  pub fn as_index(&self) -> usize {
+    self.0
   }
 }

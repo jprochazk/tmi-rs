@@ -119,17 +119,12 @@ impl Mask {
 
   #[inline(always)]
   pub fn first_match(&self) -> Match {
-    // There are 4 bits per character, so divide the trailing zeros by 4 (shift right by 2).
     Match(self.0.trailing_zeros() as usize)
   }
 
-  /// Clear all bits up to and including `bit`.
+  /// Clear all bits up to and including `m`.
   #[inline(always)]
   pub fn clear_to(&mut self, m: Match) {
-    //   0b00000000_11110000_11111111_00000000
-    // clear_to 8
-    //   0b00000000_11110000_11110000_00000000
-
     self.0 &= !(0xffff_ffff_ffff_ffff >> (63 - (m.0 + 3)));
   }
 }
@@ -141,6 +136,7 @@ pub struct Match(usize);
 impl Match {
   #[inline(always)]
   pub fn as_index(self) -> usize {
+    // There are 4 bits per character, so divide the trailing zeros by 4 (shift right by 2).
     self.0 >> 2
   }
 }

@@ -80,13 +80,24 @@ impl Mask {
   }
 
   #[inline(always)]
-  pub fn first_match(&self) -> usize {
-    self.0.trailing_zeros() as usize
+  pub fn first_match(&self) -> Match {
+    Match(self.0.trailing_zeros() as usize)
   }
 
-  /// Clear all bits up to and including `bit`.
+  /// Clear all bits up to and including `m`.
   #[inline(always)]
-  pub fn clear_to(&mut self, bit: usize) {
-    self.0 &= !(0xffff_ffff_ffff_ffff >> (63 - bit));
+  pub fn clear_to(&mut self, m: Match) {
+    self.0 &= !(0xffff_ffff_ffff_ffff >> (63 - m.0));
+  }
+}
+
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+pub struct Match(usize);
+
+impl Match {
+  #[inline(always)]
+  pub fn as_index(&self) -> usize {
+    self.0
   }
 }
