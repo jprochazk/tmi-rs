@@ -87,9 +87,9 @@ impl Mask {
     self.0.trailing_zeros() as usize
   }
 
+  /// Clear all bits up to and including `bit`.
   #[inline(always)]
   pub fn clear_to(&mut self, bit: usize) {
-    // clear all bits up to and including `bit`
     self.0 &= !(0xffff_ffff >> (31 - bit));
   }
 }

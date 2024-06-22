@@ -1,5 +1,3 @@
-#![allow(clippy::needless_range_loop)]
-
 use std::fmt::Display;
 use std::ops::Deref;
 
@@ -393,7 +391,7 @@ pub(super) fn parse(src: &str, pos: &mut usize) -> Option<RawTags> {
 // This implementation is ported from BurntSushi/memchr:
 // https://github.com/BurntSushi/memchr/blob/7fccf70e2a58c1fbedc9b9687c2ba0cf5992537b/src/arch/generic/memchr.rs#L143-L144
 // The original implementation is licensed under the MIT license.
-#[allow(clippy::erasing_op, clippy::identity_op)]
+#[allow(clippy::erasing_op, clippy::identity_op, clippy::needless_range_loop)]
 #[inline]
 fn find_first(data: &[u8], byte: u8) -> Option<usize> {
   // 1. scalar fallback for small data

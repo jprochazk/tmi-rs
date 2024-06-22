@@ -1078,6 +1078,7 @@ name = "tmi"
 version = "0.7.0"
 dependencies = [
  "anyhow",
+ "cfg-if",
  "chrono",
  "clap",
  "criterion",
