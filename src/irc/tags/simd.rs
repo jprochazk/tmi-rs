@@ -81,8 +81,6 @@ fn parse_chunk(offset: usize, chunk: V, state: &mut State, tags: &mut Array<128,
 
         *state = State::Key { key_start: pos + 1 };
 
-        println!("{key_start} {key_end} {pos}");
-
         tags.push(TagPair {
           // relative to original `src`
           key_start: key_start as u32 + 1,
