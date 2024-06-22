@@ -93,8 +93,11 @@ fn parse_chunk(offset: usize, chunk: V, state: &mut State, tags: &mut Array<128,
   }
 }
 
-// This implementation is ported from BurntSushi/memchr:
+// I didn't want to use runtime feature detection, or bring in a dependency for this.
+//
+// This implementation is ported from BurntSushi/memchr to use our vector/mask types:
 // https://github.com/BurntSushi/memchr/blob/7fccf70e2a58c1fbedc9b9687c2ba0cf5992537b/src/arch/generic/memchr.rs#L143-L144
+//
 // The original implementation is licensed under the MIT license.
 #[allow(clippy::erasing_op, clippy::identity_op, clippy::needless_range_loop)]
 #[inline]
