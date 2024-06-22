@@ -5,12 +5,17 @@
 
 // TODO: re-enable avx2 if there is a way to reduce the number of loads
 
-// #[cfg(not(target_feature = "avx2"))]
+#[cfg(not(any(target_feature = "avx2", target_feature = "avx512f")))]
 pub(crate) mod sse2;
-// #[cfg(not(target_feature = "avx2"))]
-pub use sse2::find;
+#[cfg(not(any(target_feature = "avx2", target_feature = "avx512f")))]
+pub(crate) use sse2::Vector;
 
-// #[cfg(target_feature = "avx2")]
-// mod avx2;
-// #[cfg(target_feature = "avx2")]
-// pub use avx2::find;
+// #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
+mod avx2;
+// #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
+pub(crate) use avx2::Vector;
+
+// #[cfg(target_feature = "avx512f")]
+// mod avx512;
+// #[cfg(target_feature = "avx512f")]
+// pub(crate) use avx512::Vector;

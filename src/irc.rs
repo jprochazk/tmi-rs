@@ -347,18 +347,6 @@ pub fn unescape(value: &str) -> String {
   out
 }
 
-#[cfg(feature = "simd")]
-use wide::find;
-
-#[cfg(not(feature = "simd"))]
-#[inline]
-fn find(data: &[u8], offset: usize, byte: u8) -> Option<usize> {
-  data[offset..]
-    .iter()
-    .position(|&b| b == byte)
-    .map(|pos| offset + pos)
-}
-
 #[cfg(test)]
 mod tests {
   use super::*;

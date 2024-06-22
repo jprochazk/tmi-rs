@@ -10,23 +10,27 @@ pub(super) mod x86_64;
   target_arch = "x86_64",
   any(target_feature = "sse2", target_feature = "avx2")
 ))]
-pub use x86_64::find;
+pub(super) use x86_64::Vector;
 
 #[cfg(all(
   target_arch = "x86_64",
   not(any(target_feature = "sse2", target_feature = "avx2"))
 ))]
 const _: () = {
-  compile_error!("cannot use SIMD - please enable support for sse2 or avx2");
+  compile_error!(
+    "cannot use SIMD - please enable support for sse2, avx2, or avx512 by compiling with target-cpu=native"
+  );
 };
 
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-mod aarch64;
+pub(super) mod aarch64;
 
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-pub use aarch64::find;
+pub(super) use aarch64::Vector;
 
 #[cfg(all(target_arch = "aarch64", not(target_feature = "neon")))]
 const _: () = {
-  compile_error!("cannot use SIMD - please enable supprot for neon");
+  compile_error!(
+    "cannot use SIMD - please enable support for neon by compiling with target-cpu=native"
+  );
 };

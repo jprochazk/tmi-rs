@@ -1,3 +1,7 @@
 {
-  "rust-analyzer.linkedProjects": ["xtask/Cargo.toml", "Cargo.toml"]
+  "rust-analyzer.linkedProjects": ["xtask/Cargo.toml", "Cargo.toml"],
+  // rust-analyzer target-cpu=native
+  "rust-analyzer.cargo.extraEnv": {
+    "RUSTFLAGS": "-C target-cpu=native"
+  }
 }
