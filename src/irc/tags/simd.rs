@@ -140,7 +140,9 @@ fn find_first(data: &[u8], byte: u8) -> Option<usize> {
     let chunk_3 = V::load_aligned(data, offset + V::SIZE * 3).eq(byte);
 
     // early exit if we know that all chunks will have a zero mask
-    if V::SUPPORTS_MOVEMASK_WILL_HAVE_NON_ZERO && !chunk_0.movemask_will_have_non_zero() {
+    if V::SUPPORTS_MOVEMASK_WILL_HAVE_NON_ZERO
+      && !(chunk_0 | chunk_1 | chunk_2 | chunk_3).movemask_will_have_non_zero()
+    {
       offset += V::SIZE;
       continue;
     }

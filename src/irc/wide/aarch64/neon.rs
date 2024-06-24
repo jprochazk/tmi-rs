@@ -31,8 +31,8 @@
 // To obtain the position of the charater, divide its trailing zeros by 4.
 
 use core::arch::aarch64::{
-  uint8x16_t, vceqq_u8, vget_lane_u64, vld1q_u8, vreinterpret_u64_u8, vreinterpretq_u16_u8,
-  vshrn_n_u16,
+  uint8x16_t, vceqq_u8, vget_lane_u64, vgetq_lane_u64, vld1q_u8, vorrq_u8, vpmaxq_u8,
+  vreinterpret_u64_u8, vreinterpretq_u16_u8, vreinterpretq_u64_u8, vshrn_n_u16,
 };
 
 // NOTE: neon has no alignment requirements for loads,
@@ -103,6 +103,25 @@ impl Vector {
       let matches = vget_lane_u64(vreinterpret_u64_u8(res), 0);
       Mask(matches)
     }
+  }
+
+  pub const SUPPORTS_MOVEMASK_WILL_HAVE_NON_ZERO: bool = true;
+
+  #[inline(always)]
+  pub fn movemask_will_have_non_zero(self) -> bool {
+    unsafe {
+      let low = vreinterpretq_u64_u8(vpmaxq_u8(self.0, self.0));
+      vgetq_lane_u64(low, 0) != 0
+    }
+  }
+}
+
+impl std::ops::BitOr for Vector {
+  type Output = Self;
+
+  #[inline(always)]
+  fn bitor(self, rhs: Self) -> Self {
+    Self(unsafe { vorrq_u8(self.0, rhs.0) })
   }
 }
 
