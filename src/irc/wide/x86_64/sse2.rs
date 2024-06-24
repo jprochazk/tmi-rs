@@ -1,5 +1,5 @@
 use core::arch::x86_64::{
-  __m128i, _mm_cmpeq_epi8, _mm_load_si128, _mm_loadu_si128, _mm_movemask_epi8, _mm_or_si128,
+  __m128i, _mm_cmpeq_epi8, _mm_load_si128, _mm_loadu_si128, _mm_movemask_epi8,
 };
 
 #[repr(align(16))]
@@ -66,22 +66,6 @@ impl Vector {
       let value = std::mem::transmute::<i32, u32>(_mm_movemask_epi8(self.0));
       Mask(value)
     }
-  }
-
-  pub const SUPPORTS_MOVEMASK_WILL_HAVE_NON_ZERO: bool = false;
-
-  #[inline(always)]
-  pub fn movemask_will_have_non_zero(self) -> bool {
-    unreachable!("unsupported")
-  }
-}
-
-impl std::ops::BitOr for Vector {
-  type Output = Self;
-
-  #[inline(always)]
-  fn bitor(self, rhs: Self) -> Self {
-    Self(unsafe { _mm_or_si128(self.0, rhs.0) })
   }
 }
 
