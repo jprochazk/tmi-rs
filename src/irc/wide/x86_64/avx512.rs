@@ -1,5 +1,6 @@
 use core::arch::x86_64::{
   __m512i, _mm512_cmpeq_epi8_mask, _mm512_load_si512, _mm512_loadu_si512, _mm512_movepi8_mask,
+  _mm512_or_si512,
 };
 
 #[repr(align(64))]
@@ -66,6 +67,22 @@ impl Vector {
   #[inline(always)]
   pub fn movemask(self) -> Mask {
     unsafe { Mask(_mm512_movepi8_mask(mask)) }
+  }
+
+  pub const SUPPORTS_MOVEMASK_WILL_HAVE_NON_ZERO: bool = false;
+
+  #[inline(always)]
+  pub fn movemask_will_have_non_zero(self) -> bool {
+    unreachable!("unsupported")
+  }
+}
+
+impl std::ops::BitOr for Vector {
+  type Output = Self;
+
+  #[inline(always)]
+  fn bitor(self, rhs: Self) -> Self {
+    Self(unsafe { _mm512_or_si512(self.0, rhs.0) })
   }
 }
 
