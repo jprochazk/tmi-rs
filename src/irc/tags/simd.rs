@@ -61,6 +61,7 @@ fn parse_chunk(offset: usize, chunk: V, state: &mut State, tags: &mut Array<128,
 
         let m = vector_eq.first_match();
         vector_eq.clear_to(m);
+        vector_semi.clear_to(m);
 
         let pos = offset + m.as_index(); // pos of `=`
 
@@ -75,6 +76,7 @@ fn parse_chunk(offset: usize, chunk: V, state: &mut State, tags: &mut Array<128,
         }
 
         let m = vector_semi.first_match();
+        vector_eq.clear_to(m);
         vector_semi.clear_to(m);
 
         let pos = offset + m.as_index(); // pos of `;`

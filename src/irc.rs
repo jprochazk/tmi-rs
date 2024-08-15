@@ -385,5 +385,12 @@ mod tests {
       let data = "@display-name=Dixtor334;emotes=;first-msg=0;flags=;id=0b4c70e4-9a47-4ce1-9c3e-8f78111cdc19;mod=0;reply-parent-display-name=minosura;reply-parent-msg-body=https://youtu.be/-ek4MFjz_eM?list=PL91C6439FD45DE2F3\\sannytfDinkDonk\\sstrimmer\\skorean\\sone;reply-parent-msg-id=7f811788-b897-4b4c-9f91-99fafe70eb7f;reply-parent-user-id=141993641;reply-parent-user-login=minosura;returning-chatter=0;room-id=56418014;subscriber=1;tmi-sent-ts=1686049636367;turbo=0;user-id=73714767;user-type= :dixtor334!dixtor334@dixtor334.tmi.twitch.tv PRIVMSG #anny :@minosura @anny";
       assert_eq!("https://youtu.be/-ek4MFjz_eM?list=PL91C6439FD45DE2F3\\sannytfDinkDonk\\sstrimmer\\skorean\\sone", IrcMessageRef::parse(data).unwrap().tag(Tag::ReplyParentMsgBody).unwrap());
     }
+
+    #[test]
+    fn regression_equals_in_tag_value_2() {
+      // this one has the equals aligned differently from previous
+      let data = "@room-id=11148817;tmi-sent-ts=1723702053033;color=#B7B6F9;reply-parent-msg-body=@RomeoGiggleToess\\shttps://www.youtube.com/watch?v=khMb3k-Wwvg;emotes=;flags=;reply-parent-user-id=53888434;id=96a5fb70-f54e-4640-979e-529a76ddf74b;reply-thread-parent-display-name=RomeoGiggleToess;reply-thread-parent-msg-id=fd2a5663-00cb-4e78-9c0d-aff6b66285bf;subscriber=0;historical=1;reply-parent-display-name=OGprodigy;mod=0;badges=twitch-dj/1;first-msg=0;user-id=86336791;reply-parent-user-login=ogprodigy;turbo=0;user-type=;reply-parent-msg-id=a504ba7e-d991-45d0-ab2f-c3045c6ae7b6;reply-thread-parent-user-login=romeogiggletoess;returning-chatter=0;display-name=RomeoGiggleToess;badge-info=;reply-thread-parent-user-id=86336791;rm-received-ts=1723702053240 :romeogiggletoess!romeogiggletoess@romeogiggletoess.tmi.twitch.tv PRIVMSG #pajlada :@OGprodigy klassiker";
+      IrcMessageRef::parse(data).unwrap();
+    }
   }
 }
