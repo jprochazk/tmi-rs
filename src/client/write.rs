@@ -7,14 +7,6 @@ use tokio::io::{AsyncWriteExt, WriteHalf};
 
 pub type WriteStream = WriteHalf<conn::Stream>;
 
-pub struct Privmsg<'a> {
-  client: &'a mut Client,
-  channel: &'a str,
-  text: &'a str,
-  reply_parent_msg_id: Option<&'a str>,
-  client_nonce: Option<&'a str>,
-}
-
 struct Tag<'a> {
   key: &'a str,
   value: &'a str,
@@ -28,13 +20,21 @@ impl<'a> std::fmt::Display for Tag<'a> {
   }
 }
 
-impl<'a> Privmsg<'a> {
-  pub fn reply_to(mut self, reply_parent_msg_id: &'a str) -> Self {
+pub struct Privmsg<'data, 'client> {
+  client: &'client mut Client,
+  channel: &'data str,
+  text: &'data str,
+  reply_parent_msg_id: Option<&'data str>,
+  client_nonce: Option<&'data str>,
+}
+
+impl<'data, 'client> Privmsg<'data, 'client> {
+  pub fn reply_to(mut self, reply_parent_msg_id: &'data str) -> Self {
     self.reply_parent_msg_id = Some(reply_parent_msg_id);
     self
   }
 
-  pub fn client_nonce(mut self, value: &'a str) -> Self {
+  pub fn client_nonce(mut self, value: &'data str) -> Self {
     self.client_nonce = Some(value);
     self
   }
@@ -106,7 +106,13 @@ impl Client {
   /// You can specify additional properties using the builder methods:
   /// - `reply_to`: to specify a `reply-parent-msg-id` tag, which makes this privmsg a reply to another message.
   /// - `client_nonce`: to identify the message in the `Notice` which Twitch may send as a response to this message.
-  pub fn privmsg<'a>(&'a mut self, channel: &'a str, text: &'a str) -> Privmsg<'a> {
+  ///
+  /// Channel does not have to be prefixed by `#`.
+  pub fn privmsg<'data, 'client>(
+    &'client mut self,
+    channel: &'data str,
+    text: &'data str,
+  ) -> Privmsg<'data, 'client> {
     Privmsg {
       client: self,
       channel,
@@ -140,7 +146,7 @@ impl Client {
   ///
   /// ⚠ This call is not rate limited in any way.
   ///
-  /// ⚠ `channel` MUST be a valid channel name prefixed by `#`.
+  /// Channel name does not have to be prefixed by `#`.
   pub async fn join(&mut self, channel: impl AsRef<str>) -> Result<(), SendError> {
     with_scratch!(self, |f| {
       let channel = Channel(channel);
@@ -149,12 +155,24 @@ impl Client {
     })
   }
 
+  /// Send a `PART` command.
+  ///
+  /// ⚠ This call is not rate limited in any way.
+  ///
+  /// Channel name does not have to be prefixed by `#`.
+  pub async fn part(&mut self, channel: impl AsRef<str>) -> Result<(), SendError> {
+    with_scratch!(self, |f| {
+      let channel = Channel(channel);
+      let _ = write!(f, "PART {channel}\r\n");
+      Ok(self.send_raw(f.as_str()).await?)
+    })
+  }
+
   /// Send a `JOIN` command.
   ///
   /// ⚠ This call is not rate limited in any way.
   ///
-  /// ⚠ Each channel in `channels` MUST be a valid channel name
-  /// prefixed by `#`.
+  /// Channel names do not have to be prefixed by `#`.
   pub async fn join_all<'a, I, C>(&mut self, channels: I) -> Result<(), SendError>
   where
     I: IntoIterator<Item = C>,

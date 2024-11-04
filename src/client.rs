@@ -60,7 +60,6 @@ use crate::IrcMessage;
 use futures_util::StreamExt;
 use rand::{thread_rng, Rng};
 use std::fmt::{Display, Write};
-use std::future::Future;
 use std::io;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -72,74 +71,8 @@ use util::Timeout;
 /// The default timeout used when connecting to Twitch IRC.
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// Credentials used to authenticate to Twitch IRC.
-///
-/// The [`Default`] impl uses [`Credentials::anon`].
-#[derive(Clone)]
-pub struct Credentials {
-  pub login: String,
-  pub token: Option<String>,
-}
-
-impl Credentials {
-  const ANON_RANGE: std::ops::Range<u32> = 10000..99999;
-
-  /// Credentials using an OAuth token.
-  ///
-  /// `token` should be a User Access Token.
-  ///
-  /// You can generate one by following the instructions on [Authorization Code Grant Flow](https://dev.twitch.tv/docs/authentication/getting-tokens-oauth/#authorization-code-grant-flow).
-  ///
-  /// Make sure the token is valid before attempting to use it, and refresh it or generate a new one if it expires.
-  ///
-  /// [twitch_oauth2](https://crates.io/crates/twitch_oauth2) can help automate most of this.
-  pub fn new(login: impl ToString, token: impl ToString) -> Self {
-    Self {
-      login: login.to_string(),
-      token: Some(token.to_string()),
-    }
-  }
-
-  /// An anonymous login.
-  ///
-  /// Twitch allows logging in using any username in the form `justinfan?????`
-  /// where `?` is any digit. For example, `justinfan11824` is a valid username.
-  ///
-  /// If you login anonymously, you won't be able to send messages, but you
-  /// will still be able to read them, including all the usual tags,
-  /// membership commands, etc.
-  pub fn anon() -> Self {
-    Self {
-      token: None,
-      login: format!("justinfan{}", thread_rng().gen_range(Self::ANON_RANGE)),
-    }
-  }
-
-  pub fn is_anon(&self) -> bool {
-    self.token.is_none()
-  }
-
-  pub fn login(&self) -> &str {
-    self.login.as_str()
-  }
-
-  pub fn token(&self) -> Option<&str> {
-    self.token.as_deref()
-  }
-}
-
-impl Default for Credentials {
-  fn default() -> Self {
-    Self::anon()
-  }
-}
-
-impl std::fmt::Debug for Credentials {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    f.debug_struct("Credentials")
-      .field("nick", &self.login)
-      .finish_non_exhaustive()
-  }
+fn justinfan() -> String {
+  format!("justinfan{}", thread_rng().gen_range(10000..99999))
 }
 
 /// Reconnect backoff configuration.
@@ -170,10 +103,16 @@ impl Default for Backoff {
 }
 
 /// Client configuration.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Config {
-  /// Credentials to use when logging in to Twitch IRC.
-  pub credentials: Credentials,
+  /// `token` should be a User Access Token.
+  ///
+  /// You can generate one by following the instructions on [Authorization Code Grant Flow](https://dev.twitch.tv/docs/authentication/getting-tokens-oauth/#authorization-code-grant-flow).
+  ///
+  /// Make sure the token is valid before attempting to use it, and refresh it or generate a new one if it expires.
+  ///
+  /// [twitch_oauth2](https://crates.io/crates/twitch_oauth2) can help automate most of this.
+  pub token: Option<String>,
 
   /// Connect and reconnect timeout.
   pub timeout: Duration,
@@ -185,40 +124,40 @@ pub struct Config {
 impl Default for Config {
   fn default() -> Self {
     Self {
-      credentials: Default::default(),
+      token: None,
       timeout: DEFAULT_TIMEOUT,
       backoff: Default::default(),
     }
   }
 }
 
-/// Builder for a [`Client`].
-pub struct ClientBuilder {
-  config: Config,
-}
-
-impl ClientBuilder {
-  /// Set the credentials.
-  pub fn credentials(mut self, credentials: Credentials) -> Self {
-    self.config.credentials = credentials;
+impl Config {
+  /// Set the OAuth token.
+  pub fn token(mut self, token: Option<impl Into<String>>) -> Self {
+    self.token = token.map(|t| t.into());
     self
   }
 
   /// Set the timeout used on various operations, such as connecting and reconnecting.
   pub fn timeout(mut self, timeout: Duration) -> Self {
-    self.config.timeout = timeout;
+    self.timeout = timeout;
     self
   }
 
   /// Set the backoff settings used when reconnecting.
   pub fn backoff(mut self, backoff: Backoff) -> Self {
-    self.config.backoff = backoff;
+    self.backoff = backoff;
     self
   }
+}
 
-  /// Attempts to connect to Twitch IRC using this configuration.
-  pub fn connect(self) -> impl Future<Output = Result<Client, ConnectError>> {
-    Client::connect(self.config)
+impl std::fmt::Debug for Config {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.debug_struct("Config")
+      .field("token", &"<redacted>")
+      .field("timeout", &self.timeout)
+      .field("backoff", &self.backoff)
+      .finish_non_exhaustive()
   }
 }
 
@@ -246,20 +185,8 @@ pub struct Client {
 }
 
 impl Client {
-  /// The [`ClientBuilder`] provides a builder for setting up the client configuration.
-  pub fn builder() -> ClientBuilder {
-    ClientBuilder {
-      config: Default::default(),
-    }
-  }
-
-  /// Attemps to connect anonymously.
-  pub fn anonymous() -> impl Future<Output = Result<Client, ConnectError>> {
-    Self::connect(Config::default())
-  }
-
   /// Attempts to connect with the provided `config` and `timeout`.
-  async fn connect(config: Config) -> Result<Client, ConnectError> {
+  pub async fn connect(config: Config) -> Result<Client, ConnectError> {
     trace!("connecting");
     let tls = TlsConfig::load(ServerName::try_from(conn::HOST)?)?;
     trace!("opening connection to twitch");
@@ -321,23 +248,24 @@ impl Client {
   async fn handshake(&mut self) -> Result<(), ConnectError> {
     trace!("performing handshake");
 
-    let credentials = &self.config.credentials;
     const CAP: &str = "twitch.tv/commands twitch.tv/tags twitch.tv/membership";
-    trace!("CAP REQ {CAP:?}; NICK {:?}; PASS ***", credentials.login);
+    trace!("CAP REQ {CAP:?}; PASS <redacted>");
     write!(&mut self.scratch, "CAP REQ :{CAP}\r\n").unwrap();
 
-    let login = credentials.login.as_str();
-    let token = match credentials.token.as_ref() {
-      Some(token) => token.as_str(),
-      None => "just_a_lil_guy",
-    };
-    let oauth = if token.starts_with("oauth:") {
-      ""
-    } else {
-      "oauth:"
-    };
-    write!(&mut self.scratch, "PASS {oauth}{token}\r\n").unwrap();
-    write!(&mut self.scratch, "NICK {login}\r\n").unwrap();
+    match &self.config.token {
+      Some(token) => {
+        let oauth = if token.starts_with("oauth:") {
+          ""
+        } else {
+          "oauth:"
+        };
+        write!(&mut self.scratch, "PASS {oauth}{token}\r\n").unwrap();
+      }
+      None => {
+        write!(&mut self.scratch, "PASS just_a_lil_guy\r\n").unwrap();
+        write!(&mut self.scratch, "NICK {}\r\n", justinfan()).unwrap();
+      }
+    }
 
     self.writer.write_all(self.scratch.as_bytes()).await?;
     self.writer.flush().await?;
@@ -357,7 +285,7 @@ impl Client {
       }
       _ => {
         trace!("unexpected message");
-        return Err(ConnectError::Welcome(message));
+        return Err(ConnectError::Welcome(Box::new(message)));
       }
     }
 
@@ -380,11 +308,11 @@ impl Client {
         }
 
         trace!("unrecognized error");
-        return Err(ConnectError::Notice(message));
+        return Err(ConnectError::Notice(Box::new(message)));
       }
       _ => {
         trace!("first message not recognized");
-        return Err(ConnectError::Welcome(message));
+        return Err(ConnectError::Welcome(Box::new(message)));
       }
     }
 
@@ -396,11 +324,6 @@ impl Client {
   #[inline]
   pub fn config(&self) -> &Config {
     &self.config
-  }
-
-  #[inline]
-  pub fn credentials(&self) -> &Credentials {
-    &self.config.credentials
   }
 }
 
@@ -470,13 +393,13 @@ pub enum ConnectError {
   Timeout,
 
   /// Connection received invalid welcome message.
-  Welcome(IrcMessage),
+  Welcome(Box<IrcMessage>),
 
   /// Failed to connect because of invalid credentials.
   Auth,
 
   /// Twitch sent a notice that we didn't expect during the handshake.
-  Notice(IrcMessage),
+  Notice(Box<IrcMessage>),
 }
 
 impl ConnectError {

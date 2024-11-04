@@ -22,12 +22,6 @@ macro_rules! static_assert_send {
   };
 }
 
-#[cfg(feature = "client")]
-pub mod client;
-
-#[cfg(feature = "client")]
-pub use client::{Client, Credentials};
-
 #[cfg(feature = "message-types")]
 pub mod msg;
 #[cfg(feature = "message-types")]
@@ -35,6 +29,17 @@ pub use msg::*;
 
 pub mod irc;
 pub use irc::*;
+
+#[cfg(feature = "client")]
+pub mod client;
+
+#[cfg(feature = "client")]
+pub use client::{Client, Config};
+
+#[cfg(feature = "bot")]
+pub mod bot;
+#[cfg(feature = "bot")]
+pub use bot::{run_in_place, spawn, Bot, BotError, Context, Sender};
 
 pub mod common;
 
