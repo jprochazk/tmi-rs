@@ -1,13 +1,11 @@
 use std::collections::HashMap;
 use std::future::Future;
-use std::marker::PhantomData;
 use std::time::Duration;
 use std::time::Instant;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Receiver;
 
 use crate::client::read::RecvError;
-use crate::client::write::Privmsg as PrivmsgProxy;
 use crate::client::write::SameMessageBypass;
 use crate::client::write::SendError;
 use crate::client::Config;
@@ -41,37 +39,49 @@ enum Command {
 }
 
 #[derive(Clone)]
-pub struct Sender {
-  tx: mpsc::Sender<Command>,
+pub struct Context {
+  inner: mpsc::Sender<Command>,
+  is_anon: bool,
 }
 
-static_assert_send!(Sender);
-static_assert_sync!(Sender);
+static_assert_send!(Context);
+static_assert_sync!(Context);
 
-impl Sender {
+impl Context {
+  pub fn is_anon(&self) -> bool {
+    self.is_anon
+  }
+
   pub fn join(&self, channel: impl Into<String>) {
     let channel = channel.into();
-    self.tx.blocking_send(Command::Join { channel }).unwrap();
+    self.inner.blocking_send(Command::Join { channel }).unwrap();
   }
 
   pub fn join_all(&self, channels: impl IntoIterator<Item = impl Into<String>>) {
     let channels = channels.into_iter().map(|c| c.into()).collect();
     self
-      .tx
+      .inner
       .blocking_send(Command::JoinAll { channels })
       .unwrap();
   }
 
   pub fn part(&self, channel: impl Into<String>) {
     let channel = channel.into();
-    self.tx.blocking_send(Command::Part { channel }).unwrap();
+    self.inner.blocking_send(Command::Part { channel }).unwrap();
   }
 
+  /// Create a message to send to the given channel.
+  ///
+  /// ```rust
+  /// # async fn test(ctx: tmi::Context) {
+  /// ctx.privmsg("#pajlada", "hey guys").send();
+  /// # }
+  /// ```
   pub fn privmsg(&self, channel: impl Into<String>, text: impl Into<String>) -> PrivmsgBuilder {
     let channel = channel.into();
     let text = text.into();
     PrivmsgBuilder {
-      sender: self,
+      ctx: self,
       channel,
       text,
       reply_to: None,
@@ -80,7 +90,7 @@ impl Sender {
 }
 
 pub struct PrivmsgBuilder<'a> {
-  sender: &'a Sender,
+  ctx: &'a Context,
   channel: String,
   text: String,
   reply_to: Option<String>,
@@ -92,48 +102,23 @@ impl<'a> PrivmsgBuilder<'a> {
     self
   }
 
+  /// Send the message.
+  ///
+  /// If the sender is anonymous, this will do nothing.
   pub fn send(self) {
+    if self.ctx.is_anon() {
+      return;
+    }
+
     self
-      .sender
-      .tx
+      .ctx
+      .inner
       .blocking_send(Command::Privmsg {
         channel: self.channel,
         text: self.text,
         reply_to: self.reply_to,
       })
       .unwrap();
-  }
-}
-
-pub struct SenderProxy<'a> {
-  state: &'a mut State,
-}
-
-impl<'a> SenderProxy<'a> {
-  pub async fn join(&mut self, channel: impl Into<String>) -> Result<(), BotError> {
-    self.state.maybe_join(channel.into()).await
-  }
-
-  pub async fn join_all(
-    &mut self,
-    channels: impl IntoIterator<Item = impl Into<String>>,
-  ) -> Result<(), BotError> {
-    for channel in channels {
-      self.state.maybe_join(channel.into()).await?;
-    }
-    Ok(())
-  }
-
-  pub async fn part(&mut self, channel: impl Into<String>) -> Result<(), BotError> {
-    self.state.maybe_part(channel.into()).await
-  }
-
-  pub fn privmsg<'data, 'client>(
-    &'client mut self,
-    channel: &'data str,
-    text: &'data str,
-  ) -> PrivmsgProxy<'data, 'client> {
-    self.state.client.privmsg(channel, text)
   }
 }
 
@@ -160,26 +145,41 @@ impl Bot {
     self
   }
 
-  pub async fn spawn<T>(self, handler: T) -> Result<Sender, BotError>
+  pub async fn spawn<T>(self, handler: T) -> Result<Context, BotError>
   where
     T: Handler + Send + Sync + 'static,
   {
-    let (tx, rx) = mpsc::channel(128);
-    let sender = Sender { tx };
-    sender.join_all(self.channels);
+    let (sender, receiver) = mpsc::channel(128);
+    let ctx = Context {
+      inner: sender,
+      is_anon: self.config.token.is_none(),
+    };
+    ctx.join_all(self.channels);
 
     let client = Client::connect(self.config).await?;
-    tokio::spawn(async move { State::new(rx, client).run_in_place(handler).await });
-    Ok(sender)
+    tokio::spawn({
+      let ctx = ctx.clone();
+      async move {
+        State::new(ctx, receiver, client)
+          .run_in_place(handler)
+          .await
+      }
+    });
+    Ok(ctx)
   }
 
   pub async fn run_in_place<T: Handler>(self, handler: T) -> Result<(), BotError> {
-    let (tx, rx) = mpsc::channel(1);
-    let sender = Sender { tx };
-    sender.join_all(self.channels);
+    let (sender, receiver) = mpsc::channel(1);
+    let ctx = Context {
+      inner: sender,
+      is_anon: self.config.token.is_none(),
+    };
+    ctx.join_all(self.channels);
 
     let client = Client::connect(self.config).await?;
-    State::new(rx, client).run_in_place(handler).await
+    State::new(ctx, receiver, client)
+      .run_in_place(handler)
+      .await
   }
 }
 
@@ -192,7 +192,7 @@ impl Default for Bot {
 pub async fn spawn<T>(
   channels: impl IntoIterator<Item = impl Into<String>>,
   handler: T,
-) -> Result<Sender, BotError>
+) -> Result<Context, BotError>
 where
   T: Handler + Send + Sync + 'static,
 {
@@ -207,15 +207,17 @@ pub async fn run_in_place<T: Handler>(
 }
 
 struct State {
-  rx: Receiver<Command>,
+  ctx: Context,
+  receiver: Receiver<Command>,
   client: Client,
   channels: HashMap<String, SameMessageBypass>,
 }
 
 impl State {
-  fn new(rx: Receiver<Command>, client: Client) -> Self {
+  fn new(ctx: Context, receiver: Receiver<Command>, client: Client) -> Self {
     Self {
-      rx,
+      ctx,
+      receiver,
       client,
       channels: HashMap::new(),
     }
@@ -242,7 +244,7 @@ impl State {
           let msg = msg.as_typed()?;
           self.handle_message(msg, &handler).await?;
         }
-        cmd = self.rx.recv() => {
+        cmd = self.receiver.recv() => {
           match cmd {
             Some(cmd) => self.handle_cmd(cmd).await?,
             None => break,
@@ -271,10 +273,7 @@ impl State {
     handler: &T,
   ) -> Result<(), BotError> {
     match msg {
-      Message::Privmsg(msg) => {
-        let context = Context { state: self };
-        handler.handle(context, msg).await
-      }
+      Message::Privmsg(msg) => handler.handle(self.ctx.clone(), msg.into_owned()).await,
       Message::Ping(ping) => {
         trace!("recv PING");
         self.client.pong(&ping).await?;
@@ -344,47 +343,22 @@ impl State {
   }
 }
 
-pub struct Context<'a> {
-  state: &'a mut State,
-}
-
-impl<'a> Context<'a> {
-  pub fn config(&self) -> &Config {
-    self.state.client.config()
-  }
-
-  pub fn sender(&mut self) -> SenderProxy<'_> {
-    SenderProxy { state: self.state }
-  }
-}
-
-pub trait Handler: private::Sealed {
+pub trait Handler {
   fn handle(
     &self,
-    ctx: Context<'_>,
-    msg: Privmsg<'_>,
+    ctx: Context,
+    msg: Privmsg<'static>,
   ) -> impl Future<Output = Result<(), BotError>> + Send;
-}
-
-mod private {
-  pub trait Sealed {}
 }
 
 impl<F, Fut> Handler for F
 where
   Fut: Future<Output = Result<(), BotError>> + Send + Sync,
-  F: Fn(Context<'_>, Privmsg<'_>) -> Fut + Send + Sync,
+  F: Fn(Context, Privmsg<'static>) -> Fut + Send + Sync,
 {
-  async fn handle(&self, ctx: Context<'_>, msg: Privmsg<'_>) -> Result<(), BotError> {
+  async fn handle(&self, ctx: Context, msg: Privmsg<'static>) -> Result<(), BotError> {
     self(ctx, msg).await
   }
-}
-
-impl<F, Fut> private::Sealed for F
-where
-  Fut: Future<Output = Result<(), BotError>> + Send + Sync,
-  F: Fn(Context<'_>, Privmsg<'_>) -> Fut + Send + Sync,
-{
 }
 
 #[derive(Debug)]

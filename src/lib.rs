@@ -39,7 +39,7 @@ pub use client::{Client, Config};
 #[cfg(feature = "bot")]
 pub mod bot;
 #[cfg(feature = "bot")]
-pub use bot::{run_in_place, spawn, Bot, BotError, Context, Sender};
+pub use bot::{run_in_place, spawn, Bot, BotError, Context};
 
 pub mod common;
 

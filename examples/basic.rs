@@ -6,9 +6,6 @@
 //!   --channel #forsen
 //! ```
 
-#[macro_use]
-extern crate tracing;
-
 use anyhow::Result;
 use clap::Parser;
 
@@ -33,6 +30,20 @@ async fn main() -> Result<()> {
   Ok(())
 }
 
-async fn on_msg(_: tmi::Context<'_>, _: tmi::Privmsg<'_>) -> Result<(), tmi::BotError> {
+async fn on_msg(ctx: tmi::Context, msg: tmi::Privmsg<'_>) -> Result<(), tmi::BotError> {
+  println!("{}: {}", msg.sender().name(), msg.text());
+
+  if ctx.is_anon() {
+    return Ok(());
+  }
+
+  if !msg.text().starts_with("!yo") {
+    return Ok(());
+  }
+
+  ctx.privmsg(msg.channel(), "yo").reply_to(msg.id()).send();
+
+  println!("< {} yo", msg.channel());
+
   Ok(())
 }
