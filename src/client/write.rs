@@ -173,7 +173,7 @@ impl Client {
   /// ⚠ This call is not rate limited in any way.
   ///
   /// Channel names do not have to be prefixed by `#`.
-  pub async fn join_all<'a, I, C>(&mut self, channels: I) -> Result<(), SendError>
+  pub async fn join_all<I, C>(&mut self, channels: I) -> Result<(), SendError>
   where
     I: IntoIterator<Item = C>,
     C: AsRef<str>,
