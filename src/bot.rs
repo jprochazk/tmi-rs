@@ -1,21 +1,20 @@
 use std::collections::HashMap;
 use std::future::Future;
-use std::time::Duration;
-use std::time::Instant;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
-use tokio::sync::mpsc::Receiver;
 
 use crate::client::read::RecvError;
-use crate::client::write::SameMessageBypass;
-use crate::client::write::SendError;
-use crate::client::Config;
-use crate::client::ConnectError;
-use crate::client::ReconnectError;
+use crate::client::write::{SameMessageBypass, SendError};
+use crate::client::{Auth, Config, ConnectError, ReconnectError};
 use crate::common::JoinIter as _;
-use crate::Client;
-use crate::Message;
-use crate::MessageParseError;
-use crate::Privmsg;
+use crate::{Client, Message, MessageParseError, Privmsg};
+
+fn now() -> u128 {
+  SystemTime::now()
+    .duration_since(UNIX_EPOCH)
+    .unwrap()
+    .as_millis()
+}
 
 enum Command {
   Join {
@@ -40,7 +39,7 @@ enum Command {
 
 #[derive(Clone)]
 pub struct Context {
-  inner: mpsc::Sender<Command>,
+  inner: mpsc::UnboundedSender<Command>,
   is_anon: bool,
 }
 
@@ -54,20 +53,17 @@ impl Context {
 
   pub fn join(&self, channel: impl Into<String>) {
     let channel = channel.into();
-    self.inner.blocking_send(Command::Join { channel }).unwrap();
+    self.inner.send(Command::Join { channel }).unwrap();
   }
 
   pub fn join_all(&self, channels: impl IntoIterator<Item = impl Into<String>>) {
     let channels = channels.into_iter().map(|c| c.into()).collect();
-    self
-      .inner
-      .blocking_send(Command::JoinAll { channels })
-      .unwrap();
+    self.inner.send(Command::JoinAll { channels }).unwrap();
   }
 
   pub fn part(&self, channel: impl Into<String>) {
     let channel = channel.into();
-    self.inner.blocking_send(Command::Part { channel }).unwrap();
+    self.inner.send(Command::Part { channel }).unwrap();
   }
 
   /// Create a message to send to the given channel.
@@ -113,7 +109,7 @@ impl<'a> PrivmsgBuilder<'a> {
     self
       .ctx
       .inner
-      .blocking_send(Command::Privmsg {
+      .send(Command::Privmsg {
         channel: self.channel,
         text: self.text,
         reply_to: self.reply_to,
@@ -135,8 +131,8 @@ impl Bot {
     }
   }
 
-  pub fn token(mut self, token: impl Into<String>) -> Self {
-    self.config.token = Some(token.into());
+  pub fn auth(mut self, auth: Option<impl Into<Auth>>) -> Self {
+    self.config = self.config.auth(auth);
     self
   }
 
@@ -145,14 +141,15 @@ impl Bot {
     self
   }
 
-  pub async fn spawn<T>(self, handler: T) -> Result<Context, BotError>
+  pub async fn spawn<F, Fut>(self, handler: F) -> Result<Context, BotError>
   where
-    T: Handler + Send + Sync + 'static,
+    F: Fn(Context, Privmsg<'static>) -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = Result<(), BotError>> + Send + Sync,
   {
-    let (sender, receiver) = mpsc::channel(128);
+    let (sender, receiver) = mpsc::unbounded_channel();
     let ctx = Context {
       inner: sender,
-      is_anon: self.config.token.is_none(),
+      is_anon: self.config.auth.is_none(),
     };
     ctx.join_all(self.channels);
 
@@ -168,11 +165,15 @@ impl Bot {
     Ok(ctx)
   }
 
-  pub async fn run_in_place<T: Handler>(self, handler: T) -> Result<(), BotError> {
-    let (sender, receiver) = mpsc::channel(1);
+  pub async fn run_in_place<F, Fut>(self, handler: F) -> Result<(), BotError>
+  where
+    F: Fn(Context, Privmsg<'static>) -> Fut + Send + Sync,
+    Fut: Future<Output = Result<(), BotError>> + Send + Sync,
+  {
+    let (sender, receiver) = mpsc::unbounded_channel();
     let ctx = Context {
       inner: sender,
-      is_anon: self.config.token.is_none(),
+      is_anon: self.config.auth.is_none(),
     };
     ctx.join_all(self.channels);
 
@@ -189,32 +190,37 @@ impl Default for Bot {
   }
 }
 
-pub async fn spawn<T>(
+pub async fn spawn<F, Fut>(
   channels: impl IntoIterator<Item = impl Into<String>>,
-  handler: T,
+  handler: F,
 ) -> Result<Context, BotError>
 where
-  T: Handler + Send + Sync + 'static,
+  F: Fn(Context, Privmsg<'static>) -> Fut + Send + Sync + 'static,
+  Fut: Future<Output = Result<(), BotError>> + Send + Sync,
 {
   Bot::new().channels(channels).spawn(handler).await
 }
 
-pub async fn run_in_place<T: Handler>(
+pub async fn run_in_place<F, Fut>(
   channels: impl IntoIterator<Item = impl Into<String>>,
-  handler: T,
-) -> Result<(), BotError> {
+  handler: F,
+) -> Result<(), BotError>
+where
+  F: Fn(Context, Privmsg<'static>) -> Fut + Send + Sync,
+  Fut: Future<Output = Result<(), BotError>> + Send + Sync,
+{
   Bot::new().channels(channels).run_in_place(handler).await
 }
 
 struct State {
   ctx: Context,
-  receiver: Receiver<Command>,
+  receiver: mpsc::UnboundedReceiver<Command>,
   client: Client,
   channels: HashMap<String, SameMessageBypass>,
 }
 
 impl State {
-  fn new(ctx: Context, receiver: Receiver<Command>, client: Client) -> Self {
+  fn new(ctx: Context, receiver: mpsc::UnboundedReceiver<Command>, client: Client) -> Self {
     Self {
       ctx,
       receiver,
@@ -229,13 +235,12 @@ impl State {
     let mut ping_interval = tokio::time::interval(Duration::from_secs(60));
 
     loop {
-      // `tokio::select` either `ctrl-c` or `client.recv()`
       tokio::select! {
         _ = tokio::signal::ctrl_c() => {
           break;
         }
         _ = ping_interval.tick() => {
-          let now = Instant::now().elapsed().as_millis().to_string();
+          let now = now().to_string();
           self.client.ping(&now).await?;
           trace!("send PING {now}");
         }
@@ -257,7 +262,7 @@ impl State {
   }
 
   async fn on_connect(&mut self) -> Result<(), BotError> {
-    if self.client.config().token.is_some() {
+    if self.client.config().auth.is_some() {
       trace!("bot connected with token");
     } else {
       trace!("bot connected anonymously");
@@ -280,7 +285,11 @@ impl State {
         Ok(())
       }
       Message::Pong(pong) => {
-        trace!("recv PONG {}", pong.nonce().unwrap_or(""));
+        let nonce = pong.nonce().unwrap_or("");
+        trace!("recv PONG {nonce}");
+        if let Ok(nonce) = nonce.parse::<u128>() {
+          trace!("latency: {}ms", now() - nonce);
+        }
         Ok(())
       }
       Message::Reconnect => {
@@ -353,8 +362,8 @@ pub trait Handler {
 
 impl<F, Fut> Handler for F
 where
-  Fut: Future<Output = Result<(), BotError>> + Send + Sync,
   F: Fn(Context, Privmsg<'static>) -> Fut + Send + Sync,
+  Fut: Future<Output = Result<(), BotError>> + Send + Sync,
 {
   async fn handle(&self, ctx: Context, msg: Privmsg<'static>) -> Result<(), BotError> {
     self(ctx, msg).await
@@ -405,11 +414,11 @@ impl std::error::Error for BotError {}
 impl std::fmt::Display for BotError {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
-      BotError::Send(err) => write!(f, "failed to send: {err}"),
-      BotError::Recv(err) => write!(f, "failed to receive: {err}"),
-      BotError::Parse(err) => write!(f, "failed to parse: {err}"),
-      BotError::Connect(err) => write!(f, "failed to connect: {err}"),
-      BotError::Reconnect(err) => write!(f, "failed to reconnect: {err}"),
+      BotError::Send(err) => write!(f, "{err}"),
+      BotError::Recv(err) => write!(f, "{err}"),
+      BotError::Parse(err) => write!(f, "{err}"),
+      BotError::Connect(err) => write!(f, "{err}"),
+      BotError::Reconnect(err) => write!(f, "{err}"),
     }
   }
 }

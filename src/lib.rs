@@ -1,3 +1,4 @@
+#![allow(clippy::needless_lifetimes)]
 #![doc = include_str!("../README.md")]
 
 #[cfg(feature = "client")]

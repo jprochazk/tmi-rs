@@ -28,6 +28,7 @@ client = [
   "dep:tracing",
 ]
 
+# High-level bot interface.
 bot = ["client"]
 
 # Enable serializing message types.

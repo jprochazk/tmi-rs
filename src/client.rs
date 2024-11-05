@@ -102,9 +102,11 @@ impl Default for Backoff {
   }
 }
 
-/// Client configuration.
 #[derive(Clone)]
-pub struct Config {
+pub struct Auth {
+  /// Username associated with the given `token`.
+  pub login: String,
+
   /// `token` should be a User Access Token.
   ///
   /// You can generate one by following the instructions on [Authorization Code Grant Flow](https://dev.twitch.tv/docs/authentication/getting-tokens-oauth/#authorization-code-grant-flow).
@@ -112,7 +114,19 @@ pub struct Config {
   /// Make sure the token is valid before attempting to use it, and refresh it or generate a new one if it expires.
   ///
   /// [twitch_oauth2](https://crates.io/crates/twitch_oauth2) can help automate most of this.
-  pub token: Option<String>,
+  pub token: String,
+}
+
+impl From<(String, String)> for Auth {
+  fn from((login, token): (String, String)) -> Self {
+    Self { login, token }
+  }
+}
+
+/// Client configuration.
+#[derive(Clone)]
+pub struct Config {
+  pub auth: Option<Auth>,
 
   /// Connect and reconnect timeout.
   pub timeout: Duration,
@@ -124,7 +138,7 @@ pub struct Config {
 impl Default for Config {
   fn default() -> Self {
     Self {
-      token: None,
+      auth: None,
       timeout: DEFAULT_TIMEOUT,
       backoff: Default::default(),
     }
@@ -133,8 +147,8 @@ impl Default for Config {
 
 impl Config {
   /// Set the OAuth token.
-  pub fn token(mut self, token: Option<impl Into<String>>) -> Self {
-    self.token = token.map(|t| t.into());
+  pub fn auth(mut self, auth: Option<impl Into<Auth>>) -> Self {
+    self.auth = auth.map(|v| v.into());
     self
   }
 
@@ -252,18 +266,20 @@ impl Client {
     trace!("CAP REQ {CAP:?}; PASS <redacted>");
     write!(&mut self.scratch, "CAP REQ :{CAP}\r\n").unwrap();
 
-    match &self.config.token {
-      Some(token) => {
+    match &self.config.auth {
+      Some(Auth { login, token }) => {
         let oauth = if token.starts_with("oauth:") {
           ""
         } else {
           "oauth:"
         };
         write!(&mut self.scratch, "PASS {oauth}{token}\r\n").unwrap();
+        write!(&mut self.scratch, "NICK {login}\r\n").unwrap();
       }
       None => {
+        let login = justinfan();
         write!(&mut self.scratch, "PASS just_a_lil_guy\r\n").unwrap();
-        write!(&mut self.scratch, "NICK {}\r\n", justinfan()).unwrap();
+        write!(&mut self.scratch, "NICK {login}\r\n").unwrap();
       }
     }
 
