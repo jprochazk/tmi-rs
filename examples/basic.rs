@@ -52,12 +52,8 @@ async fn main() -> Result<()> {
   Ok(())
 }
 
-async fn handler(ctx: tmi::Context, msg: tmi::Privmsg<'_>) -> Result<(), tmi::BotError> {
-  if !msg.text().starts_with("yo") {
-    return Ok(());
-  }
-
-  ctx.privmsg(msg.channel(), "yo").reply_to(msg.id()).send();
+async fn handler(_: tmi::Context, m: tmi::Privmsg<'_>) -> Result<(), tmi::BotError> {
+  println!("{}: {}", m.sender().name(), m.text());
 
   Ok(())
 }
