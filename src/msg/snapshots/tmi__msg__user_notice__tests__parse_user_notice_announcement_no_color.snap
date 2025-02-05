@@ -1,0 +1,34 @@
+---
+source: src/msg/user_notice.rs
+expression: "f(\"@badge-info=;badges=moderator/1;color=#1E90FF;display-name=vetricbot;emotes=;flags=;id=8c0fea53-7827-4165-8848-8e512b59beed;login=vetricbot;mod=1;msg-id=announcement;room-id=404660262;subscriber=0;system-msg=;tmi-sent-ts=1738762344755;user-id=955666532;user-type=mod;vip=0 :tmi.twitch.tv USERNOTICE #creepycode :sample\")"
+---
+UserNotice {
+    channel: "#creepycode",
+    channel_id: "404660262",
+    sender: Some(
+        User {
+            id: "955666532",
+            login: "vetricbot",
+            name: "vetricbot",
+        },
+    ),
+    text: Some(
+        "sample",
+    ),
+    system_message: None,
+    event: Announcement(
+        Announcement {
+            highlight_color: "PRIMARY",
+        },
+    ),
+    event_id: "announcement",
+    badges: [
+        Moderator,
+    ],
+    emotes: "",
+    color: Some(
+        "#1E90FF",
+    ),
+    message_id: "8c0fea53-7827-4165-8848-8e512b59beed",
+    timestamp: 2025-02-05T13:32:24.755Z,
+}

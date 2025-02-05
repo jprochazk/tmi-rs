@@ -571,7 +571,7 @@ impl<'src> UserNotice<'src> {
       ),
       "announcement" => (
         Event::Announcement(Announcement {
-          highlight_color: message.tag(Tag::MsgParamColor)?.into(),
+          highlight_color: message.tag(Tag::MsgParamColor).unwrap_or("PRIMARY").into(),
         }),
         false,
       ),
@@ -714,6 +714,11 @@ mod tests {
   #[test]
   fn parse_user_notice_announcement() {
     assert_irc_snapshot!(UserNotice, "@emotes=;login=pajbot;vip=0;tmi-sent-ts=1695554663565;flags=;mod=1;subscriber=1;id=bb1bec25-8f26-4ba3-a084-a6a2ca332f00;badge-info=subscriber/93;system-msg=;user-id=82008718;user-type=mod;room-id=11148817;badges=moderator/1,subscriber/3072;msg-param-color=PRIMARY;msg-id=announcement;color=#2E8B57;display-name=pajbot :tmi.twitch.tv USERNOTICE #pajlada :$ping xd");
+  }
+  
+  #[test]
+  fn parse_user_notice_announcement_no_color() {
+    assert_irc_snapshot!(UserNotice, "@badge-info=;badges=moderator/1;color=#1E90FF;display-name=vetricbot;emotes=;flags=;id=8c0fea53-7827-4165-8848-8e512b59beed;login=vetricbot;mod=1;msg-id=announcement;room-id=404660262;subscriber=0;system-msg=;tmi-sent-ts=1738762344755;user-id=955666532;user-type=mod;vip=0 :tmi.twitch.tv USERNOTICE #creepycode :sample")
   }
 
   #[test]
