@@ -571,7 +571,7 @@ impl<'src> UserNotice<'src> {
       ),
       "announcement" => (
         Event::Announcement(Announcement {
-          highlight_color: message.tag(Tag::MsgParamColor)?.into(),
+          highlight_color: message.tag(Tag::MsgParamColor).unwrap_or("PRIMARY").into(),
         }),
         false,
       ),
