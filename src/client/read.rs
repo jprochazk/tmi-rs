@@ -14,7 +14,7 @@ impl Client {
   pub async fn recv(&mut self) -> Result<IrcMessage, RecvError> {
     if let Some(message) = self.reader.next().await {
       let message = message?;
-      Ok(IrcMessage::parse(&message).ok_or_else(|| RecvError::Parse(message))?)
+      Ok(IrcMessage::parse(&message).ok_or(RecvError::Parse(message))?)
     } else {
       Err(RecvError::StreamClosed)
     }

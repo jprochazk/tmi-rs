@@ -155,7 +155,7 @@ impl Client {
   ///
   /// ⚠ Each channel in `channels` MUST be a valid channel name
   /// prefixed by `#`.
-  pub async fn join_all<'a, I, C>(&mut self, channels: I) -> Result<(), SendError>
+  pub async fn join_all<I, C>(&mut self, channels: I) -> Result<(), SendError>
   where
     I: IntoIterator<Item = C>,
     C: AsRef<str>,
