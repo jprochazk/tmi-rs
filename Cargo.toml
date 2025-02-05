@@ -9,7 +9,7 @@ license = "MIT"
 exclude = ["src/**/*.snap", "/.vscode", "/.github", "/benches/data.txt"]
 
 [features]
-default = ["simd", "client", "message-types"]
+default = ["simd", "message-types", "client", "bot"]
 
 # Enable strongly-typed Twitch IRC message types.
 message-types = ["dep:chrono", "dep:smallvec"]
@@ -27,6 +27,9 @@ client = [
   "dep:tokio-stream",
   "dep:tracing",
 ]
+
+# High-level bot interface.
+bot = ["client"]
 
 # Enable serializing message types.
 serde = ["dep:serde", "chrono/serde"]

@@ -174,10 +174,15 @@ pub struct IrcMessage {
 
 impl IrcMessage {
   /// Parse a single Twitch IRC message.
-  pub fn parse(src: impl ToString) -> Option<Self> {
-    let src = src.to_string();
-    let parts = IrcMessageRef::parse_inner(&src)?.parts;
-    Some(IrcMessage { src, parts })
+  ///
+  /// Returns `Err(src)` if the message could not be parsed.
+  pub fn parse(src: impl Into<String>) -> Result<Self, String> {
+    let src: String = src.into();
+    let parts = match IrcMessageRef::parse_inner(&src) {
+      Some(IrcMessageRef { parts, .. }) => parts,
+      None => return Err(src),
+    };
+    Ok(IrcMessage { src, parts })
   }
 
   /// Get the string from which this message was parsed.
