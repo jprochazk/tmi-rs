@@ -253,7 +253,7 @@ generate_getters! {
     cumulative_months -> u64,
 
     /// The user that received this gifted subscription or resubscription.
-    recipient -> User<'src>,
+    recipient -> &User<'src> = &self.recipient,
 
     /// Subcription tier/plan.
     /// For example:
@@ -341,7 +341,7 @@ generate_getters! {
     gifter_name -> &str = self.gifter_name.as_ref(),
 
     /// Set if the subscription is part of a promotion.
-    promotion -> Option<SubGiftPromo<'src>>,
+    promotion -> Option<&SubGiftPromo<'src>> = self.promotion.as_ref(),
   }
 }
 
@@ -356,7 +356,7 @@ pub struct AnonGiftPaidUpgrade<'src> {
 generate_getters! {
   <'src> for AnonGiftPaidUpgrade<'src> as self {
     /// Set if the subscription is part of a promotion.
-    promotion -> Option<SubGiftPromo<'src>>,
+    promotion -> Option<&SubGiftPromo<'src>> = self.promotion.as_ref(),
   }
 }
 

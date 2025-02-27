@@ -166,7 +166,7 @@ generate_getters! {
     message_id -> &str = self.message_id.as_ref(),
 
     /// Sender of the message the user replied to directly.
-    sender -> User<'src>,
+    sender -> &User<'src> = &self.sender,
 
     /// Text of the message the user replied to directly.
     ///
