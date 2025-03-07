@@ -9,13 +9,23 @@ use argp::FromArgs;
 pub struct Changelog {
   #[argp(option, description = "The tag to start from (inclusive)")]
   since: String,
+
+  #[argp(option, description = "The tag to end at (inclusive)")]
+  until: Option<String>,
 }
 
 impl Changelog {
   pub fn run(self) -> Result {
     // git log 0.6.1..HEAD --pretty=format:"%h"
     let git_log = git("log")
-      .with_args([&format!("{}..HEAD", self.since), "--pretty=format:%h"])
+      .with_args([
+        &format!(
+          "{}..{}",
+          self.since,
+          self.until.as_deref().unwrap_or("HEAD")
+        ),
+        "--pretty=format:%h",
+      ])
       .run_with_output()?;
     let commits: Vec<&str> = git_log.trim().split('\n').collect();
 

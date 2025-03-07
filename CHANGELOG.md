@@ -1,3 +1,20 @@
+## 0.8.0
+
+* Return `User` and `SubGiftPromo` by ref [b0f0157](https://github.com/jprochazk/tmi-rs/commit/b0f0157)
+
+Full commit range: [0.7.3..3d497e1](https://github.com/jprochazk/tmi-rs/compare/0.7.3...3d497e1)
+
+## 0.7.3
+
+* Fix typed message parsing for announcement `USERNOTICE`s without `msg-param-color` tag [38a2173](https://github.com/jprochazk/tmi-rs/commit/38a2173) by [ByteZ1337](https://github.com/ByteZ1337)
+  * Now defaults to `PRIMARY` if not present
+
+## 0.7.2
+
+* Fix equals in tag value regression again [1a0ba79](https://github.com/jprochazk/tmi-rs/commit/1a0ba79)
+
+Full commit range: [0.7.1..3d497e1](https://github.com/jprochazk/tmi-rs/compare/0.7.1...3d497e1)
+
 ## 0.7.1
 
 This release include another full rewrite of the tag parser, using a new approach that resulted
