@@ -1,9 +1,8 @@
 //! Represents a basic Twitch chat message sent by some user to a specific channel.
 
-use super::parse_bool;
 use super::{
-  is_not_empty, maybe_clone, maybe_unescape, parse_badges, parse_message_text, parse_timestamp,
-  Badge, MessageParseError, User,
+  is_not_empty, maybe_clone, maybe_unescape, parse_badges, parse_bool, parse_message_text,
+  parse_timestamp, Badge, MessageParseError, User,
 };
 use crate::irc::{Command, IrcMessageRef, Tag};
 use chrono::{DateTime, Utc};
@@ -612,5 +611,21 @@ mod tests {
   #[test]
   fn regression_invalid_prefix_span_overread() {
     Privmsg::parse(IrcMessageRef::parse("@badge-info=;badges=moments/1;color=;display-name=kovacicdusko2001;emotes=;first-msg=0;flags=;id=97798b78-b5c7-4a0a-bcd4-e9ec12de926a;mod=0;returning-chatter=0;room-id=71092938;subscriber=0;tmi-sent-ts=1663858872621;turbo=0;user-id=251524724;user-type= :kovacicdusko2001!kovacicdusko2001@kovacicdusko2001.tmi.twitch.tv PRIVMSG #xqc :!play").unwrap()).unwrap();
+  }
+
+  #[test]
+  fn support_text_without_trailing_marker() {
+    let data = "@emotes=;rm-received-ts=1742677467748;id=2de725a2-f6af-4a1a-a2d3-be8773860943;user-type=;historical=1;room-id=23936415;tmi-sent-ts=1742677467563;mod=0;display-name=justinfan123456;turbo=0;user-id=141981764;color=#FF00A5;flags=;returning-chatter=0;first-msg=0 :justinfan123456!justinfan123456@justinfan123456.tmi.twitch.tv PRIVMSG #jerma985 ballfondler";
+    let irc = IrcMessageRef::parse(data).unwrap();
+    let privmsg = Privmsg::parse(irc).unwrap();
+
+    assert_eq!(privmsg.text(), "ballfondler");
+    assert_eq!(privmsg.sender().login(), "justinfan123456");
+    assert_eq!(privmsg.sender().name(), "justinfan123456");
+    assert_eq!(privmsg.channel(), "#jerma985");
+    assert_eq!(
+      privmsg.timestamp(),
+      DateTime::<Utc>::from_timestamp_millis(1742677467563).unwrap()
+    );
   }
 }
