@@ -138,13 +138,15 @@ impl<'src> IrcMessageRef<'src> {
   }
 
   /// Returns the contents of the params after the last `:`.
+  ///
+  /// If `:` is not present, returns all params.
   pub fn text(&self) -> Option<&'src str> {
     match self.parts.params {
       Some(params) => {
         let params = &self.src[params];
         match params.find(':') {
           Some(start) => Some(&params[start + 1..]),
-          None => None,
+          None => Some(params),
         }
       }
       None => None,
