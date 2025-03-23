@@ -1,3 +1,10 @@
+## 0.9.0
+
+* Support `channel` getter for `Names` and `EndOfNames` [17df3a8](https://github.com/jprochazk/tmi-rs/commit/17df3a8)
+* Return all params from `text` if trailer is missing [5f240c8](https://github.com/jprochazk/tmi-rs/commit/5f240c8)
+
+Full commit range: [0.8.0..bf3e823](https://github.com/jprochazk/tmi-rs/compare/0.8.0...bf3e823)
+
 ## 0.8.0
 
 * Return `User` and `SubGiftPromo` by ref [b0f0157](https://github.com/jprochazk/tmi-rs/commit/b0f0157)
