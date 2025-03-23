@@ -1,5 +1,4 @@
-use crate::util::git;
-use crate::util::CommandExt;
+use crate::util::{git, CommandExt};
 use crate::Result;
 use argp::FromArgs;
 
@@ -48,9 +47,15 @@ impl Changelog {
       self.since, latest_commit
     );
 
+    let existing_changelog = std::fs::read_to_string("CHANGELOG.md").unwrap();
+
     std::fs::write(
-      "CHANGELOG.new.md",
-      format!("{}\n\n{}", gh_commit_range, lines.join("\n")),
+      "CHANGELOG.md",
+      format!(
+        "{}\n\n{}\n\n{existing_changelog}",
+        gh_commit_range,
+        lines.join("\n")
+      ),
     )?;
 
     Ok(())
