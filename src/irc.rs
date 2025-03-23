@@ -99,9 +99,19 @@ impl<'src> IrcMessageRef<'src> {
     self.parts.command.get(self.src)
   }
 
-  /// Get the channel name this message was sent to.
+  /// Get the channel name this message is associated with.
   pub fn channel(&self) -> Option<&'src str> {
-    self.parts.channel.map(|span| &self.src[span])
+    match self.command() {
+      // `353 justinfan123456 = #jerma985 :justinfan123456`
+      Command::RplNames => self
+        .params()
+        .and_then(|params| params.split_whitespace().nth(2)),
+      // `366 justinfan123456 #jerma985 :End of /NAMES list`
+      Command::RplEndOfNames => self
+        .params()
+        .and_then(|params| params.split_whitespace().nth(1)),
+      _ => self.parts.channel.map(|span| &self.src[span]),
+    }
   }
 
   /// Get the raw message params.
@@ -202,9 +212,19 @@ impl IrcMessage {
     self.parts.command.get(&self.src)
   }
 
-  /// Get the channel name this message was sent to.
+  /// Get the channel name this message is associated with.
   pub fn channel(&self) -> Option<&str> {
-    self.parts.channel.map(|span| &self.src.as_str()[span])
+    match self.command() {
+      // `353 justinfan123456 = #jerma985 :justinfan123456`
+      Command::RplNames => self
+        .params()
+        .and_then(|params| params.split_whitespace().nth(2)),
+      // `366 justinfan123456 #jerma985 :End of /NAMES list`
+      Command::RplEndOfNames => self
+        .params()
+        .and_then(|params| params.split_whitespace().nth(1)),
+      _ => self.parts.channel.map(|span| &self.src.as_str()[span]),
+    }
   }
 
   /// Get the raw message params.
@@ -393,6 +413,54 @@ mod tests {
       // this one has the equals aligned differently from previous
       let data = "@room-id=11148817;tmi-sent-ts=1723702053033;color=#B7B6F9;reply-parent-msg-body=@RomeoGiggleToess\\shttps://www.youtube.com/watch?v=khMb3k-Wwvg;emotes=;flags=;reply-parent-user-id=53888434;id=96a5fb70-f54e-4640-979e-529a76ddf74b;reply-thread-parent-display-name=RomeoGiggleToess;reply-thread-parent-msg-id=fd2a5663-00cb-4e78-9c0d-aff6b66285bf;subscriber=0;historical=1;reply-parent-display-name=OGprodigy;mod=0;badges=twitch-dj/1;first-msg=0;user-id=86336791;reply-parent-user-login=ogprodigy;turbo=0;user-type=;reply-parent-msg-id=a504ba7e-d991-45d0-ab2f-c3045c6ae7b6;reply-thread-parent-user-login=romeogiggletoess;returning-chatter=0;display-name=RomeoGiggleToess;badge-info=;reply-thread-parent-user-id=86336791;rm-received-ts=1723702053240 :romeogiggletoess!romeogiggletoess@romeogiggletoess.tmi.twitch.tv PRIVMSG #pajlada :@OGprodigy klassiker";
       IrcMessageRef::parse(data).unwrap();
+    }
+
+    #[test]
+    fn parse_simple_params() {
+      let data = ":tmi.twitch.tv 002 justinfan26682 :Your host is tmi.twitch.tv";
+      let msg = IrcMessageRef::parse(data).unwrap();
+
+      assert_eq!(
+        msg.params(),
+        Some("justinfan26682 :Your host is tmi.twitch.tv"),
+      );
+    }
+
+    #[test]
+    fn parse_names() {
+      let lines = &[
+        ":tmi.twitch.tv 002 justinfan26682 :Your host is tmi.twitch.tv",
+        ":tmi.twitch.tv 003 justinfan26682 :This server is rather new",
+        ":tmi.twitch.tv 004 justinfan26682 :-",
+        ":tmi.twitch.tv 375 justinfan26682 :-",
+        ":tmi.twitch.tv 372 justinfan26682 :You are in a maze of twisty passages, all alike.",
+        ":tmi.twitch.tv 376 justinfan26682 :>",
+        ":justinfan26682.tmi.twitch.tv 353 justinfan26682 = #pajlada :localaniki pajlada sadmadladsalman spambotsen streamelements supibot tobaton_ compileraddict digital_red_panda forsenstares howtoeat6 boring_nick",
+        ":justinfan26682.tmi.twitch.tv 353 justinfan26682 = #pajlada :justinfan26682",
+        ":justinfan26682.tmi.twitch.tv 366 justinfan26682 #pajlada :End of /NAMES list",
+      ];
+
+      let channels = lines
+        .iter()
+        .map(|line| IrcMessageRef::parse(line).unwrap())
+        .inspect(|msg| println!("COMMAND: {:?}, PARAMS: {:?}", msg.command(), msg.params()))
+        .map(|msg| msg.channel())
+        .collect::<Vec<_>>();
+
+      assert_eq!(
+        channels,
+        [
+          None,             // 002
+          None,             // 003
+          None,             // 004
+          None,             // 375
+          None,             // 372
+          None,             // 376
+          Some("#pajlada"), // 353
+          Some("#pajlada"), // 353
+          Some("#pajlada"), // 366
+        ]
+      );
     }
   }
 }
