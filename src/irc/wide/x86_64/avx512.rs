@@ -1,6 +1,7 @@
 use core::arch::x86_64::{
   __m512i, _mm512_cmpeq_epi8_mask, _mm512_load_si512, _mm512_loadu_si512, _mm512_movepi8_mask,
 };
+use std::arch::x86_64::_mm512_movm_epi8;
 
 #[repr(align(64))]
 struct Align64([u8; 64]);
@@ -60,12 +61,17 @@ impl Vector {
 
   #[inline(always)]
   pub fn eq(self, byte: u8) -> Self {
-    unsafe { Self(_mm512_cmpeq_epi8_mask(self.0, Self::fill(byte))) }
+    unsafe {
+      Self(_mm512_movm_epi8(_mm512_cmpeq_epi8_mask(
+        self.0,
+        Self::fill(byte).0,
+      )))
+    }
   }
 
   #[inline(always)]
   pub fn movemask(self) -> Mask {
-    unsafe { Mask(_mm512_movepi8_mask(mask)) }
+    unsafe { Mask(_mm512_movepi8_mask(self.0)) }
   }
 }
 
