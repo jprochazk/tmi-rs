@@ -69,11 +69,12 @@ jobs:
           args: --doc --all-features
 
   test:
-    name: Test
-    runs-on: ubuntu-22.04
+    name: Test (${{ matrix.os }}, ${{ matrix.rust }}, ${{ matrix.features.key }})
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
         rust: ["stable", "nightly"]
         features:
           [
@@ -92,7 +93,7 @@ jobs:
       - name: Cache
         uses: Swatinem/rust-cache@v2
         with:
-          key: "${{ runner.os }}-test-${{ matrix.rust }}-${{ matrix.features.args }}"
+          key: "${{ runner.os }}-test-${{ matrix.rust }}-${{ matrix.features.key }}"
 
       - name: cargo test (${{ matrix.features.key }})
         uses: actions-rs/cargo@v1
