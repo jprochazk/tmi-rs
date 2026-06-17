@@ -26,15 +26,18 @@ pub(crate) fn parse(src: &str, pos: &mut usize) -> Option<RawTags> {
     if let State::Value { key_start, key_end } = state {
       // value contains whatever is left after key_end
 
-      let pos = remainder.len(); // pos of `;`
+      let pos = remainder.len(); // pos of `;` or ` `
 
       tags.push(TagPair {
         // relative to original `src`
         key_start: key_start as u32 + 1,
-        key_end: (key_end - key_start) as u16,
+        key_len: (key_end - key_start) as u16,
         // starts after `=`
-        value_end: (pos - (key_end + 1)) as u16,
+        val_len: (pos - (key_end + 1)) as u16,
       });
+    } else if let State::Key { key_start } = state {
+      // valueless key
+      push_valueless(&mut tags, key_start, remainder.len());
     }
   }
 
@@ -56,19 +59,58 @@ fn parse_chunk(offset: usize, chunk: V, state: &mut State, tags: &mut Array<128,
     match *state {
       State::Key { key_start } => {
         if !vector_eq.has_match() {
-          break;
+          if !vector_semi.has_match() {
+            break;
+          }
+
+          // `;` comes first, valueless key
+          let m = vector_semi.first_match();
+          vector_eq.clear_to(m);
+          vector_semi.clear_to(m);
+
+          let pos = offset + m.as_index(); // pos of `;`
+          push_valueless(tags, key_start, pos);
+          *state = State::Key { key_start: pos + 1 };
+          continue;
         }
 
         let m = vector_eq.first_match();
-        vector_eq.clear_to(m);
-        vector_semi.clear_to(m);
+        let cleared_semi = vector_semi.take_to(m);
 
-        let pos = offset + m.as_index(); // pos of `=`
+        if !cleared_semi.has_match() {
+          vector_eq.clear_to(m);
 
-        *state = State::Value {
-          key_start,
-          key_end: pos,
-        };
+          let key_end = offset + m.as_index(); // pos of `=`
+          if !vector_semi.has_match() {
+            *state = State::Value { key_start, key_end };
+            break;
+          }
+
+          let m = vector_semi.first_match();
+          vector_eq.clear_to(m);
+          vector_semi.clear_to(m);
+
+          let pos = offset + m.as_index(); // pos of `;`
+          tags.push(TagPair {
+            // relative to original `src`
+            key_start: key_start as u32 + 1,
+            key_len: (key_end - key_start) as u16,
+            // starts after `=`
+            val_len: (pos - (key_end + 1)) as u16,
+          });
+          *state = State::Key { key_start: pos + 1 };
+        } else {
+          // `;` comes first, valueless key
+          vector_semi = vector_semi.bit_or(cleared_semi);
+
+          let m = cleared_semi.first_match();
+          vector_eq.clear_to(m);
+          vector_semi.clear_to(m);
+
+          let pos = offset + m.as_index(); // pos of `;`
+          push_valueless(tags, key_start, pos);
+          *state = State::Key { key_start: pos + 1 }
+        }
       }
       State::Value { key_start, key_end } => {
         if !vector_semi.has_match() {
@@ -86,13 +128,24 @@ fn parse_chunk(offset: usize, chunk: V, state: &mut State, tags: &mut Array<128,
         tags.push(TagPair {
           // relative to original `src`
           key_start: key_start as u32 + 1,
-          key_end: (key_end - key_start) as u16,
+          key_len: (key_end - key_start) as u16,
           // starts after `=`
-          value_end: (pos - (key_end + 1)) as u16,
+          val_len: (pos - (key_end + 1)) as u16,
         });
       }
     }
   }
+}
+
+#[cold]
+#[inline(never)]
+fn push_valueless(tags: &mut Array<128, TagPair>, key_start: usize, pos: usize) {
+  tags.push(TagPair {
+    // relative to original `src`
+    key_start: key_start as u32 + 1,
+    key_len: (pos - key_start) as u16,
+    val_len: 0,
+  });
 }
 
 // I didn't want to use runtime feature detection, or bring in a dependency for this.

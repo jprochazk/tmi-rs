@@ -199,7 +199,7 @@ impl<'src> Display for Tag<'src> {
   }
 }
 
-#[derive(Default, Clone)]
+#[derive(Debug, Default, Clone)]
 pub(super) struct RawTags(pub(crate) Vec<TagPair>);
 
 impl Deref for RawTags {
@@ -220,18 +220,18 @@ impl IntoIterator for RawTags {
   }
 }
 
-#[derive(Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 pub(super) struct TagPair {
   // key=value
   // ^
   key_start: u32,
   // key=value
   //    ^
-  key_end: u16,
+  key_len: u16,
 
   // key=value
   //          ^
-  value_end: u16,
+  val_len: u16,
 }
 
 impl TagPair {
@@ -239,18 +239,24 @@ impl TagPair {
   // ^  ^
   #[inline]
   pub fn key(&self) -> Span {
-    let start = self.key_start;
-    let end = start + self.key_end as u32;
-    Span { start, end }
+    let key_start = self.key_start;
+    let key_end = key_start + self.key_len as u32;
+    Span {
+      start: key_start,
+      end: key_end,
+    }
   }
 
   // key=value
   //     ^    ^
   #[inline]
   pub fn value(&self) -> Span {
-    let start = self.key_start + self.key_end as u32 + 1;
-    let end = start + self.value_end as u32;
-    Span { start, end }
+    let val_start = self.key_start + self.key_len as u32 + 1;
+    let val_end = val_start + self.val_len as u32;
+    Span {
+      start: val_start,
+      end: val_end,
+    }
   }
 
   #[inline]
@@ -323,5 +329,27 @@ mod tests {
 
     assert_eq!(&src[pos..], "");
     assert_eq!(src, parsed);
+  }
+
+  #[test]
+  fn valueless() {
+    let src = "@some-key-a=some-value-a;some-key-b=;some-key-c;some-key-d ";
+
+    let mut pos = 0;
+    let parsed = parse(src, &mut pos).unwrap();
+
+    assert_eq!(parsed.len(), 4);
+    assert_eq!(
+      parsed
+        .into_iter()
+        .map(|tag| (&src[tag.key()], &src[tag.value()]))
+        .collect::<Vec<_>>(),
+      [
+        ("some-key-a", "some-value-a"),
+        ("some-key-b", ""),
+        ("some-key-c", ""),
+        ("some-key-d", "")
+      ]
+    );
   }
 }
