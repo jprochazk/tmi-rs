@@ -6,37 +6,42 @@ pub(crate) fn parse(src: &str, pos: &mut usize) -> Option<RawTags> {
 
   // 1. scan for ASCII space to find tags end
   let end = find_first(src, b' ')?;
+  if end == 0 {
+    return None;
+  }
   *pos += end + 2; // skip '@' + space
 
   let remainder = &src[..end];
+  if end <= u16::MAX as usize {
+    parse_remainder::<false>(remainder)
+  } else {
+    parse_remainder::<true>(remainder)
+  }
+}
+
+fn parse_remainder<const CHECK_SPANS: bool>(remainder: &[u8]) -> Option<RawTags> {
   let mut tags = Array::<128, TagPair>::new();
   let mut offset = 0;
 
   let mut state = State::Key { key_start: 0 };
   while offset + V::SIZE < remainder.len() {
     let chunk = V::load_unaligned(remainder, offset);
-    parse_chunk(offset, chunk, &mut state, &mut tags);
+    parse_chunk::<CHECK_SPANS>(offset, chunk, &mut state, &mut tags)?;
     offset += V::SIZE;
   }
 
   if remainder.len() - offset > 0 {
     let chunk = V::load_unaligned_remainder(remainder, offset);
-    parse_chunk(offset, chunk, &mut state, &mut tags);
+    parse_chunk::<CHECK_SPANS>(offset, chunk, &mut state, &mut tags)?;
 
     if let State::Value { key_start, key_end } = state {
       // value contains whatever is left after key_end
 
       let pos = remainder.len(); // pos of `;` or ` `
 
-      tags.push(TagPair {
-        // relative to original `src`
-        key_start: key_start as u32 + 1,
-        key_len: (key_end - key_start) as u16,
-        // starts after `=`
-        val_len: (pos - (key_end + 1)) as u16,
-      });
+      tags.push(TagPair::valued::<CHECK_SPANS>(key_start, key_end, pos)?)?;
     } else if let State::Key { key_start } = state {
-      push_valueless(&mut tags, key_start, remainder.len());
+      push_valueless::<CHECK_SPANS>(&mut tags, key_start, remainder.len())?;
     }
   }
 
@@ -50,7 +55,12 @@ enum State {
 }
 
 #[inline(always)]
-fn parse_chunk(offset: usize, chunk: V, state: &mut State, tags: &mut Array<128, TagPair>) {
+fn parse_chunk<const CHECK_SPANS: bool>(
+  offset: usize,
+  chunk: V,
+  state: &mut State,
+  tags: &mut Array<128, TagPair>,
+) -> Option<()> {
   let mut vector_eq = chunk.eq(b'=').movemask();
   let mut vector_semi = chunk.eq(b';').movemask();
 
@@ -67,7 +77,7 @@ fn parse_chunk(offset: usize, chunk: V, state: &mut State, tags: &mut Array<128,
           vector_semi.clear_to(m);
 
           let pos = offset + m.as_index();
-          push_valueless(tags, key_start, pos);
+          push_valueless::<CHECK_SPANS>(tags, key_start, pos)?;
           *state = State::Key { key_start: pos + 1 };
           continue;
         }
@@ -89,11 +99,7 @@ fn parse_chunk(offset: usize, chunk: V, state: &mut State, tags: &mut Array<128,
           vector_semi.clear_to(m);
 
           let pos = offset + m.as_index();
-          tags.push(TagPair {
-            key_start: key_start as u32 + 1,
-            key_len: (key_end - key_start) as u16,
-            val_len: (pos - (key_end + 1)) as u16,
-          });
+          tags.push(TagPair::valued::<CHECK_SPANS>(key_start, key_end, pos)?)?;
           *state = State::Key { key_start: pos + 1 };
         } else {
           vector_semi = vector_semi.bit_or(cleared_semi);
@@ -103,7 +109,7 @@ fn parse_chunk(offset: usize, chunk: V, state: &mut State, tags: &mut Array<128,
           vector_semi.clear_to(m);
 
           let pos = offset + m.as_index();
-          push_valueless(tags, key_start, pos);
+          push_valueless::<CHECK_SPANS>(tags, key_start, pos)?;
           *state = State::Key { key_start: pos + 1 };
         }
       }
@@ -120,26 +126,22 @@ fn parse_chunk(offset: usize, chunk: V, state: &mut State, tags: &mut Array<128,
 
         *state = State::Key { key_start: pos + 1 };
 
-        tags.push(TagPair {
-          // relative to original `src`
-          key_start: key_start as u32 + 1,
-          key_len: (key_end - key_start) as u16,
-          // starts after `=`
-          val_len: (pos - (key_end + 1)) as u16,
-        });
+        tags.push(TagPair::valued::<CHECK_SPANS>(key_start, key_end, pos)?)?;
       }
     }
   }
+
+  Some(())
 }
 
 #[cold]
 #[inline(never)]
-fn push_valueless(tags: &mut Array<128, TagPair>, key_start: usize, pos: usize) {
-  tags.push(TagPair {
-    key_start: key_start as u32 + 1,
-    key_len: (pos - key_start) as u16,
-    val_len: 0,
-  });
+fn push_valueless<const CHECK_SPANS: bool>(
+  tags: &mut Array<128, TagPair>,
+  key_start: usize,
+  pos: usize,
+) -> Option<()> {
+  tags.push(TagPair::valueless::<CHECK_SPANS>(key_start, pos)?)
 }
 
 // I didn't want to use runtime feature detection, or bring in a dependency for this.

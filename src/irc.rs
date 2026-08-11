@@ -58,17 +58,33 @@ fn message_text(params: Option<&str>) -> Option<&str> {
   })
 }
 
+fn message_len_supported(len: usize) -> bool {
+  u32::try_from(len).is_ok()
+}
+
 impl<'src> IrcMessageRef<'src> {
   /// Parse a single Twitch IRC message.
+  ///
+  /// Returns `None` for malformed input, messages with more than 128 tags,
+  /// tag keys or values longer than 65,535 bytes, or messages too large for
+  /// the parser's compact spans.
   pub fn parse(src: &'src str) -> Option<Self> {
     Self::parse_inner(src)
   }
 
   #[inline(always)]
   fn parse_inner(src: &'src str) -> Option<Self> {
+    if !message_len_supported(src.len()) {
+      return None;
+    }
+
     let mut pos = 0usize;
 
-    let tags = tags::parse(src, &mut pos).unwrap_or_default();
+    let tags = if src.starts_with('@') {
+      tags::parse(src, &mut pos)?
+    } else {
+      RawTags::default()
+    };
     let prefix = prefix::parse(src, &mut pos);
     let command = command::parse(src, &mut pos)?;
     let channel = channel::parse(src, &mut pos);
@@ -184,6 +200,10 @@ pub struct IrcMessage {
 
 impl IrcMessage {
   /// Parse a single Twitch IRC message.
+  ///
+  /// Returns `None` for malformed input, messages with more than 128 tags,
+  /// tag keys or values longer than 65,535 bytes, or messages too large for
+  /// the parser's compact spans.
   pub fn parse(src: impl ToString) -> Option<Self> {
     let src = src.to_string();
     let parts = IrcMessageRef::parse_inner(&src)?.parts;
@@ -534,6 +554,56 @@ mod tests {
         Some("hello")
       );
       assert_eq!(IrcMessage::parse(without_params).unwrap().text(), None);
+    }
+
+    #[test]
+    fn rejects_unsupported_tag_input_without_panicking() {
+      fn message_with_tags(count: usize) -> String {
+        let tags = (0..count)
+          .map(|index| format!("k{index}=v"))
+          .collect::<Vec<_>>()
+          .join(";");
+        format!("@{tags} PRIVMSG #channel :hello")
+      }
+
+      let max_tags = message_with_tags(128);
+      let too_many_tags = message_with_tags(129);
+      assert!(IrcMessageRef::parse(&max_tags).is_some());
+
+      let too_many_result = std::panic::catch_unwind(|| IrcMessageRef::parse(&too_many_tags));
+      assert!(too_many_result.is_ok());
+      assert!(too_many_result.unwrap().is_none());
+
+      let max_key = format!("@{} PRIVMSG #channel :hello", "k".repeat(u16::MAX as usize));
+      let long_key = format!(
+        "@{} PRIVMSG #channel :hello",
+        "k".repeat(u16::MAX as usize + 1)
+      );
+      assert!(IrcMessageRef::parse(&max_key).is_some());
+      assert!(IrcMessageRef::parse(&long_key).is_none());
+
+      let max_value = format!(
+        "@key={} PRIVMSG #channel :hello",
+        "v".repeat(u16::MAX as usize)
+      );
+      let long_value = format!(
+        "@key={} PRIVMSG #channel :hello",
+        "v".repeat(u16::MAX as usize + 1)
+      );
+      assert!(IrcMessageRef::parse(&max_value).is_some());
+      assert!(IrcMessageRef::parse(&long_value).is_none());
+
+      assert!(IrcMessageRef::parse("@room-id=42").is_none());
+      assert!(IrcMessageRef::parse("@ PRIVMSG #channel :hello").is_none());
+      assert!(IrcMessageRef::parse("PING").is_some());
+    }
+
+    #[test]
+    fn message_span_limit() {
+      assert!(message_len_supported(u32::MAX as usize));
+
+      #[cfg(target_pointer_width = "64")]
+      assert!(!message_len_supported(u32::MAX as usize + 1));
     }
   }
 }

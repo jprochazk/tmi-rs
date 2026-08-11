@@ -244,6 +244,46 @@ pub(super) struct TagPair {
 }
 
 impl TagPair {
+  #[inline(always)]
+  fn valued<const CHECK_SPANS: bool>(
+    key_start: usize,
+    key_end: usize,
+    value_end: usize,
+  ) -> Option<Self> {
+    debug_assert!(key_end >= key_start);
+    debug_assert!(value_end > key_end);
+
+    let key_len = key_end - key_start;
+    let val_len = value_end - (key_end + 1);
+
+    if CHECK_SPANS && (key_len > u16::MAX as usize || val_len > u16::MAX as usize) {
+      return None;
+    }
+
+    Some(Self {
+      key_start: (key_start + 1) as u32,
+      key_len: key_len as u16,
+      val_len: val_len as u16,
+    })
+  }
+
+  #[inline(always)]
+  fn valueless<const CHECK_SPANS: bool>(key_start: usize, key_end: usize) -> Option<Self> {
+    debug_assert!(key_end >= key_start);
+
+    let key_len = key_end - key_start;
+
+    if CHECK_SPANS && key_len > u16::MAX as usize {
+      return None;
+    }
+
+    Some(Self {
+      key_start: (key_start + 1) as u32,
+      key_len: key_len as u16,
+      val_len: 0,
+    })
+  }
+
   // key=value
   // ^  ^
   #[inline]
@@ -295,9 +335,18 @@ impl<const CAPACITY: usize, T: Clone + Copy + Default> Array<CAPACITY, T> {
     }
   }
 
-  fn push(&mut self, value: T) {
-    self.data[self.len].write(value);
+  #[inline(always)]
+  fn push(&mut self, value: T) -> Option<()> {
+    if self.len >= CAPACITY {
+      return None;
+    }
+
+    // SAFETY: the capacity check above guarantees that `self.len` is in bounds.
+    unsafe {
+      self.data.get_unchecked_mut(self.len).write(value);
+    }
     self.len += 1;
+    Some(())
   }
 
   fn to_vec(&self) -> Vec<T> {
@@ -359,6 +408,17 @@ mod tests {
   #[test]
   fn known_tag_invariants() {
     tags::assert_invariants();
+  }
+
+  #[test]
+  fn tag_pair_span_limits() {
+    let max = u16::MAX as usize;
+
+    assert!(TagPair::valued::<true>(0, max, max + 1 + max).is_some());
+    assert!(TagPair::valued::<true>(0, max + 1, max + 2).is_none());
+    assert!(TagPair::valued::<true>(0, 1, max + 3).is_none());
+    assert!(TagPair::valueless::<true>(0, max).is_some());
+    assert!(TagPair::valueless::<true>(0, max + 1).is_none());
   }
 
   #[test]

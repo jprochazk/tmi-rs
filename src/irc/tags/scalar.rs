@@ -2,11 +2,15 @@ use super::*;
 
 pub(crate) fn parse(src: &str, pos: &mut usize) -> Option<RawTags> {
   let src = src[*pos..].strip_prefix('@')?.as_bytes();
+  if src.first() == Some(&b' ') {
+    return None;
+  }
 
   let mut tags = Array::<128, TagPair>::new();
 
   let mut state = State::Key { key_start: 0 };
   let mut offset = 0;
+  let mut complete = false;
   while offset < src.len() {
     let c = src[offset];
     match c {
@@ -20,21 +24,13 @@ pub(crate) fn parse(src: &str, pos: &mut usize) -> Option<RawTags> {
       }
       b';' => match state {
         State::Value { key_start, key_end } => {
-          tags.push(TagPair {
-            key_start: key_start as u32 + 1,
-            key_len: (key_end - key_start) as u16,
-            val_len: (offset - (key_end + 1)) as u16,
-          });
+          tags.push(TagPair::valued::<true>(key_start, key_end, offset)?)?;
           state = State::Key {
             key_start: offset + 1,
           };
         }
         State::Key { key_start } => {
-          tags.push(TagPair {
-            key_start: key_start as u32 + 1,
-            key_len: (offset - key_start) as u16,
-            val_len: 0,
-          });
+          tags.push(TagPair::valueless::<true>(key_start, offset)?)?;
           state = State::Key {
             key_start: offset + 1,
           };
@@ -43,26 +39,23 @@ pub(crate) fn parse(src: &str, pos: &mut usize) -> Option<RawTags> {
       b' ' => {
         match state {
           State::Value { key_start, key_end } => {
-            tags.push(TagPair {
-              key_start: key_start as u32 + 1,
-              key_len: (key_end - key_start) as u16,
-              val_len: (offset - (key_end + 1)) as u16,
-            });
+            tags.push(TagPair::valued::<true>(key_start, key_end, offset)?)?;
           }
           State::Key { key_start } => {
-            tags.push(TagPair {
-              key_start: key_start as u32 + 1,
-              key_len: (offset - key_start) as u16,
-              val_len: 0,
-            });
+            tags.push(TagPair::valueless::<true>(key_start, offset)?)?;
           }
         }
+        complete = true;
         break;
       }
       _ => {}
     }
 
     offset += 1;
+  }
+
+  if !complete {
+    return None;
   }
 
   *pos += offset + 2; // skip '@' + space
