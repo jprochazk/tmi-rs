@@ -416,6 +416,27 @@ mod tests {
     }
 
     #[test]
+    fn regression_valueless_tags() {
+      let data = concat!(
+        "@first=1;badges;color;room-id=42;",
+        "tmi-sent-ts=1704067200000;",
+        "id=272e342c-5864-4c59-b730-25908cdb7f57 ",
+        ":user!user@user.tmi.twitch.tv PRIVMSG #channel :hello"
+      );
+
+      let message = IrcMessageRef::parse(data).unwrap();
+      assert_eq!(message.tag("first"), Some("1"));
+      assert_eq!(message.tag("badges"), Some(""));
+      assert_eq!(message.tag("color"), Some(""));
+      assert_eq!(message.tag(Tag::RoomId), Some("42"));
+      assert_eq!(message.tag(Tag::TmiSentTs), Some("1704067200000"));
+      assert_eq!(
+        message.tag(Tag::Id),
+        Some("272e342c-5864-4c59-b730-25908cdb7f57")
+      );
+    }
+
+    #[test]
     fn parse_simple_params() {
       let data = ":tmi.twitch.tv 002 justinfan26682 :Your host is tmi.twitch.tv";
       let msg = IrcMessageRef::parse(data).unwrap();

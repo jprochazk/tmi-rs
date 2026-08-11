@@ -84,10 +84,28 @@ impl Mask {
     Match(self.0.trailing_zeros() as usize)
   }
 
+  #[inline(always)]
+  fn mask_to(m: Match) -> u32 {
+    0xffff_ffff >> (31 - m.0)
+  }
+
   /// Clear all bits up to and including `m`.
   #[inline(always)]
   pub fn clear_to(&mut self, m: Match) {
-    self.0 &= !(0xffff_ffff >> (31 - m.0));
+    self.0 &= !Self::mask_to(m);
+  }
+
+  #[inline(always)]
+  pub fn take_to(&mut self, m: Match) -> Mask {
+    let mask = Self::mask_to(m);
+    let removed = self.0 & mask;
+    self.0 &= !mask;
+    Mask(removed)
+  }
+
+  #[inline(always)]
+  pub fn bit_or(self, other: Mask) -> Mask {
+    Mask(self.0 | other.0)
   }
 }
 

@@ -199,7 +199,7 @@ impl<'src> Display for Tag<'src> {
   }
 }
 
-#[derive(Default, Clone)]
+#[derive(Debug, Default, Clone)]
 pub(super) struct RawTags(pub(crate) Vec<TagPair>);
 
 impl Deref for RawTags {
@@ -220,18 +220,18 @@ impl IntoIterator for RawTags {
   }
 }
 
-#[derive(Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 pub(super) struct TagPair {
   // key=value
   // ^
   key_start: u32,
   // key=value
   //    ^
-  key_end: u16,
+  key_len: u16,
 
   // key=value
   //          ^
-  value_end: u16,
+  val_len: u16,
 }
 
 impl TagPair {
@@ -239,18 +239,24 @@ impl TagPair {
   // ^  ^
   #[inline]
   pub fn key(&self) -> Span {
-    let start = self.key_start;
-    let end = start + self.key_end as u32;
-    Span { start, end }
+    let key_start = self.key_start;
+    let key_end = key_start + self.key_len as u32;
+    Span {
+      start: key_start,
+      end: key_end,
+    }
   }
 
   // key=value
   //     ^    ^
   #[inline]
   pub fn value(&self) -> Span {
-    let start = self.key_start + self.key_end as u32 + 1;
-    let end = start + self.value_end as u32;
-    Span { start, end }
+    let val_start = self.key_start + self.key_len as u32 + 1;
+    let val_end = val_start + self.val_len as u32;
+    Span {
+      start: val_start,
+      end: val_end,
+    }
   }
 
   #[inline]
@@ -292,19 +298,35 @@ impl<const CAPACITY: usize, T: Clone + Copy + Default> Array<CAPACITY, T> {
   }
 }
 
-cfg_if::cfg_if! {
-  if #[cfg(feature = "simd")] {
-    mod simd;
-    pub(super) use simd::parse;
-  } else {
-    mod scalar;
-    pub(super) use scalar::parse;
-  }
-}
+#[cfg(any(not(feature = "simd"), test))]
+mod scalar;
+
+#[cfg(feature = "simd")]
+mod simd;
+
+#[cfg(feature = "simd")]
+pub(super) use simd::parse;
+
+#[cfg(not(feature = "simd"))]
+pub(super) use scalar::parse;
 
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  fn parse_pairs<'src>(
+    parser: fn(&'src str, &mut usize) -> Option<RawTags>,
+    src: &'src str,
+  ) -> (usize, Vec<(&'src str, &'src str)>) {
+    let mut pos = 0;
+    let tags = parser(src, &mut pos)
+      .unwrap()
+      .into_iter()
+      .map(|tag| tag.get(src))
+      .collect();
+
+    (pos, tags)
+  }
 
   #[test]
   fn roundtrip() {
@@ -323,5 +345,65 @@ mod tests {
 
     assert_eq!(&src[pos..], "");
     assert_eq!(src, parsed);
+  }
+
+  #[test]
+  fn valueless_tags() {
+    let cases: &[(&str, &[(&str, &str)])] = &[
+      ("@badges ", &[("badges", "")]),
+      ("@badges;room-id=42 ", &[("badges", ""), ("room-id", "42")]),
+      (
+        "@room-id=42;badges;tmi-sent-ts=123 ",
+        &[("room-id", "42"), ("badges", ""), ("tmi-sent-ts", "123")],
+      ),
+      ("@room-id=42;badges ", &[("room-id", "42"), ("badges", "")]),
+      (
+        "@badges;color;room-id=42 ",
+        &[("badges", ""), ("color", ""), ("room-id", "42")],
+      ),
+      (
+        "@empty=;valueless;unknown-tag=value ",
+        &[("empty", ""), ("valueless", ""), ("unknown-tag", "value")],
+      ),
+      (
+        "@url=https://example.com/?a=b;badges ",
+        &[("url", "https://example.com/?a=b"), ("badges", "")],
+      ),
+    ];
+
+    for (src, expected) in cases {
+      let (pos, actual) = parse_pairs(parse, src);
+      assert_eq!(pos, src.len(), "position mismatch for {src:?}");
+      assert_eq!(&actual, expected, "tag mismatch for {src:?}");
+    }
+  }
+
+  #[cfg(feature = "simd")]
+  #[test]
+  fn scalar_simd_parity() {
+    use crate::irc::wide::Vector as V;
+
+    let mut corpus = vec![
+      "@badges ".to_string(),
+      "@badges;color;room-id=42;tmi-sent-ts=123 ".to_string(),
+      "@empty=;valueless;url=https://example.com/?a=b;last ".to_string(),
+    ];
+
+    for delimiter_at in [
+      V::SIZE - 1,
+      V::SIZE,
+      V::SIZE + 1,
+      V::SIZE * 2 - 1,
+      V::SIZE * 2,
+      V::SIZE * 2 + 1,
+    ] {
+      corpus.push(format!("@{};valued=ok;last ", "k".repeat(delimiter_at)));
+    }
+
+    for src in corpus {
+      let scalar = parse_pairs(scalar::parse, &src);
+      let simd = parse_pairs(simd::parse, &src);
+      assert_eq!(scalar, simd, "parser mismatch for {src:?}");
+    }
   }
 }
