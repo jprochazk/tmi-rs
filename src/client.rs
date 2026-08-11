@@ -278,6 +278,7 @@ impl Client {
   }
 
   /// Attempt to reconnect to Twitch IRC.
+  #[allow(clippy::result_large_err)]
   pub async fn reconnect(&mut self) -> Result<(), ReconnectError> {
     trace!("reconnecting");
 
