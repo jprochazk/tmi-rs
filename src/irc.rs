@@ -437,6 +437,22 @@ mod tests {
     }
 
     #[test]
+    fn canonical_pinned_chat_paid_amount() {
+      let data = concat!(
+        "@pinned-chat-paid-amount=100;",
+        "pinned-chat-paid-canonical-amount=200 ",
+        "PRIVMSG #channel :hello"
+      );
+
+      let message = IrcMessageRef::parse(data).unwrap();
+      assert_eq!(
+        Tag::PinnedChatPaidCanonicalAmount.as_str(),
+        "pinned-chat-paid-canonical-amount"
+      );
+      assert_eq!(message.tag(Tag::PinnedChatPaidCanonicalAmount), Some("200"));
+    }
+
+    #[test]
     fn parse_simple_params() {
       let data = ":tmi.twitch.tv 002 justinfan26682 :Your host is tmi.twitch.tv";
       let msg = IrcMessageRef::parse(data).unwrap();

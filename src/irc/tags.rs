@@ -67,6 +67,15 @@ macro_rules! tags_def {
     #[allow(non_upper_case_globals)]
     pub(super) mod $tag_mod {
       $(pub const $name: &'static [u8] = $bytes;)*
+
+      #[cfg(test)]
+      pub(super) fn assert_invariants() {
+        $(
+          assert_eq!(&$bytes[..], $key.as_bytes());
+          assert_eq!(super::$tag::parse($key), super::$tag::$name);
+          assert_eq!(super::$tag::$name.as_str(), $key);
+        )*
+      }
     }
   }
 }
@@ -173,7 +182,7 @@ tags_def! {
   b"pinned-chat-paid-amount"; "pinned-chat-paid-amount" = PinnedChatPaidAmount,
 
   /// The value of the Hype Chat sent by the user. This seems to always be the same as `pinned-chat-paid-amount`.
-  b"pinned-chat-paid-canonical-amount"; "pinned-chat-paid-amount" = PinnedChatPaidCanonicalAmount,
+  b"pinned-chat-paid-canonical-amount"; "pinned-chat-paid-canonical-amount" = PinnedChatPaidCanonicalAmount,
 
   /// The ISO 4217 alphabetic currency code the user has sent the Hype Chat in.
   b"pinned-chat-paid-currency"; "pinned-chat-paid-currency" = PinnedChatPaidCurrency,
@@ -345,6 +354,11 @@ mod tests {
 
     assert_eq!(&src[pos..], "");
     assert_eq!(src, parsed);
+  }
+
+  #[test]
+  fn known_tag_invariants() {
+    tags::assert_invariants();
   }
 
   #[test]
