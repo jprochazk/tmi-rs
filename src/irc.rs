@@ -51,6 +51,13 @@ struct IrcMessageParts {
   params: Option<Span>,
 }
 
+fn message_text(params: Option<&str>) -> Option<&str> {
+  params.map(|params| match params.find(':') {
+    Some(start) => &params[start + 1..],
+    None => params,
+  })
+}
+
 impl<'src> IrcMessageRef<'src> {
   /// Parse a single Twitch IRC message.
   pub fn parse(src: &'src str) -> Option<Self> {
@@ -147,20 +154,11 @@ impl<'src> IrcMessageRef<'src> {
       .map(|pair| &self.src[pair.value()])
   }
 
-  /// Returns the contents of the params after the last `:`.
+  /// Returns the contents of the params after the first `:`.
   ///
   /// If `:` is not present, returns all params.
   pub fn text(&self) -> Option<&'src str> {
-    match self.parts.params {
-      Some(params) => {
-        let params = &self.src[params];
-        match params.find(':') {
-          Some(start) => Some(&params[start + 1..]),
-          None => Some(params),
-        }
-      }
-      None => None,
-    }
+    message_text(self.params())
   }
 }
 
@@ -260,15 +258,11 @@ impl IrcMessage {
       .map(|pair| &self.src.as_str()[pair.value()])
   }
 
-  /// Returns the contents of the params after the last `:`.
+  /// Returns the contents of the params after the first `:`.
+  ///
+  /// If `:` is not present, returns all params.
   pub fn text(&self) -> Option<&str> {
-    match self.params() {
-      Some(params) => match params.find(':') {
-        Some(start) => Some(&params[start + 1..]),
-        None => None,
-      },
-      None => None,
-    }
+    message_text(self.params())
   }
 }
 
@@ -498,6 +492,48 @@ mod tests {
           Some("#pajlada"), // 366
         ]
       );
+    }
+
+    #[test]
+    fn owned_and_borrowed_accessors_match() {
+      fn assert_parity(data: &str) {
+        let borrowed = IrcMessageRef::parse(data).unwrap();
+        let owned = IrcMessage::parse(data).unwrap();
+
+        assert_eq!(borrowed.raw(), owned.raw());
+        assert_eq!(
+          borrowed.tags().collect::<Vec<_>>(),
+          owned.tags().collect::<Vec<_>>()
+        );
+        assert_eq!(borrowed.prefix(), owned.prefix());
+        assert_eq!(borrowed.command(), owned.command());
+        assert_eq!(borrowed.channel(), owned.channel());
+        assert_eq!(borrowed.params(), owned.params());
+        assert_eq!(borrowed.text(), owned.text());
+
+        for (tag, _) in borrowed.tags() {
+          assert_eq!(borrowed.tag(tag), owned.tag(tag));
+        }
+      }
+
+      let with_trailing =
+        "@room-id=42;unknown-tag=value :user!user@host PRIVMSG #channel :hello:world";
+      let without_trailing = "PRIVMSG #channel hello";
+      let without_params = "PING";
+
+      assert_parity(with_trailing);
+      assert_parity(without_trailing);
+      assert_parity(without_params);
+
+      assert_eq!(
+        IrcMessage::parse(with_trailing).unwrap().text(),
+        Some("hello:world")
+      );
+      assert_eq!(
+        IrcMessage::parse(without_trailing).unwrap().text(),
+        Some("hello")
+      );
+      assert_eq!(IrcMessage::parse(without_params).unwrap().text(), None);
     }
   }
 }
