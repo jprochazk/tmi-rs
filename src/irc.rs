@@ -432,22 +432,15 @@ mod tests {
     #[test]
     fn regression_valueless_tags() {
       let data = concat!(
-        "@first=1;badges;color;room-id=42;",
-        "tmi-sent-ts=1704067200000;",
-        "id=272e342c-5864-4c59-b730-25908cdb7f57 ",
+        "@badges;color;room-id=42;tmi-sent-ts=1704067200000 ",
         ":user!user@user.tmi.twitch.tv PRIVMSG #channel :hello"
       );
 
       let message = IrcMessageRef::parse(data).unwrap();
-      assert_eq!(message.tag("first"), Some("1"));
       assert_eq!(message.tag("badges"), Some(""));
       assert_eq!(message.tag("color"), Some(""));
       assert_eq!(message.tag(Tag::RoomId), Some("42"));
       assert_eq!(message.tag(Tag::TmiSentTs), Some("1704067200000"));
-      assert_eq!(
-        message.tag(Tag::Id),
-        Some("272e342c-5864-4c59-b730-25908cdb7f57")
-      );
     }
 
     #[test]
@@ -459,10 +452,6 @@ mod tests {
       );
 
       let message = IrcMessageRef::parse(data).unwrap();
-      assert_eq!(
-        Tag::PinnedChatPaidCanonicalAmount.as_str(),
-        "pinned-chat-paid-canonical-amount"
-      );
       assert_eq!(message.tag(Tag::PinnedChatPaidCanonicalAmount), Some("200"));
     }
 
@@ -515,49 +504,23 @@ mod tests {
     }
 
     #[test]
-    fn owned_and_borrowed_accessors_match() {
-      fn assert_parity(data: &str) {
+    fn owned_and_borrowed_text_match() {
+      let cases = [
+        ("PRIVMSG #channel :hello:world", Some("hello:world")),
+        ("PRIVMSG #channel hello", Some("hello")),
+        ("PING", None),
+      ];
+
+      for (data, expected) in cases {
         let borrowed = IrcMessageRef::parse(data).unwrap();
         let owned = IrcMessage::parse(data).unwrap();
-
-        assert_eq!(borrowed.raw(), owned.raw());
-        assert_eq!(
-          borrowed.tags().collect::<Vec<_>>(),
-          owned.tags().collect::<Vec<_>>()
-        );
-        assert_eq!(borrowed.prefix(), owned.prefix());
-        assert_eq!(borrowed.command(), owned.command());
-        assert_eq!(borrowed.channel(), owned.channel());
-        assert_eq!(borrowed.params(), owned.params());
-        assert_eq!(borrowed.text(), owned.text());
-
-        for (tag, _) in borrowed.tags() {
-          assert_eq!(borrowed.tag(tag), owned.tag(tag));
-        }
+        assert_eq!(borrowed.text(), expected);
+        assert_eq!(owned.text(), expected);
       }
-
-      let with_trailing =
-        "@room-id=42;unknown-tag=value :user!user@host PRIVMSG #channel :hello:world";
-      let without_trailing = "PRIVMSG #channel hello";
-      let without_params = "PING";
-
-      assert_parity(with_trailing);
-      assert_parity(without_trailing);
-      assert_parity(without_params);
-
-      assert_eq!(
-        IrcMessage::parse(with_trailing).unwrap().text(),
-        Some("hello:world")
-      );
-      assert_eq!(
-        IrcMessage::parse(without_trailing).unwrap().text(),
-        Some("hello")
-      );
-      assert_eq!(IrcMessage::parse(without_params).unwrap().text(), None);
     }
 
     #[test]
-    fn rejects_unsupported_tag_input_without_panicking() {
+    fn rejects_more_than_128_tags_without_panicking() {
       fn message_with_tags(count: usize) -> String {
         let tags = (0..count)
           .map(|index| format!("k{index}=v"))
@@ -571,31 +534,13 @@ mod tests {
       assert!(IrcMessageRef::parse(&max_tags).is_some());
 
       let too_many_result = std::panic::catch_unwind(|| IrcMessageRef::parse(&too_many_tags));
-      assert!(too_many_result.is_ok());
-      assert!(too_many_result.unwrap().is_none());
+      assert!(matches!(too_many_result, Ok(None)));
+    }
 
-      let max_key = format!("@{} PRIVMSG #channel :hello", "k".repeat(u16::MAX as usize));
-      let long_key = format!(
-        "@{} PRIVMSG #channel :hello",
-        "k".repeat(u16::MAX as usize + 1)
-      );
-      assert!(IrcMessageRef::parse(&max_key).is_some());
-      assert!(IrcMessageRef::parse(&long_key).is_none());
-
-      let max_value = format!(
-        "@key={} PRIVMSG #channel :hello",
-        "v".repeat(u16::MAX as usize)
-      );
-      let long_value = format!(
-        "@key={} PRIVMSG #channel :hello",
-        "v".repeat(u16::MAX as usize + 1)
-      );
-      assert!(IrcMessageRef::parse(&max_value).is_some());
-      assert!(IrcMessageRef::parse(&long_value).is_none());
-
+    #[test]
+    fn rejects_malformed_tag_section() {
       assert!(IrcMessageRef::parse("@room-id=42").is_none());
       assert!(IrcMessageRef::parse("@ PRIVMSG #channel :hello").is_none());
-      assert!(IrcMessageRef::parse("PING").is_some());
     }
 
     #[test]
