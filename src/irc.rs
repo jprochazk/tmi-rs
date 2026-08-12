@@ -51,17 +51,40 @@ struct IrcMessageParts {
   params: Option<Span>,
 }
 
+fn message_text(params: Option<&str>) -> Option<&str> {
+  params.map(|params| match params.find(':') {
+    Some(start) => &params[start + 1..],
+    None => params,
+  })
+}
+
+fn message_len_supported(len: usize) -> bool {
+  u32::try_from(len).is_ok()
+}
+
 impl<'src> IrcMessageRef<'src> {
   /// Parse a single Twitch IRC message.
+  ///
+  /// Returns `None` for malformed input, messages with more than 128 tags,
+  /// tag keys or values longer than 65,535 bytes, or messages too large for
+  /// the parser's compact spans.
   pub fn parse(src: &'src str) -> Option<Self> {
     Self::parse_inner(src)
   }
 
   #[inline(always)]
   fn parse_inner(src: &'src str) -> Option<Self> {
+    if !message_len_supported(src.len()) {
+      return None;
+    }
+
     let mut pos = 0usize;
 
-    let tags = tags::parse(src, &mut pos).unwrap_or_default();
+    let tags = if src.starts_with('@') {
+      tags::parse(src, &mut pos)?
+    } else {
+      RawTags::default()
+    };
     let prefix = prefix::parse(src, &mut pos);
     let command = command::parse(src, &mut pos)?;
     let channel = channel::parse(src, &mut pos);
@@ -147,20 +170,11 @@ impl<'src> IrcMessageRef<'src> {
       .map(|pair| &self.src[pair.value()])
   }
 
-  /// Returns the contents of the params after the last `:`.
+  /// Returns the contents of the params after the first `:`.
   ///
   /// If `:` is not present, returns all params.
   pub fn text(&self) -> Option<&'src str> {
-    match self.parts.params {
-      Some(params) => {
-        let params = &self.src[params];
-        match params.find(':') {
-          Some(start) => Some(&params[start + 1..]),
-          None => Some(params),
-        }
-      }
-      None => None,
-    }
+    message_text(self.params())
   }
 }
 
@@ -186,6 +200,10 @@ pub struct IrcMessage {
 
 impl IrcMessage {
   /// Parse a single Twitch IRC message.
+  ///
+  /// Returns `None` for malformed input, messages with more than 128 tags,
+  /// tag keys or values longer than 65,535 bytes, or messages too large for
+  /// the parser's compact spans.
   pub fn parse(src: impl ToString) -> Option<Self> {
     let src = src.to_string();
     let parts = IrcMessageRef::parse_inner(&src)?.parts;
@@ -260,15 +278,11 @@ impl IrcMessage {
       .map(|pair| &self.src.as_str()[pair.value()])
   }
 
-  /// Returns the contents of the params after the last `:`.
+  /// Returns the contents of the params after the first `:`.
+  ///
+  /// If `:` is not present, returns all params.
   pub fn text(&self) -> Option<&str> {
-    match self.params() {
-      Some(params) => match params.find(':') {
-        Some(start) => Some(&params[start + 1..]),
-        None => None,
-      },
-      None => None,
-    }
+    message_text(self.params())
   }
 }
 
@@ -416,6 +430,32 @@ mod tests {
     }
 
     #[test]
+    fn regression_valueless_tags() {
+      let data = concat!(
+        "@badges;color;room-id=42;tmi-sent-ts=1704067200000 ",
+        ":user!user@user.tmi.twitch.tv PRIVMSG #channel :hello"
+      );
+
+      let message = IrcMessageRef::parse(data).unwrap();
+      assert_eq!(message.tag("badges"), Some(""));
+      assert_eq!(message.tag("color"), Some(""));
+      assert_eq!(message.tag(Tag::RoomId), Some("42"));
+      assert_eq!(message.tag(Tag::TmiSentTs), Some("1704067200000"));
+    }
+
+    #[test]
+    fn canonical_pinned_chat_paid_amount() {
+      let data = concat!(
+        "@pinned-chat-paid-amount=100;",
+        "pinned-chat-paid-canonical-amount=200 ",
+        "PRIVMSG #channel :hello"
+      );
+
+      let message = IrcMessageRef::parse(data).unwrap();
+      assert_eq!(message.tag(Tag::PinnedChatPaidCanonicalAmount), Some("200"));
+    }
+
+    #[test]
     fn parse_simple_params() {
       let data = ":tmi.twitch.tv 002 justinfan26682 :Your host is tmi.twitch.tv";
       let msg = IrcMessageRef::parse(data).unwrap();
@@ -461,6 +501,54 @@ mod tests {
           Some("#pajlada"), // 366
         ]
       );
+    }
+
+    #[test]
+    fn owned_and_borrowed_text_match() {
+      let cases = [
+        ("PRIVMSG #channel :hello:world", Some("hello:world")),
+        ("PRIVMSG #channel hello", Some("hello")),
+        ("PING", None),
+      ];
+
+      for (data, expected) in cases {
+        let borrowed = IrcMessageRef::parse(data).unwrap();
+        let owned = IrcMessage::parse(data).unwrap();
+        assert_eq!(borrowed.text(), expected);
+        assert_eq!(owned.text(), expected);
+      }
+    }
+
+    #[test]
+    fn rejects_more_than_128_tags_without_panicking() {
+      fn message_with_tags(count: usize) -> String {
+        let tags = (0..count)
+          .map(|index| format!("k{index}=v"))
+          .collect::<Vec<_>>()
+          .join(";");
+        format!("@{tags} PRIVMSG #channel :hello")
+      }
+
+      let max_tags = message_with_tags(128);
+      let too_many_tags = message_with_tags(129);
+      assert!(IrcMessageRef::parse(&max_tags).is_some());
+
+      let too_many_result = std::panic::catch_unwind(|| IrcMessageRef::parse(&too_many_tags));
+      assert!(matches!(too_many_result, Ok(None)));
+    }
+
+    #[test]
+    fn rejects_malformed_tag_section() {
+      assert!(IrcMessageRef::parse("@room-id=42").is_none());
+      assert!(IrcMessageRef::parse("@ PRIVMSG #channel :hello").is_none());
+    }
+
+    #[test]
+    fn message_span_limit() {
+      assert!(message_len_supported(u32::MAX as usize));
+
+      #[cfg(target_pointer_width = "64")]
+      assert!(!message_len_supported(u32::MAX as usize + 1));
     }
   }
 }

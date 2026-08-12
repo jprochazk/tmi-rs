@@ -479,7 +479,7 @@ impl<'src> UserNotice<'src> {
           streak_months: message
             .tag(Tag::MsgParamStreakMonths)
             .and_then(|v| v.parse().ok())
-            .and_then(|n| if n > 0 { Some(n) } else { None }),
+            .filter(|&n| n > 0),
           sub_plan: message.tag(Tag::MsgParamSubPlan)?.into(),
           sub_plan_name: message.tag(Tag::MsgParamSubPlanName)?.into(),
         }),

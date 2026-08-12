@@ -67,6 +67,15 @@ macro_rules! tags_def {
     #[allow(non_upper_case_globals)]
     pub(super) mod $tag_mod {
       $(pub const $name: &'static [u8] = $bytes;)*
+
+      #[cfg(test)]
+      pub(super) fn assert_invariants() {
+        $(
+          assert_eq!(&$bytes[..], $key.as_bytes());
+          assert_eq!(super::$tag::parse($key), super::$tag::$name);
+          assert_eq!(super::$tag::$name.as_str(), $key);
+        )*
+      }
     }
   }
 }
@@ -173,7 +182,7 @@ tags_def! {
   b"pinned-chat-paid-amount"; "pinned-chat-paid-amount" = PinnedChatPaidAmount,
 
   /// The value of the Hype Chat sent by the user. This seems to always be the same as `pinned-chat-paid-amount`.
-  b"pinned-chat-paid-canonical-amount"; "pinned-chat-paid-amount" = PinnedChatPaidCanonicalAmount,
+  b"pinned-chat-paid-canonical-amount"; "pinned-chat-paid-canonical-amount" = PinnedChatPaidCanonicalAmount,
 
   /// The ISO 4217 alphabetic currency code the user has sent the Hype Chat in.
   b"pinned-chat-paid-currency"; "pinned-chat-paid-currency" = PinnedChatPaidCurrency,
@@ -235,6 +244,46 @@ pub(super) struct TagPair {
 }
 
 impl TagPair {
+  #[inline(always)]
+  fn valued<const CHECK_SPANS: bool>(
+    key_start: usize,
+    key_end: usize,
+    value_end: usize,
+  ) -> Option<Self> {
+    debug_assert!(key_end >= key_start);
+    debug_assert!(value_end > key_end);
+
+    let key_len = key_end - key_start;
+    let val_len = value_end - (key_end + 1);
+
+    if CHECK_SPANS && (key_len > u16::MAX as usize || val_len > u16::MAX as usize) {
+      return None;
+    }
+
+    Some(Self {
+      key_start: (key_start + 1) as u32,
+      key_end: key_len as u16,
+      value_end: val_len as u16,
+    })
+  }
+
+  #[inline(always)]
+  fn valueless<const CHECK_SPANS: bool>(key_start: usize, key_end: usize) -> Option<Self> {
+    debug_assert!(key_end >= key_start);
+
+    let key_len = key_end - key_start;
+
+    if CHECK_SPANS && key_len > u16::MAX as usize {
+      return None;
+    }
+
+    Some(Self {
+      key_start: (key_start + 1) as u32,
+      key_end: key_len as u16,
+      value_end: 0,
+    })
+  }
+
   // key=value
   // ^  ^
   #[inline]
@@ -280,9 +329,11 @@ impl<const CAPACITY: usize, T: Clone + Copy + Default> Array<CAPACITY, T> {
     }
   }
 
-  fn push(&mut self, value: T) {
-    self.data[self.len].write(value);
+  #[inline(always)]
+  fn push(&mut self, value: T) -> Option<()> {
+    self.data.get_mut(self.len)?.write(value);
     self.len += 1;
+    Some(())
   }
 
   fn to_vec(&self) -> Vec<T> {
@@ -306,6 +357,17 @@ cfg_if::cfg_if! {
 mod tests {
   use super::*;
 
+  fn parse_pairs(src: &str) -> (usize, Vec<(&str, &str)>) {
+    let mut pos = 0;
+    let tags = parse(src, &mut pos)
+      .unwrap()
+      .into_iter()
+      .map(|tag| tag.get(src))
+      .collect();
+
+    (pos, tags)
+  }
+
   #[test]
   fn roundtrip() {
     let src = "@some-key-a=some-value-a;some-key-b=some-value-b;some-key-c=some-value-c ";
@@ -323,5 +385,65 @@ mod tests {
 
     assert_eq!(&src[pos..], "");
     assert_eq!(src, parsed);
+  }
+
+  #[test]
+  fn known_tag_invariants() {
+    tags::assert_invariants();
+  }
+
+  #[test]
+  fn tag_pair_span_limits() {
+    let max = u16::MAX as usize;
+
+    assert!(TagPair::valued::<true>(0, max, max + 1 + max).is_some());
+    assert!(TagPair::valued::<true>(0, max + 1, max + 2).is_none());
+    assert!(TagPair::valued::<true>(0, 1, max + 3).is_none());
+    assert!(TagPair::valueless::<true>(0, max + 1).is_none());
+  }
+
+  #[test]
+  fn valueless_tags() {
+    let cases: &[(&str, &[(&str, &str)])] = &[
+      ("@badges ", &[("badges", "")]),
+      (
+        "@badges;color;room-id=42;tmi-sent-ts=123;last ",
+        &[
+          ("badges", ""),
+          ("color", ""),
+          ("room-id", "42"),
+          ("tmi-sent-ts", "123"),
+          ("last", ""),
+        ],
+      ),
+      ("@empty=;valueless ", &[("empty", ""), ("valueless", "")]),
+    ];
+
+    for (src, expected) in cases {
+      let (pos, actual) = parse_pairs(src);
+      assert_eq!(pos, src.len(), "position mismatch for {src:?}");
+      assert_eq!(&actual, expected, "tag mismatch for {src:?}");
+    }
+  }
+
+  #[cfg(feature = "simd")]
+  #[test]
+  fn valueless_tags_across_simd_boundaries() {
+    use crate::irc::wide::Vector as V;
+
+    for delimiter_at in [
+      V::SIZE - 1,
+      V::SIZE,
+      V::SIZE + 1,
+      V::SIZE * 2 - 1,
+      V::SIZE * 2,
+      V::SIZE * 2 + 1,
+    ] {
+      let key = "k".repeat(delimiter_at);
+      let src = format!("@{key};valued=ok ");
+      let (pos, tags) = parse_pairs(&src);
+      assert_eq!(pos, src.len());
+      assert_eq!(tags, [(key.as_str(), ""), ("valued", "ok")]);
+    }
   }
 }
